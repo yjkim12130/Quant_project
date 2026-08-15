@@ -1,0 +1,17 @@
+# API 키 / 인증정보 (절대 커밋 금지)
+config/*.local.yaml
+config/api_keys.yaml
+.env
+*.key
+
+# 로컬 데이터 캐시 (용량 크고 재생성 가능 — repo에 안 올림)
+data/*.db
+data/*.db-journal
+data/raw/
+
+# 배치 적재 진행 체크포인트 (재실행 편의를 위해 로컬 유지, 공유 불필요)
+ingest/.checkpoint*
+
+__pycache__/
+*.pyc
+.streamlit/secrets.toml
