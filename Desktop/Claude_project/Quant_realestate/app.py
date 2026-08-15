@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from scoring.engine import Params, build_scored_panel, combine_scores  # noqa: E402
@@ -23,6 +24,8 @@ from backtest.event_study import (  # noqa: E402
 
 ACCENT = "#00d084"  # YJ-Quant 팔레트
 RED = "#ff5c5c"
+
+ROOT = Path(__file__).resolve().parent
 
 st.set_page_config(page_title="YJ-RealEstate", page_icon="🏠", layout="wide",
                    initial_sidebar_state="expanded")
@@ -97,8 +100,9 @@ budget = st.sidebar.number_input("총 예산 상한 (억원, 0=미적용)", min_
 
 # ---------------------------------------------------------------- 탭
 
-tab0, tabT, tabA, tab1, tab2, tab3 = st.tabs(
-    ["📖 가이드", "⏱️ 매수 타이밍", "🌐 자산 비교", "🔍 저평가 스크리너", "🏢 단지 상세", "🧪 백테스트"])
+tab0, tabT, tabA, tabS, tabTr, tab1, tab2, tab3 = st.tabs(
+    ["📖 가이드", "⏱️ 매수 타이밍", "🌐 자산 비교", "🏗️ 공급", "🚇 교통",
+     "🔍 저평가 스크리너", "🏢 단지 상세", "🧪 백테스트"])
 
 # ---------------------------------------------------------------- Tab0 가이드
 
@@ -283,6 +287,26 @@ def load_transit_times():
     return t
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_complex_coords():
+    import sqlite3
+    from scoring.engine import DB_PATH
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        c = pd.read_sql_query("SELECT ckey, region_code, lat, lon FROM complex_coords", conn)
+    except Exception:
+        c = pd.DataFrame(columns=["ckey", "region_code", "lat", "lon"])
+    conn.close()
+    return c
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_region_map():
+    """region_code -> region_name. tabTr·tabS가 공유(Task 9에서 재사용)."""
+    cfg = yaml.safe_load(open(ROOT / "config" / "regions.yaml", encoding="utf-8"))
+    return {r["code"]: r["name"] for g in cfg.values() for r in g}
+
+
 TRANSIT_DEST_ORDER = ["강남", "종로", "여의도", "판교", "동탄"]
 
 with tabA:
@@ -365,6 +389,36 @@ with tabA:
     except Exception as e:  # noqa: BLE001
         st.error(f"자산 비교 탭 오류: {e}")
         st.exception(e)
+
+# ---------------------------------------------------------------- TabTr 교통
+
+
+with tabTr:
+    try:
+        st.markdown("##### 업무지구별 소요시간 — 역 기반 근사 (오차 ±5~10분)")
+        transit = load_transit_times()
+        coords = load_complex_coords()
+        merged = transit.merge(
+            coords[["ckey", "region_code"]], on="ckey", how="left")
+        region_map = load_region_map()
+        merged["region_name"] = merged["region_code"].map(region_map)
+
+        sel_region = st.selectbox("지역 (시군구)", sorted(region_map.values()), index=None,
+                                  placeholder="지역을 선택하세요", key="transit_region")
+        if sel_region:
+            sub = merged[merged["region_name"] == sel_region]
+            agg = (sub.groupby("dest")["minutes"].median()
+                      .reindex(TRANSIT_DEST_ORDER).reset_index())
+            fig = go.Figure(go.Bar(x=agg["dest"], y=agg["minutes"], marker_color=ACCENT,
+                                   text=agg["minutes"].round(0), textposition="outside"))
+            fig.update_layout(title=f"{sel_region} 대표 소요시간(중위값, 분)", height=380,
+                              margin=dict(t=40, b=0), yaxis_title="분")
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption(f"표본 {sub['ckey'].nunique()}개 단지 기준 중위값")
+    except Exception as e:  # noqa: BLE001
+        st.error(f"교통 탭 오류: {e}")
+        st.exception(e)
+
 
 # ---------------------------------------------------------------- Tab1 스크리너
 
