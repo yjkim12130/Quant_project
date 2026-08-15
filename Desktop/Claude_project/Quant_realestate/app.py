@@ -390,6 +390,47 @@ with tabA:
         st.error(f"자산 비교 탭 오류: {e}")
         st.exception(e)
 
+# ---------------------------------------------------------------- TabS 공급
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_supply():
+    import sqlite3
+    from scoring.engine import DB_PATH
+    from scoring.market_context import load_supply_by_region_year
+    conn = sqlite3.connect(DB_PATH)
+    out = load_supply_by_region_year(conn)
+    conn.close()
+    return out
+
+
+with tabS:
+    try:
+        st.markdown("##### 향후 입주 예정 물량 — 분양(자동) + 정비사업(수동 큐레이션)")
+        supply = load_supply()
+        region_map = load_region_map()  # Task 6에서 정의(tabTr와 공유)
+        supply["region_name"] = supply["region_code"].map(region_map)
+
+        sel_region = st.selectbox("지역 (시군구)", sorted(region_map.values()), index=None,
+                                  placeholder="지역을 선택하세요", key="supply_region")
+        if sel_region:
+            sub = supply[supply["region_name"] == sel_region].sort_values("year")
+            fig = go.Figure()
+            fig.add_trace(go.Bar(x=sub["year"], y=sub["presale_units"], name="분양(자동)",
+                                 marker_color=ACCENT))
+            fig.add_trace(go.Bar(x=sub["year"], y=sub["redevelopment_units"], name="정비사업(수동)",
+                                 marker_color="#f0b429"))
+            fig.update_layout(barmode="stack", title=f"{sel_region} 연도별 입주 예정 물량",
+                              height=380, margin=dict(t=40, b=0), yaxis_title="세대수")
+            st.plotly_chart(fig, use_container_width=True)
+            st.dataframe(sub[["year", "presale_units", "redevelopment_units"]],
+                        hide_index=True, use_container_width=True)
+        st.caption("정비사업은 1천 세대 이상 대단지만 수동 등록됨(config/manual_catalysts.yaml) — "
+                  "누락된 사업이 있을 수 있음.")
+    except Exception as e:  # noqa: BLE001
+        st.error(f"공급 탭 오류: {e}")
+        st.exception(e)
+
 # ---------------------------------------------------------------- TabTr 교통
 
 
