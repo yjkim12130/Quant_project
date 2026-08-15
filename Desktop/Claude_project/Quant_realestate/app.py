@@ -274,8 +274,11 @@ def load_transit_times():
     import sqlite3
     from scoring.engine import DB_PATH
     conn = sqlite3.connect(DB_PATH)
-    t = pd.read_sql_query(
-        "SELECT ckey, dest, minutes, nearest_station FROM complex_transit_time", conn)
+    try:
+        t = pd.read_sql_query(
+            "SELECT ckey, dest, minutes, nearest_station FROM complex_transit_time", conn)
+    except Exception:
+        t = pd.DataFrame(columns=["ckey", "dest", "minutes", "nearest_station"])
     conn.close()
     return t
 
