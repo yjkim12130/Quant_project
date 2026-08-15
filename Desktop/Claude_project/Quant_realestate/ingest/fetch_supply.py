@@ -10,6 +10,7 @@
     python ingest/fetch_supply.py
 """
 import sys
+import time
 from pathlib import Path
 
 import pandas as pd
@@ -47,12 +48,16 @@ def load_apply_home_key():
 def normalize_presale_rows(raw):
     df = pd.DataFrame(raw)
     out = pd.DataFrame({std: df[orig] for std, orig in COLUMN_MAP.items()})
-    out["expected_ym"] = out["expected_ym"].astype(str).str[:6]
+    # Preserve nullness through date truncation — NaN must stay NaN, not become string "nan"
+    raw_date = out["expected_ym"]
+    out["expected_ym"] = raw_date.astype(str).str[:6]
+    out.loc[raw_date.isna(), "expected_ym"] = pd.NA
     out["total_units"] = pd.to_numeric(out["total_units"], errors="coerce")
     return out.dropna(subset=["project_name", "expected_ym", "total_units"])
 
 
 def fetch_raw_presale(api_key, num_of_rows=1000):
+    """전 페이지 수집. 반환은 원본 dict 리스트(정규화 전)."""
     rows, page = [], 1
     while True:
         r = requests.get(APPLY_HOME_URL, params={
@@ -61,19 +66,26 @@ def fetch_raw_presale(api_key, num_of_rows=1000):
         }, timeout=30)
         r.raise_for_status()
         body = r.json()["response"]["body"]
-        items = body.get("items") or []
-        if not items:
+        items = body.get("items") or {}
+        page_rows = items.get("item") or []
+        if isinstance(page_rows, dict):  # 결과 1건일 때 dict로 오는 API가 있음
+            page_rows = [page_rows]
+        if not page_rows:
             break
-        rows.extend(items)
+        rows.extend(page_rows)
         if len(rows) >= int(body.get("totalCount", 0)):
             break
         page += 1
+        time.sleep(0.2)
     return rows
 
 
 def match_region_code(region_hint, region_rows):
+    """지역 매칭: API 지역명을 regions.yaml 시군구명과 정확히 일치(exact match) 검사.
+    정확히 일치하지 않으면 None 반환 (매칭 실패)."""
+    hint_str = str(region_hint).strip()
     for r in region_rows:
-        if r["name"][:2] in str(region_hint) or str(region_hint) in r["name"]:
+        if r["name"] == hint_str:
             return r["code"]
     return None
 
