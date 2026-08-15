@@ -19,3 +19,16 @@ data_go_kr:
 neis:
   # https://open.neis.go.kr  — 마이페이지에서 인증키 신청 (학교기본정보, Phase 5에서 사용)
   api_key: ""
+
+apply_home:
+  # https://www.data.go.kr/data/15098547/openapi.do — 한국부동산원_청약홈 분양정보 조회 서비스
+  api_key: ""
+
+kakao:
+  # https://developers.kakao.com → 애플리케이션 추가 → 앱 키의 "REST API 키"
+  # (지도 API 별도 활성화 불필요 — 로컬/주소 검색은 REST API 키만 있으면 됨)
+  rest_api_key: ""
+
+tago:
+  # https://www.data.go.kr/data/15041666/openapi.do — 국가철도공단_도시철도 전체노선정보
+  api_key: ""

@@ -5,3 +5,4 @@ plotly>=5.20.0
 PublicDataReader>=1.1.1
 PyYAML>=6.0
 requests>=2.32.0
+pytest>=8.0
