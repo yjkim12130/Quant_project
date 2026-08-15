@@ -5,7 +5,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from scoring.market_context import asset_ratio_zscore, load_planned_transit, load_redevelopment, load_supply_by_region_year
+from scoring.market_context import (
+    asset_ratio_zscore, load_planned_transit, load_redevelopment, load_supply_by_region_year,
+    own_apt_index,
+)
 
 
 def test_load_redevelopment_parses_yaml(tmp_path, monkeypatch):
@@ -160,3 +163,51 @@ def test_asset_ratio_zscore_skips_missing_columns():
     assets = pd.DataFrame({"reb_apt_index": pd.Series(range(12), index=idx, dtype=float)})
     result = asset_ratio_zscore(assets)
     assert result == {}
+
+
+def _trades_sale_conn(tmp_path, rows):
+    from ingest.db import SCHEMA
+    conn = sqlite3.connect(str(tmp_path / "test.db"))
+    conn.executescript(SCHEMA)
+    conn.executemany(
+        "INSERT INTO trades_sale (region_code, exclusive_area, contract_date, deal_amount, cancelled) "
+        "VALUES (?,?,?,?,?)", rows)
+    conn.commit()
+    return conn
+
+
+def test_own_apt_index_applies_3month_rolling_then_rebases_to_100(tmp_path):
+    """월중위 ㎡당가에 scoring/engine.py와 동일한 3개월 롤링 중위를 적용한 뒤 첫 롤링값=100으로
+    정규화하는지 확인. 월중위 원값 100/200/300/100(만원/㎡) ->
+    롤링(min_periods=1): 100, median(100,200)=150, median(100,200,300)=200,
+    median(200,300,100)=200 -> 100 기준 정규화하면 100/150/200/200."""
+    rows = [
+        ("11680", 100.0, "2021-01-05", 10000, 0),
+        ("11680", 100.0, "2021-02-05", 20000, 0),
+        ("11680", 100.0, "2021-03-05", 30000, 0),
+        ("11680", 100.0, "2021-04-05", 10000, 0),
+    ]
+    conn = _trades_sale_conn(tmp_path, rows)
+    idx = own_apt_index(conn)
+    assert idx.loc[pd.Period("2021-01", freq="M")] == pytest.approx(100.0)
+    assert idx.loc[pd.Period("2021-02", freq="M")] == pytest.approx(150.0)
+    assert idx.loc[pd.Period("2021-03", freq="M")] == pytest.approx(200.0)
+    assert idx.loc[pd.Period("2021-04", freq="M")] == pytest.approx(200.0)
+
+
+def test_own_apt_index_excludes_cancelled_trades(tmp_path):
+    """해제거래(cancelled=1)는 중위값 계산에서 빠져야 한다."""
+    rows = [
+        ("11680", 100.0, "2021-01-05", 10000, 0),
+        ("11680", 100.0, "2021-01-10", 90000, 1),  # 해제거래 — 극단값이라 섞이면 바로 티가 남
+    ]
+    conn = _trades_sale_conn(tmp_path, rows)
+    idx = own_apt_index(conn)
+    assert idx.loc[pd.Period("2021-01", freq="M")] == pytest.approx(100.0)
+
+
+def test_own_apt_index_empty_when_no_trades(tmp_path):
+    conn = _trades_sale_conn(tmp_path, [])
+    idx = own_apt_index(conn)
+    assert idx.empty
+    assert idx.name == "own_apt_index"

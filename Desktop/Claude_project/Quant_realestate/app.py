@@ -205,10 +205,10 @@ with tabT:
                                  yaxis="y2", line=dict(color="#888", width=1.5)))
         fig.add_hline(y=0, line_color="#555")
         fig.update_layout(title="레짐 점수 히스토리 vs 수도권 아파트 매매가격지수 (2003~)",
-                          height=420, margin=dict(t=40, b=0),
+                          height=460, margin=dict(t=100, b=0),
                           yaxis=dict(title="레짐 점수"),
                           yaxis2=dict(title="지수", overlaying="y", side="right", showgrid=False),
-                          legend=dict(orientation="h", y=1.12))
+                          legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0))
         st.plotly_chart(fig, use_container_width=True)
 
         # 변수 원시값 차트
@@ -220,7 +220,10 @@ with tabT:
         if vcol in raw.columns:
             s = raw[vcol].dropna()
             fig2 = go.Figure(go.Scatter(x=s.index.to_timestamp(), y=s, line=dict(color=ACCENT)))
-            fig2.update_layout(height=280, margin=dict(t=10, b=0))
+            fig2.update_layout(
+                title=f"{sel_var} — 전체 히스토리 ({s.index.min()} ~ {s.index.max()}, {len(s)}개월)",
+                height=380, margin=dict(t=50, b=0),
+                xaxis=dict(rangeslider=dict(visible=True, thickness=0.08)))
             st.plotly_chart(fig2, use_container_width=True)
 
         # 규칙기반 해석
@@ -256,7 +259,8 @@ with tabT:
 # ---------------------------------------------------------------- TabA 자산 비교
 
 ASSET_LABELS = {
-    "reb_apt_index": "🏠 수도권 아파트", "asset_kospi": "🇰🇷 코스피", "asset_nasdaq": "🇺🇸 나스닥",
+    "reb_apt_index": "🏠 수도권 아파트(공식지수)", "own_apt_index": "📍 관심지역 실거래(자체계산)",
+    "asset_kospi": "🇰🇷 코스피", "asset_nasdaq": "🇺🇸 나스닥",
     "asset_gold": "🥇 금", "asset_btc": "₿ 비트코인", "ecos_m2": "💧 M2 통화량",
 }
 
@@ -265,11 +269,16 @@ ASSET_LABELS = {
 def load_assets():
     import sqlite3
     from scoring.engine import DB_PATH
+    from scoring.market_context import own_apt_index
     conn = sqlite3.connect(DB_PATH)
     m = pd.read_sql_query("SELECT series, ym, value FROM macro_series", conn)
-    conn.close()
     wide = m.pivot(index="ym", columns="series", values="value")
     wide.index = pd.PeriodIndex(pd.to_datetime(wide.index, format="%Y%m"), freq="M")
+    wide = wide.sort_index()
+    own = own_apt_index(conn)
+    conn.close()
+    if not own.empty:
+        wide = wide.join(own, how="outer")
     return wide.sort_index()
 
 
@@ -337,22 +346,24 @@ with tabA:
                 rebased[c] = sub[c] / s.iloc[0] * 100
 
         fig = go.Figure()
-        palette = {"reb_apt_index": ACCENT, "asset_kospi": "#4c9aff", "asset_nasdaq": "#b37feb",
-                   "asset_gold": "#f0b429", "asset_btc": "#ff9f43", "ecos_m2": "#8899aa"}
+        palette = {"reb_apt_index": ACCENT, "own_apt_index": "#2dd4bf", "asset_kospi": "#4c9aff",
+                   "asset_nasdaq": "#b37feb", "asset_gold": "#f0b429", "asset_btc": "#ff9f43",
+                   "ecos_m2": "#8899aa"}
         for c in rebased.columns:
             fig.add_trace(go.Scatter(x=rebased.index.to_timestamp(), y=rebased[c],
                                      name=ASSET_LABELS[c],
-                                     line=dict(color=palette.get(c), width=2.5 if c == "reb_apt_index" else 1.5,
-                                               dash=None if c != "ecos_m2" else "dot")))
+                                     line=dict(color=palette.get(c),
+                                               width=2.5 if c in ("reb_apt_index", "own_apt_index") else 1.5,
+                                               dash={"ecos_m2": "dot", "own_apt_index": "dash"}.get(c))))
         if "ecos_base_rate" in assets.columns:
             br = assets["ecos_base_rate"].iloc[-n_months:].dropna()
             fig.add_trace(go.Scatter(x=br.index.to_timestamp(), y=br, name="기준금리(%, 우축)",
                                      yaxis="y2", line=dict(color="#888", width=1, dash="dash")))
         fig.update_layout(
-            title=f"시작점=100 기준 상대 성과 ({rng})", height=460, margin=dict(t=40, b=0),
+            title=f"시작점=100 기준 상대 성과 ({rng})", height=520, margin=dict(t=110, b=0),
             yaxis=dict(title="지수 (시작=100)", type="log" if logy else "linear"),
             yaxis2=dict(title="기준금리 %", overlaying="y", side="right", showgrid=False),
-            legend=dict(orientation="h", y=1.14))
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0))
         st.plotly_chart(fig, use_container_width=True)
 
         # 기간별 수익률 표
@@ -368,7 +379,9 @@ with tabA:
             rows.append(row)
         table = pd.DataFrame(rows)[["자산", "1년", "3년", "3년(연)", "5년", "5년(연)", "10년", "10년(연)"]]
         st.dataframe(table, hide_index=True, use_container_width=True)
-        st.caption("연 = 연평균 복리(CAGR). 수도권 아파트지수는 최근월 공표분(약 1~2개월 지연)까지 반영")
+        st.caption("연 = 연평균 복리(CAGR). 수도권 아파트지수는 최근월 공표분(약 1~2개월 지연)까지 반영. "
+                  "관심지역 실거래 지수는 이 프로젝트가 추적하는 30개 지역만 대상이라 2021-08~만 "
+                  "존재(공식지수만큼 긴 추세 비교는 불가).")
 
         # 해석
         mom = {}
@@ -382,19 +395,27 @@ with tabA:
         msg = "최근 12개월 모멘텀 순위: " + " > ".join(f"{n} {v:+.1f}%" for n, v in rank) + ". "
         if apt_rank:
             msg += f"수도권 아파트는 {len(rank)}개 자산 중 <b>{apt_rank}위</b>. "
-        msg += ("주의: 아파트지수는 실거래 기반 평활 지수라 변동성이 구조적으로 낮게 보입니다 — "
-                "수익률 비교는 유효하지만 변동성(위험) 비교는 과소평가되므로, 레버리지(대출)까지 "
-                "고려한 실질 위험은 표시보다 큽니다.")
+        msg += ("주의: 수도권 아파트(공식지수)는 표본 기반 평활 지수라 변동성이 구조적으로 낮게 "
+                "보이고, 관심지역 실거래(자체계산)는 그 달 어떤 단지가 몇 건 거래됐는지에 따라 "
+                "출렁이는 표본 노이즈가 있습니다 — 레버리지(대출)까지 고려한 실질 위험은 두 지수 "
+                "모두 표시보다 큽니다.")
         _ai_box(msg)
 
         with st.expander("📖 읽는 법"):
             st.markdown("""
 - **시작=100 차트**: 선택 기간 시작점을 100으로 정규화한 상대 성과. 장기 구간은 로그 스케일 권장
   (복리 효과 왜곡 방지)
+- **수도권 아파트(공식지수)**: 한국부동산원 표본조사 기반, 서울+인천+경기 전체 평균이라 특정
+  인기지역 체감 상승률과 크게 다를 수 있음(예: 최근5년 공식지수 +1.0% vs 강남구 자체실거래
+  중위 +65.3%). 월간·평활·후행(공표 1~2개월 지연), 2003~ 장기 데이터
+- **관심지역 실거래(자체계산, 점선)**: 이 프로젝트가 추적하는 30개 지역(서울 남부+경기 남부)
+  실거래 중위 ㎡당가 기반. 공식지수의 "전체 평균이라 덜 오른 외곽까지 섞임" 문제는 없지만, 월별
+  거래 구성 노이즈가 있고 2021-08~만 존재(공식지수만큼 긴 추세는 못 봄) — 장기추세는 공식지수,
+  최근 체감비교는 이 지수를 참고
 - **M2(점선)**: 통화량 — "모든 자산의 분모". M2보다 덜 오른 자산은 실질 구매력 기준 제자리
 - **기준금리(우축 점선)**: 할인율 — 금리 인하기에 자산 전반이 우호적이었는지 확인
-- **아파트지수의 특성**: 월간·평활·후행(공표 1~2개월 지연). 단기 비교보다 3년+ 추세 비교에 적합
-- 데이터: 부동산원(수도권 아파트), yfinance(코스피·나스닥·금·비트코인, 월말 종가), 한국은행 ECOS(M2·기준금리)
+- 데이터: 부동산원(수도권 아파트), 이 프로젝트 자체 실거래 DB(관심지역 실거래), yfinance(코스피·
+  나스닥·금·비트코인, 월말 종가), 한국은행 ECOS(M2·기준금리)
 """)
     except Exception as e:  # noqa: BLE001
         st.error(f"자산 비교 탭 오류: {e}")
@@ -434,7 +455,8 @@ with tabS:
             fig.add_trace(go.Bar(x=sub["year"], y=sub["redevelopment_units"], name="정비사업(수동)",
                                  marker_color="#f0b429"))
             fig.update_layout(barmode="stack", title=f"{sel_region} 연도별 입주 예정 물량",
-                              height=380, margin=dict(t=40, b=0), yaxis_title="세대수")
+                              height=420, margin=dict(t=80, b=0), yaxis_title="세대수",
+                              legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0))
             st.plotly_chart(fig, use_container_width=True)
             st.dataframe(sub[["year", "presale_units", "redevelopment_units"]],
                         hide_index=True, use_container_width=True)
@@ -608,8 +630,8 @@ with tab2:
                 fig.add_trace(go.Scatter(x=carried_pts["date"], y=carried_pts["price"] * PYEONG,
                                          mode="markers", name="이월(거래없음)",
                                          marker=dict(color="#666", size=5, symbol="circle-open")))
-            fig.update_layout(title="평당가 추이 (만원/평)", height=380, margin=dict(t=40, b=0),
-                              legend=dict(orientation="h", y=1.12))
+            fig.update_layout(title="평당가 추이 (만원/평)", height=420, margin=dict(t=80, b=0),
+                              legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0))
             st.plotly_chart(fig, use_container_width=True)
 
             # 차트2: rv_z 추이
@@ -620,7 +642,8 @@ with tab2:
                            annotation_text=f"매수 임계 {params.rv_buy_z}σ")
             fig2.add_hline(y=-params.rv_buy_z, line_dash="dash", line_color=RED)
             fig2.add_hline(y=0, line_color="#555")
-            fig2.update_layout(title="그룹 대비 괴리율 z-score 추이", height=320, margin=dict(t=40, b=0))
+            fig2.update_layout(title="그룹 대비 괴리율 z-score 추이", height=360, margin=dict(t=70, b=0),
+                               legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0))
             st.plotly_chart(fig2, use_container_width=True)
 
             # 해석
@@ -712,10 +735,10 @@ with tab3:
                                      name="초과수익 평균(%)", marker_color=ACCENT))
                 fig.add_trace(go.Scatter(x=sw_num["rv_z<"].astype(str), y=sw_num["hit_rate"] * 100,
                                          name="승률(%)", yaxis="y2", line=dict(color="#f0b429")))
-                fig.update_layout(height=300, margin=dict(t=10, b=0),
+                fig.update_layout(height=340, margin=dict(t=50, b=0),
                                   yaxis=dict(title="초과수익 %"),
                                   yaxis2=dict(title="승률 %", overlaying="y", side="right"),
-                                  legend=dict(orientation="h", y=1.15))
+                                  legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0))
                 st.plotly_chart(fig, use_container_width=True)
 
             # ── 해석
