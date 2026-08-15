@@ -78,22 +78,26 @@ def test_shortest_minutes_start_in_targets():
 
 
 def test_shortest_minutes_weighted_dijkstra_vs_bfs():
-    """가중 다익스트라 동작 확인: hop 수가 적어도 가중치가 크면 더 오래 걸린 경로를 버림.
+    """가중 다익스트라 동작 확인: hop 수가 적으면 무조건 선택하지 않고 가중치로 비교.
 
     그래프:
-    A -100min-> B -1min-> C  (2 hops, 101분)
-    A -50min-> D -50min-> C  (2 hops, 100분)
-    A -99min-> C             (1 hop, 99분) <- 최단
+    A -100min-> C             (1 hop, 100분 — 비싼 직접 경로)
+    A -1min-> B -1min-> C     (2 hops, 2분 — 싼 다중홉 경로)
 
-    BFS라면 1-hop 경로를 항상 선택할 수 없으므로 가중치를 제대로 고려해야 함.
+    순진한 BFS/hop-counting 알고리즘: 1-hop 경로 A->C(100분)를 먼저 발견해서 고정
+    (재방문 없음) → 결과 100.0 (틀림)
+
+    가중 다익스트라: 누적 가중치로 거리를 추적하고 재완화(relax)하므로 2-hop 경로
+    A->B->C(2분)를 발견하고 더 싼 경로임을 인식해서 업데이트 → 결과 2.0 (맞음)
+
+    이 그래프에서 두 알고리즘은 다른 답을 줌. 올바른 다익스트라는 2.0을 반환.
     """
     adj = {
-        "A": [("B", 100.0), ("D", 50.0), ("C", 99.0)],
+        "A": [("B", 1.0), ("C", 100.0)],
         "B": [("C", 1.0)],
-        "D": [("C", 50.0)],
     }
     result = shortest_minutes(adj, "A", ["C"])
-    assert result["C"] == 99.0, f"Expected 99.0 (direct A->C), got {result['C']}"
+    assert result["C"] == 2.0, f"Expected 2.0 (2-hop path A->B->C), got {result['C']}"
 
 
 def test_shortest_minutes_unreachable_target():
