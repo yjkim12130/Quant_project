@@ -1,0 +1,332 @@
+<title>YJ-RealEstate 설계도</title>
+<style>
+:root {
+  --bg: #f5f8f6; --surface: #ffffff; --ink: #182420; --muted: #5b6b63;
+  --accent: #009468; --accent-soft: rgba(0,168,107,.10); --line: #d9e3dd;
+  --red: #c94f4f; --amber: #a87716; --code-bg: #eef3f0;
+}
+:root:not([data-theme="light"]) { }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1411; --surface: #151f1a; --ink: #e6efe9; --muted: #8fa298;
+    --accent: #00d084; --accent-soft: rgba(0,208,132,.10); --line: #26332c;
+    --red: #ff6b6b; --amber: #f0b429; --code-bg: #101a15;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1411; --surface: #151f1a; --ink: #e6efe9; --muted: #8fa298;
+  --accent: #00d084; --accent-soft: rgba(0,208,132,.10); --line: #26332c;
+  --red: #ff6b6b; --amber: #f0b429; --code-bg: #101a15;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", -apple-system, sans-serif;
+  line-height: 1.65; margin: 0; padding: 0 20px 80px;
+}
+main { max-width: 900px; margin: 0 auto; }
+header.doc { padding: 56px 0 8px; border-bottom: 2px solid var(--ink); margin-bottom: 8px; }
+.eyebrow { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+h1 { font-size: clamp(30px, 5vw, 44px); margin: 6px 0 10px; letter-spacing: -.02em; text-wrap: balance; }
+.lede { color: var(--muted); max-width: 62ch; margin: 0 0 18px; }
+.badges { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 0 22px; }
+.badge { font-size: 12.5px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--muted); font-variant-numeric: tabular-nums; }
+.badge b { color: var(--ink); }
+.badge.ok { border-color: var(--accent); color: var(--accent); }
+section { margin-top: 52px; }
+h2 { font-size: 22px; letter-spacing: -.01em; margin: 0 0 4px; }
+h2 .no { color: var(--accent); font-variant-numeric: tabular-nums; margin-right: 8px; }
+.sub { color: var(--muted); font-size: 14.5px; margin: 0 0 18px; max-width: 68ch; }
+h3 { font-size: 16px; margin: 26px 0 8px; }
+p { max-width: 68ch; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; background: var(--surface);
+  font-variant-numeric: tabular-nums; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+th { text-align: left; font-size: 12px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--muted); padding: 10px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 9px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+td.k { white-space: nowrap; font-weight: 600; }
+.callout { border: 1px solid var(--accent); background: var(--accent-soft); border-radius: 10px;
+  padding: 16px 20px; margin: 18px 0; }
+.callout b.num { color: var(--accent); font-variant-numeric: tabular-nums; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 700px) { .grid2 { grid-template-columns: 1fr; } }
+.card { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 16px 18px; }
+.card h4 { margin: 0 0 6px; font-size: 14.5px; }
+.card p { font-size: 13.5px; color: var(--muted); margin: 0; }
+code, .mono { font-family: "JetBrains Mono", Consolas, "Courier New", monospace; font-size: .92em; }
+code { background: var(--code-bg); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px;
+  padding: 14px 18px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+pre code { background: none; border: none; padding: 0; }
+figure { margin: 22px 0; }
+figure svg { max-width: 100%; height: auto; display: block; }
+figcaption { font-size: 13px; color: var(--muted); margin-top: 8px; }
+.dia { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 18px; overflow-x: auto; }
+.reject { color: var(--red); }
+.keep { color: var(--accent); font-weight: 600; }
+.amber { color: var(--amber); }
+ul { padding-left: 20px; } li { margin: 4px 0; max-width: 66ch; }
+footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid var(--line);
+  font-size: 13px; color: var(--muted); }
+</style>
+
+<main>
+<header class="doc">
+  <div class="eyebrow">Quant_realestate · Algorithm Blueprint v1</div>
+  <h1>YJ-RealEstate 설계도</h1>
+  <p class="lede">YJalgo(주식 퀀트)의 동일자산군 상대평가·검증 인프라를 부동산에 이식한
+  개인용 매수 의사결정 시스템. 서울 남부 11개구 + 경기 남부 핵심 11개시, 5년 실거래 174만 건 기반.</p>
+  <div class="badges">
+    <span class="badge">기준일 <b>2026-08-15</b></span>
+    <span class="badge">매매 <b>352,000</b>건 · 전세 <b>1,385,477</b>건</span>
+    <span class="badge ok">선택엔진 검증 통과 p&lt;0.001</span>
+    <span class="badge ok">레짐 장기검증 통과 p&lt;0.0001</span>
+    <span class="badge">현재 레짐 <b>🟢 매수적기</b></span>
+  </div>
+</header>
+
+<section>
+  <h2><span class="no">01</span>핵심 사상 — 문제를 둘로 쪼갠다</h2>
+  <p class="sub">"지금 사야 하나"와 "무엇을 사야 하나"는 다른 질문이고, 다른 데이터·다른 검증이 필요하다.
+  레짐(타이밍)은 스크리너(선택) 위의 게이트 층으로 결합된다.</p>
+
+  <figure class="dia">
+    <svg role="img" aria-label="두 문제 분리 구조: 데이터 소스가 SQLite로 적재되고, 레짐 엔진(문제1)과 스코어링 엔진(문제2)이 각각 판정을 내려 앱에서 게이트 구조로 결합된다" viewBox="0 0 860 400">
+      <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
+      <g fill="none" stroke="currentColor" stroke-width="1.3">
+        <!-- sources -->
+        <rect x="20" y="30" width="150" height="46" rx="8"/>
+        <rect x="20" y="92" width="150" height="46" rx="8"/>
+        <rect x="20" y="154" width="150" height="46" rx="8"/>
+        <rect x="20" y="216" width="150" height="46" rx="8"/>
+        <!-- store -->
+        <rect x="250" y="110" width="160" height="92" rx="8"/>
+        <!-- engines -->
+        <rect x="490" y="40" width="200" height="86" rx="8" stroke="#f0b429"/>
+        <rect x="490" y="180" width="200" height="86" rx="8" stroke="#00d084"/>
+        <!-- app -->
+        <rect x="740" y="110" width="100" height="92" rx="8"/>
+        <!-- flows -->
+        <line x1="170" y1="53" x2="245" y2="130" marker-end="url(#ar)"/>
+        <line x1="170" y1="115" x2="245" y2="145" marker-end="url(#ar)"/>
+        <line x1="170" y1="177" x2="245" y2="165" marker-end="url(#ar)"/>
+        <line x1="170" y1="239" x2="245" y2="185" marker-end="url(#ar)"/>
+        <line x1="410" y1="130" x2="485" y2="85" marker-end="url(#ar)"/>
+        <line x1="410" y1="180" x2="485" y2="220" marker-end="url(#ar)"/>
+        <line x1="690" y1="83" x2="735" y2="135" marker-end="url(#ar)"/>
+        <line x1="690" y1="223" x2="735" y2="177" marker-end="url(#ar)"/>
+      </g>
+      <g font-size="12.5" fill="currentColor">
+        <text x="95" y="50" text-anchor="middle">국토부 실거래가</text>
+        <text x="95" y="66" text-anchor="middle" opacity=".6">매매·전세, 월배치</text>
+        <text x="95" y="112" text-anchor="middle">한국은행 ECOS</text>
+        <text x="95" y="128" text-anchor="middle" opacity=".6">기준금리·M2</text>
+        <text x="95" y="174" text-anchor="middle">부동산원 R-ONE</text>
+        <text x="95" y="190" text-anchor="middle" opacity=".6">지수·수급·심리</text>
+        <text x="95" y="236" text-anchor="middle">yfinance</text>
+        <text x="95" y="252" text-anchor="middle" opacity=".6">KOSPI·NASDAQ·금·BTC</text>
+        <text x="330" y="150" text-anchor="middle" font-weight="bold">SQLite</text>
+        <text x="330" y="168" text-anchor="middle" opacity=".6">realestate.db</text>
+        <text x="330" y="184" text-anchor="middle" opacity=".6">체크포인트 재시작</text>
+        <text x="590" y="68" text-anchor="middle" font-weight="bold">문제 1 · 레짐 엔진</text>
+        <text x="590" y="86" text-anchor="middle" opacity=".7">지금 살 때인가?</text>
+        <text x="590" y="104" text-anchor="middle" opacity=".6">scoring/regime.py</text>
+        <text x="590" y="208" text-anchor="middle" font-weight="bold">문제 2 · 선택 엔진</text>
+        <text x="590" y="226" text-anchor="middle" opacity=".7">산다면 무엇을?</text>
+        <text x="590" y="244" text-anchor="middle" opacity=".6">scoring/engine.py</text>
+        <text x="790" y="150" text-anchor="middle" font-weight="bold">app.py</text>
+        <text x="790" y="168" text-anchor="middle" opacity=".6">6개 탭</text>
+        <text x="718" y="60" text-anchor="middle" opacity=".7">신호등</text>
+        <text x="718" y="250" text-anchor="middle" opacity=".7">랭킹</text>
+        <text x="448" y="100" text-anchor="middle" opacity=".7">매크로</text>
+        <text x="448" y="215" text-anchor="middle" opacity=".7">실거래</text>
+      </g>
+    </svg>
+    <figcaption>레짐이 스크리너의 매수 임계를 조절하는 게이트 구조(YJalgo의 VIX 레짐 패턴 계승).
+    두 엔진은 데이터·검증이 독립적이며, 결합 검증에서 직교성이 실증됐다.</figcaption>
+  </figure>
+
+  <div class="callout">
+    <b>직교성의 실증</b> — 결합 검증 결과, 저평가 시그널의 <b>절대수익은 레짐에 의존</b>
+    (🟢 진입 <b class="num">+13.1%</b> vs 🔴 진입 <b class="num">+7.6%</b>/12개월)하지만,
+    <b>그룹 대비 초과수익은 레짐과 무관</b>(~7%p로 일정). "언제"와 "무엇을"은 실제로 분리 가능한 문제다.
+  </div>
+</section>
+
+<section>
+  <h2><span class="no">02</span>문제 1 — 매수 타이밍 레짐</h2>
+  <p class="sub">시장 레벨 변수의 z-score 동일가중 합산 → 연속점수 → 과거 분위(q30/q70)로
+  🟢 매수적기 / 🟡 중립 / 🔴 보류 3단계. 명세: <code>docs/regime_spec_v1.md</code></p>
+
+  <div class="tablewrap"><table>
+    <tr><th>변수</th><th>가설 (＋ = 매수 우호)</th><th>소스</th><th>장기검증 ρ(12M)</th><th>판정</th></tr>
+    <tr><td class="k">소비심리지수</td><td>심리 개선 국면</td><td>R-ONE, 2011~</td><td>0.59</td><td class="keep">채택 · 1위</td></tr>
+    <tr><td class="k">매매수급지수</td><td>수요 우위 국면</td><td>R-ONE, 2012~</td><td>0.52</td><td class="keep">채택</td></tr>
+    <tr><td class="k">기준금리 방향</td><td>12개월 인하 국면</td><td>ECOS, 2003~</td><td>0.38</td><td class="keep">채택</td></tr>
+    <tr><td class="k">지수 모멘텀</td><td>수도권지수 12M 상승 전환</td><td>R-ONE, 2003~</td><td>0.36</td><td class="keep">채택</td></tr>
+    <tr><td class="k">시장 전세가율 방향</td><td>상승 = 실수요 바닥</td><td>자체 DB, 2021~</td><td>결합검증 대상</td><td class="keep">채택</td></tr>
+    <tr><td class="k">매매/전세 거래량비</td><td>매매 회복 = 수요 전환</td><td>자체 DB, 2021~</td><td>결합검증 대상</td><td class="keep">채택</td></tr>
+    <tr><td class="k">M2 증가율</td><td>유동성 확장</td><td>ECOS, 2003~</td><td>0.08 / <span class="reject">−0.19</span></td><td class="reject">탈락 — 역방향</td></tr>
+  </table></div>
+
+  <h3>판정 규칙</h3>
+  <pre><code>score(t) = mean( z_i(t) )        # rolling 120개월 z, 발표지연 반영(M2 2개월·부동산원 1개월)
+하드룰   : 기준금리 12개월 변화 &gt; +1.0%p → 다른 변수 무관 강제 🔴
+신호등   : score ≥ q70 → 🟢  ·  q30~q70 → 🟡  ·  ≤ q30 → 🔴   (expanding 분위, 미래 미사용)</code></pre>
+
+  <div class="callout">
+    <b>장기 검증 (2003~2026, 사이클 3개)</b> — 🟢 판정 월 이후 12개월 지수수익
+    평균 <b class="num">+6.2%</b>·양(+)비율 <b class="num">97.1%</b> vs
+    🔴 판정 월 <b class="num reject">−2.9%</b>·46.7%. 격차 +9.1%p, 순열검정 <b class="num">p&lt;0.0001</b>.
+    변수는 "검증 무효 시 탈락" 조건부 채택 — M2가 실제로 탈락한 첫 사례.
+  </div>
+
+  <h3>스크리너 결합 (게이트)</h3>
+  <p>신호등은 상시 표시. "레짐 연동" 토글 시 저평가 판정 임계를 레짐별로 조절:
+  🟢 <code>−1.0σ</code> · 🟡 <code>−1.5σ</code> · 🔴 <code>−2.0σ</code> —
+  보류 국면일수록 극단적 저평가만 통과시킨다. 스크리너 잠금(정보 차단)은 설계상 금지.</p>
+</section>
+
+<section>
+  <h2><span class="no">03</span>문제 2 — 저평가 선택 엔진</h2>
+  <p class="sub">"원래 그룹보다 20% 비싸던 단지가 지금 8%만 비싸다"를 저평가로 정의한다 —
+  절대 수준 비교가 아니라 <b>평소 위상 대비 이탈</b>. 명세: <code>docs/algo_spec_v1.md</code></p>
+
+  <figure class="dia">
+    <svg role="img" aria-label="선택 엔진 파이프라인: 실거래 원본이 가격 패널, 그룹 배정, 팩터 산출을 거쳐 3단 결합으로 랭킹이 된다" viewBox="0 0 860 210">
+      <defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
+      <g fill="none" stroke="currentColor" stroke-width="1.3">
+        <rect x="15" y="60" width="150" height="90" rx="8"/>
+        <rect x="235" y="60" width="150" height="90" rx="8"/>
+        <rect x="455" y="60" width="150" height="90" rx="8"/>
+        <rect x="675" y="60" width="170" height="90" rx="8" stroke="#00d084"/>
+        <line x1="165" y1="105" x2="230" y2="105" marker-end="url(#ar2)"/>
+        <line x1="385" y1="105" x2="450" y2="105" marker-end="url(#ar2)"/>
+        <line x1="605" y1="105" x2="670" y2="105" marker-end="url(#ar2)"/>
+      </g>
+      <g font-size="12.5" fill="currentColor">
+        <text x="90" y="85" text-anchor="middle" font-weight="bold">① 가격 패널</text>
+        <text x="90" y="103" text-anchor="middle" opacity=".7">월 중위 ㎡당가</text>
+        <text x="90" y="119" text-anchor="middle" opacity=".7">3M 롤링 · 이월 6M</text>
+        <text x="90" y="135" text-anchor="middle" opacity=".7">해제거래 제외</text>
+        <text x="310" y="85" text-anchor="middle" font-weight="bold">② 그룹 배정</text>
+        <text x="310" y="103" text-anchor="middle" opacity=".7">동 × 면적 × 연식</text>
+        <text x="310" y="119" text-anchor="middle" opacity=".7">5단지 미만 → 시군구</text>
+        <text x="310" y="135" text-anchor="middle" opacity=".7">미달 → 제외</text>
+        <text x="530" y="85" text-anchor="middle" font-weight="bold">③ 팩터 산출</text>
+        <text x="530" y="103" text-anchor="middle" opacity=".7">괴리율 rv_z</text>
+        <text x="530" y="119" text-anchor="middle" opacity=".7">전세가율 jr_z</text>
+        <text x="530" y="135" text-anchor="middle" opacity=".7">DD · 12M 모멘텀</text>
+        <text x="760" y="85" text-anchor="middle" font-weight="bold">④ 3단 결합</text>
+        <text x="760" y="103" text-anchor="middle" opacity=".7">하드필터 → 2팩터 랭킹</text>
+        <text x="760" y="119" text-anchor="middle" opacity=".7">→ 보너스(호재·세수)</text>
+        <text x="760" y="135" text-anchor="middle" opacity=".7">🟢🟡🔴⚪ 판정</text>
+        <text x="197" y="95" text-anchor="middle" opacity=".7" font-size="11">39만 행</text>
+      </g>
+    </svg>
+    <figcaption>월배치 → 랭킹까지 55초(전량 계산, 시간당 캐시). 그룹 정의는 <code>make_group_key()</code>
+    단일 함수에만 존재 — Phase 5에서 학군·역세권 축으로 교체 가능한 유일한 지점.</figcaption>
+  </figure>
+
+  <h3>핵심 수식 — Factor 1 상대가치 괴리율 (C3, 페어트레이딩 프레임)</h3>
+  <pre><code>ratio(c,t) = 단지 ㎡당가(c,t) / 그룹 중위 ㎡당가(g(c),t)
+rv_z(c,t)  = ( ratio(c,t) − mean(ratio, 직전 L개월) ) / std(ratio, 직전 L개월)
+             # 현재값은 통계에서 제외(shift 1) — look-ahead 방지
+             # 단지 고유 프리미엄(브랜드·입지)은 ratio의 "평소 수준"에 흡수되어 자동 통제</code></pre>
+
+  <h3>파라미터 대장 — 과적합 방어가 1원칙</h3>
+  <div class="tablewrap"><table>
+    <tr><th>파라미터</th><th>값</th><th>성격</th></tr>
+    <tr><td class="k">면적밴드 / 연식밴드</td><td>60·85㎡ / 10·25년</td><td>고정 (브레인스토밍 확정)</td></tr>
+    <tr><td class="k">최소 그룹 단지수 · 롤링 · 이월</td><td>5개 · 3M · 6M</td><td>고정, 실측 재검토 (제외율 0.8%로 양호)</td></tr>
+    <tr><td class="k">L (lookback)</td><td>24개월</td><td class="amber">그리드서치+WFV 대상</td></tr>
+    <tr><td class="k">rv_z 매수 임계</td><td>−1.0σ (레짐 연동 시 가변)</td><td class="amber">그리드서치+WFV 대상</td></tr>
+    <tr><td class="k">DD 임계 / 모멘텀 하한</td><td>−10% / −5%</td><td class="amber">그리드서치+WFV 대상 (현재 중립화)</td></tr>
+    <tr><td class="k">팩터 가중치</td><td>동일가중</td><td><b>최적화 금지</b> — 시점 60개 표본 과적합 방어</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <h2><span class="no">04</span>검증 인프라 — 이 시스템의 존재 이유</h2>
+  <p class="sub">"5년 상승장에선 아무거나 사도 올랐다"를 걸러내는 것이 백테스트의 목적.
+  벤치마크는 시장이 아니라 <b>소속 그룹</b>이다.</p>
+
+  <div class="grid2">
+    <div class="card"><h4>Event Study (선택 엔진)</h4>
+      <p>시그널 +1개월 진입(신고지연) → 12/24/36개월 보유 → 그룹 중위 대비 초과수익.
+      순열검정으로 무작위 선택 대비 우위 판정. 취득·중개·보유세 단순 비용 모델 토글.</p></div>
+    <div class="card"><h4>팩터 IC 분석</h4>
+      <p>월별 크로스섹션 Spearman(팩터값 ↔ 이후 초과수익), Fama-MacBeth 평균.
+      "이 변수가 적합한가"에 대한 정량 답변 장치.</p></div>
+    <div class="card"><h4>레짐 장기검증</h4>
+      <p>지수 레벨 2003~(사이클 3개: 2008 급락·2010–13 침체·2015–21 상승·2022 급락)에서
+      레짐 규칙 검증 → 통과한 규칙만 5년 단지 데이터에 결합.</p></div>
+    <div class="card"><h4>진단 리포트</h4>
+      <p>거래 희소성·조인율·분포·해제율·커버리지 5종 실측 — 파라미터를 감이 아니라
+      데이터로 확정. <code>scoring/diagnostics.py</code></p></div>
+  </div>
+
+  <h3>검증 결과 요약 (2026-08-14 실측)</h3>
+  <div class="tablewrap"><table>
+    <tr><th>대상</th><th>결과</th><th>귀결</th></tr>
+    <tr><td class="k">rv_z &lt; −1σ 코호트</td><td>그룹 대비 +7.3%p(12M) ~ +13.4%p(36M), 승률 68~73%, p&lt;0.001</td><td class="keep">핵심 팩터로 확정</td></tr>
+    <tr><td class="k">임계 스윕</td><td>깊을수록 수익↑ 후보수↓ 단조 (−2σ: +10.5%p/12M, 승률 74%)</td><td>임계는 "필요 후보 수"로 선택</td></tr>
+    <tr><td class="k">전세가율 jr_z</td><td>IC +0.13~0.18 유의, 가설 방향 일치</td><td class="keep">유효 — 커버리지 82%</td></tr>
+    <tr><td class="k">단지 모멘텀 가드</td><td>초과수익 잠식 + IC 역방향 (−0.16~−0.23)</td><td class="amber">중립화 — 타이밍은 레짐으로 이관</td></tr>
+    <tr><td class="k">레짐 M2 변수</td><td>전방수익 상관 무효/역방향</td><td class="reject">점수에서 탈락 (모니터링만)</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <h2><span class="no">05</span>설계 원칙</h2>
+  <ul>
+    <li><b>검증 없이 채택 없다</b> — 모든 변수는 IC/장기검증을 통과해야 점수에 들어간다. 통과 못 하면 탈락(M2), 역효과면 중립화(모멘텀 가드).</li>
+    <li><b>과적합 방어 우선</b> — 최적화 파라미터 4개 제한, 가중치 동일가중 고정, 표본 밖 검증(WFV)만 신뢰.</li>
+    <li><b>누수 방지</b> — 신고지연 +1개월 진입, 발표지연 시차 반영, z-score는 shift(1), 분위는 expanding.</li>
+    <li><b>교체 가능한 경계</b> — 그룹 정의·레짐 변수·비용 모델은 각각 단일 지점에서 교체 가능.</li>
+    <li><b>예산 정보 무저장</b> — 현금·자산 입력은 세션 한정, 어떤 파일·DB에도 기록하지 않는다 (불변 원칙).</li>
+    <li><b>정보 차단 금지</b> — 레짐이 나빠도 스크리너는 잠그지 않는다. 도구는 판단을 돕지, 대신하지 않는다.</li>
+  </ul>
+</section>
+
+<section>
+  <h2><span class="no">06</span>로드맵 — 미착수 영역</h2>
+  <div class="tablewrap"><table>
+    <tr><th>영역</th><th>내용</th><th>선행 조건</th></tr>
+    <tr><td class="k">용적률·건폐율</td><td>재건축 잠재력 보조 지표 (건축HUB)</td><td>건축HUB 활용신청 (data.go.kr, 동일 키)</td></tr>
+    <tr><td class="k">개발호재 큐레이션</td><td>교통·일자리 수동 이벤트 테이블 → 보너스 점수, 발표 전후 이벤트 스터디로 사후 검증</td><td>manual_catalysts.yaml 작성</td></tr>
+    <tr><td class="k">공급압력</td><td>분양물량·정비사업 진행 — 미분양(KOSIS)을 프록시 후보로</td><td>소스 재조사</td></tr>
+    <tr><td class="k">규제 통합지수</td><td>세제·LTV/DSR·거래규제 정책 이벤트를 하나의 강도 지수로 (개별 검증은 표본상 불가능 — 정직한 한계)</td><td>이벤트 테이블 축적</td></tr>
+    <tr><td class="k">그룹 정의 v2</td><td>학군·역세권 축 (지오코딩 + NEIS/학교알리미)</td><td>NEIS 키 + 파싱 파이프라인</td></tr>
+    <tr><td class="k">그리드서치+WFV</td><td>L·임계 3~4개 파라미터 최적화 및 워크포워드 확정</td><td>현행 기본값으로 운용 중</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <h2><span class="no">07</span>모듈 맵</h2>
+  <pre><code>Quant_realestate/
+├── config/regions.yaml            # 30개 법정동코드 — 지역 확장은 이 파일만
+├── config/api_keys.local.yaml     # 키 4종 (gitignore, 절대 커밋 금지)
+├── data/realestate.db             # 실거래 174만행 + macro_series (SQLite)
+├── ingest/fetch_trades.py         # 실거래 월배치 (체크포인트 재시작, 쿼터 인지)
+├── ingest/fetch_macro.py          # ECOS·R-ONE·yfinance 시계열
+├── scoring/engine.py              # 문제 2: 가격패널→그룹→팩터→결합 (§03)
+├── scoring/regime.py              # 문제 1: 레짐 점수·신호등 (§02)
+├── scoring/diagnostics.py         # 실측 진단 5종 리포트
+├── backtest/event_study.py        # 코호트·IC·임계스윕·순열검정
+├── backtest/regime_validation.py  # 레짐 장기·결합 이원 검증
+├── app.py                         # 가이드·매수타이밍·자산비교·스크리너·단지상세·백테스트
+└── docs/                          # algo_spec_v1 · regime_spec_v1 · 브레인스토밍 로그 · 진단 리포트</code></pre>
+</section>
+
+<footer>
+  YJ-RealEstate Blueprint v1 · 2026-08-15 · 근거 문서: docs/algo_spec_v1.md, docs/regime_spec_v1.md,
+  docs/brainstorm_algo_v1.md, docs/brainstorm_regime_v1.md · 본 도구는 후보 발굴·타이밍 참고용이며
+  매수 결정은 임장과 호가 확인을 전제로 한다.
+</footer>
+</main>
