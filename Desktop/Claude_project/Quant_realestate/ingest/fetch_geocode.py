@@ -108,7 +108,7 @@ def main():
 
     session = requests.Session()
     ok = fail = 0
-    now = pd.Timestamp.utcnow().isoformat()
+    now = pd.Timestamp.now("UTC").isoformat()
     for row in pending.to_dict("records"):
         try:
             result = geocode_one(session, api_key, row)

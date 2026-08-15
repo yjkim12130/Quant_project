@@ -113,9 +113,10 @@ def main():
     unmatched_n = len(df) - len(matched)
 
     conn = get_connection()
-    now = pd.Timestamp.utcnow().isoformat()
+    now = pd.Timestamp.now("UTC").isoformat()
     rows = [(r.region_code, r.expected_ym, r.project_name, int(r.total_units), "apply_home", now)
             for r in matched.itertuples()]
+    conn.execute("DELETE FROM supply_presale WHERE source='apply_home'")
     conn.executemany(
         "INSERT OR REPLACE INTO supply_presale "
         "(region_code, expected_ym, project_name, total_units, source, fetched_at) "

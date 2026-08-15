@@ -1,5 +1,6 @@
-import pandas as pd
+import sqlite3
 
+from ingest.db import SCHEMA
 from ingest.fetch_supply import normalize_presale_rows, COLUMN_MAP, match_region_code
 
 RAW_SAMPLE = [
@@ -72,3 +73,48 @@ def test_match_region_code_with_whitespace():
 
     # Still no substring matching
     assert match_region_code("강남", region_rows) is None
+
+
+def test_reingest_does_not_double_count_when_expected_ym_changes(tmp_path):
+    """Fix #6: main() must DELETE existing source='apply_home' rows before re-inserting,
+    so a project whose expected_ym shifts between runs isn't double-counted under
+    both the old and new year-month. Mirrors the exact DELETE+INSERT OR REPLACE
+    sequence used in ingest/fetch_supply.py::main() against a throwaway schema-only DB
+    (no live API/DB — matches this project's existing db-schema test style)."""
+    db_path = tmp_path / "test.db"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(SCHEMA)
+
+    # Simulate a prior run: project announced for 202601.
+    conn.execute(
+        "INSERT INTO supply_presale (region_code, expected_ym, project_name, total_units, "
+        "source, fetched_at) VALUES (?,?,?,?,?,?)",
+        ("41135", "202601", "테스트단지", 500, "apply_home", "2026-01-01T00:00:00+00:00"),
+    )
+    # A row from a different source must never be touched by the apply_home refresh.
+    conn.execute(
+        "INSERT INTO supply_presale (region_code, expected_ym, project_name, total_units, "
+        "source, fetched_at) VALUES (?,?,?,?,?,?)",
+        ("41135", "202601", "정비사업단지", 1200, "manual_curation", "2026-01-01T00:00:00+00:00"),
+    )
+    conn.commit()
+
+    # Simulate a re-run where the same project's announcement date slipped to 202603.
+    rows = [("41135", "202603", "테스트단지", 500, "apply_home", "2026-03-01T00:00:00+00:00")]
+    conn.execute("DELETE FROM supply_presale WHERE source='apply_home'")
+    conn.executemany(
+        "INSERT OR REPLACE INTO supply_presale "
+        "(region_code, expected_ym, project_name, total_units, source, fetched_at) "
+        "VALUES (?,?,?,?,?,?)", rows)
+    conn.commit()
+
+    apply_home_rows = conn.execute(
+        "SELECT expected_ym FROM supply_presale WHERE project_name='테스트단지'").fetchall()
+    assert apply_home_rows == [("202603",)], (
+        "stale row under the old expected_ym must be gone, only the new one remains")
+
+    manual_rows = conn.execute(
+        "SELECT project_name FROM supply_presale WHERE source='manual_curation'").fetchall()
+    assert manual_rows == [("정비사업단지",)], "non-apply_home rows must survive the refresh"
+
+    conn.close()

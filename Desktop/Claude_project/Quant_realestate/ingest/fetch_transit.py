@@ -168,12 +168,18 @@ def compute_transit_times(conn):
             continue
         target_ids[dest] = matches.iloc[0]["station_id"]
 
+    if not target_ids:
+        print("[경고] 매칭된 목적지 역이 없어 소요시간 계산을 건너뜁니다.")
+        conn.execute("DELETE FROM complex_transit_time")
+        conn.commit()
+        return
+
     coords["nearest_id"] = coords.apply(
         lambda r: nearest_station(r["lat"], r["lon"], stations), axis=1)
 
     # 동일 최근접역을 공유하는 단지가 많으므로 역 단위로 한 번만 다익스트라 실행
     cache = {}
-    now = pd.Timestamp.utcnow().isoformat()
+    now = pd.Timestamp.now("UTC").isoformat()
     rows = []
     for start_id in coords["nearest_id"].unique():
         if start_id not in cache:

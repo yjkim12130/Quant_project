@@ -303,7 +303,8 @@ def load_complex_coords():
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_region_map():
     """region_code -> region_name. tabTr·tabS가 공유(Task 9에서 재사용)."""
-    cfg = yaml.safe_load(open(ROOT / "config" / "regions.yaml", encoding="utf-8"))
+    with open(ROOT / "config" / "regions.yaml", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
     return {r["code"]: r["name"] for g in cfg.values() for r in g}
 
 
@@ -423,7 +424,10 @@ with tabS:
         sel_region = st.selectbox("지역 (시군구)", sorted(region_map.values()), index=None,
                                   placeholder="지역을 선택하세요", key="supply_region")
         if sel_region:
-            sub = supply[supply["region_name"] == sel_region].sort_values("year")
+            cur_year = pd.Timestamp.now().year
+            sub = supply[(supply["region_name"] == sel_region)
+                         & (supply["year"] >= cur_year)
+                         & (supply["year"] <= cur_year + 2)].sort_values("year")
             fig = go.Figure()
             fig.add_trace(go.Bar(x=sub["year"], y=sub["presale_units"], name="분양(자동)",
                                  marker_color=ACCENT))
@@ -469,7 +473,7 @@ with tabTr:
             planned = load_planned_transit()
             if not planned.empty:
                 st.markdown("###### 🚧 예정 노선 (착공/준공, 현재 소요시간 계산에는 미반영)")
-                for row in planned.itertuples():
+                for row in planned.sort_values("expected_open_year").itertuples():
                     years_left = row.expected_open_year - pd.Timestamp.now().year
                     badge = "🔜 3년 이내" if years_left <= 3 else "🕐 3년 이상"
                     st.markdown(f"- **{row.line_name}** ({row.stage}) — {', '.join(row.stations)} · "
