@@ -312,6 +312,15 @@ TRANSIT_DEST_ORDER = ["강남", "종로", "여의도", "판교", "동탄"]
 with tabA:
     try:
         assets = load_assets()
+        from scoring.market_context import asset_ratio_zscore
+        zscores = asset_ratio_zscore(assets)
+        if zscores:
+            st.markdown("###### 저평가 정도 (비율 z-score, 2003~ 전체 역사 기준)")
+            cols = st.columns(len(zscores))
+            for col, (asset_col, z) in zip(cols, zscores.items()):
+                label = ASSET_LABELS.get(asset_col, asset_col)
+                col.metric(f"🏠/{label}", f"{z:+.2f}σ",
+                          help="음수 = 부동산이 해당 자산 대비 역사적으로 저평가")
         st.markdown("##### 자산군 상대 성과 — 부동산도 여러 자산 중 하나다")
 
         rng = st.radio("기간", ["1년", "3년", "5년", "10년", "전체"], index=2, horizontal=True)

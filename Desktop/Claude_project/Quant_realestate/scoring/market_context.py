@@ -69,3 +69,22 @@ def load_supply_by_region_year(conn):
     out["presale_units"] = out["presale_units"].fillna(0).astype(int)
     out["redevelopment_units"] = out["redevelopment_units"].fillna(0).astype(int)
     return out.sort_values(["region_code", "year"]).reset_index(drop=True)
+
+
+ASSET_COMPARE_COLS = ["asset_kospi", "asset_nasdaq", "asset_gold", "asset_btc"]
+
+
+def asset_ratio_zscore(assets):
+    """reb_apt_index / 각 자산 비율의 자기 역사 대비 z-score(최신값). 음수 = 부동산이 해당
+    자산 대비 역사적으로 싸다(rv_z와 동일한 부호 관례). 컬럼 없으면 결과에서 제외."""
+    if "reb_apt_index" not in assets.columns:
+        return {}
+    out = {}
+    for col in ASSET_COMPARE_COLS:
+        if col not in assets.columns:
+            continue
+        ratio = (assets["reb_apt_index"] / assets[col]).dropna()
+        if len(ratio) < 2 or ratio.std() == 0:
+            continue
+        out[col] = (ratio.iloc[-1] - ratio.mean()) / ratio.std()
+    return out

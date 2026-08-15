@@ -1,9 +1,11 @@
 import sqlite3
 import textwrap
 
+import numpy as np
 import pandas as pd
+import pytest
 
-from scoring.market_context import load_planned_transit, load_redevelopment, load_supply_by_region_year
+from scoring.market_context import asset_ratio_zscore, load_planned_transit, load_redevelopment, load_supply_by_region_year
 
 
 def test_load_redevelopment_parses_yaml(tmp_path, monkeypatch):
@@ -137,3 +139,24 @@ def test_load_planned_transit_handles_multiple_entries(tmp_path, monkeypatch):
     assert len(df) == 2
     assert df.iloc[0]["line_name"] == "GTX-A"
     assert df.iloc[1]["line_name"] == "GTX-C"
+
+
+def test_asset_ratio_zscore_matches_manual_calc():
+    idx = pd.period_range("2020-01", periods=24, freq="M")
+    rng = np.random.RandomState(0)
+    apt = pd.Series(100 + rng.randn(24).cumsum(), index=idx)
+    kospi = pd.Series(100 + rng.randn(24).cumsum(), index=idx)
+    assets = pd.DataFrame({"reb_apt_index": apt, "asset_kospi": kospi})
+
+    result = asset_ratio_zscore(assets)
+
+    ratio = apt / kospi
+    expected = (ratio.iloc[-1] - ratio.mean()) / ratio.std()
+    assert result["asset_kospi"] == pytest.approx(expected)
+
+
+def test_asset_ratio_zscore_skips_missing_columns():
+    idx = pd.period_range("2020-01", periods=12, freq="M")
+    assets = pd.DataFrame({"reb_apt_index": pd.Series(range(12), index=idx, dtype=float)})
+    result = asset_ratio_zscore(assets)
+    assert result == {}
