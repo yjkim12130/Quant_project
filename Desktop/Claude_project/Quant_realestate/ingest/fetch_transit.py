@@ -145,6 +145,7 @@ def haversine_km(lat1, lon1, lat2, lon2):
 
 def nearest_station(lat, lon, stations):
     """stations: station_id/lat/lon 컬럼 DataFrame. 가장 가까운 station_id 반환."""
+    stations = stations.reset_index(drop=True)
     d = stations.apply(lambda s: haversine_km(lat, lon, s["lat"], s["lon"]), axis=1)
     return stations.loc[d.idxmin(), "station_id"]
 

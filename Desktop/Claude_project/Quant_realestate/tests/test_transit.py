@@ -138,3 +138,22 @@ def test_nearest_station_picks_closest():
     })
     result = nearest_station(37.501, 127.031, stations)
     assert result == "A"
+
+
+def test_nearest_station_safe_with_non_unique_index():
+    """인덱스가 고유하지 않은 DataFrame에서도 scalar 문자열을 반환하는지 확인.
+
+    pd.concat이나 필터링으로 인해 중복된 인덱스를 가진 DataFrame을 전달해도
+    nearest_station이 안전하게 동작해야 한다.
+    """
+    # 중복된 인덱스를 가진 DataFrame 생성 (pd.concat 시뮬레이션)
+    stations = pd.DataFrame({
+        "station_id": ["A", "B", "C"], "lat": [37.50, 37.60, 37.70], "lon": [127.03, 127.10, 127.15],
+    })
+    stations.index = [0, 0, 1]  # 중복된 인덱스
+
+    result = nearest_station(37.501, 127.031, stations)
+
+    # 결과가 scalar 문자열인지 확인
+    assert isinstance(result, str), f"Expected str, got {type(result)}"
+    assert result == "A", f"Expected 'A', got {result}"
