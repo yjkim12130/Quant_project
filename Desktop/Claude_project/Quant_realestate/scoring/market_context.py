@@ -24,6 +24,13 @@ def load_redevelopment():
     return pd.DataFrame(rows)
 
 
+def load_planned_transit():
+    rows = _load_yaml().get("transit_planned") or []
+    if not rows:
+        return pd.DataFrame(columns=["line_name", "stations", "stage", "expected_open_year"])
+    return pd.DataFrame(rows)
+
+
 def load_supply_by_region_year(conn):
     """Load and aggregate presale (자동) and redevelopment (수동) supply data.
 

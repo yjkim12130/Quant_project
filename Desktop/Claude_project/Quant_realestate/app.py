@@ -456,6 +456,15 @@ with tabTr:
                               margin=dict(t=40, b=0), yaxis_title="분")
             st.plotly_chart(fig, use_container_width=True)
             st.caption(f"표본 {sub['ckey'].nunique()}개 단지 기준 중위값")
+            from scoring.market_context import load_planned_transit
+            planned = load_planned_transit()
+            if not planned.empty:
+                st.markdown("###### 🚧 예정 노선 (착공/준공, 현재 소요시간 계산에는 미반영)")
+                for row in planned.itertuples():
+                    years_left = row.expected_open_year - pd.Timestamp.now().year
+                    badge = "🔜 3년 이내" if years_left <= 3 else "🕐 3년 이상"
+                    st.markdown(f"- **{row.line_name}** ({row.stage}) — {', '.join(row.stations)} · "
+                               f"예정 {row.expected_open_year}년 {badge}")
     except Exception as e:  # noqa: BLE001
         st.error(f"교통 탭 오류: {e}")
         st.exception(e)

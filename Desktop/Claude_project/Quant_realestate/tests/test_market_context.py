@@ -3,7 +3,7 @@ import textwrap
 
 import pandas as pd
 
-from scoring.market_context import load_redevelopment, load_supply_by_region_year
+from scoring.market_context import load_planned_transit, load_redevelopment, load_supply_by_region_year
 
 
 def test_load_redevelopment_parses_yaml(tmp_path, monkeypatch):
@@ -87,3 +87,53 @@ def test_load_supply_by_region_year_handles_missing_presale_table(tmp_path, monk
     row = out[(out["region_code"] == "11680") & (out["year"] == 2027)].iloc[0]
     assert row["redevelopment_units"] == 500
     assert row["presale_units"] == 0
+
+
+def test_load_planned_transit_parses_yaml(tmp_path, monkeypatch):
+    yaml_path = tmp_path / "manual_catalysts.yaml"
+    yaml_path.write_text(textwrap.dedent("""
+        redevelopment: []
+        transit_planned:
+          - line_name: "GTX-A"
+            stations: ["동탄", "판교"]
+            stage: "공사중"
+            expected_open_year: 2026
+    """), encoding="utf-8")
+    monkeypatch.setattr("scoring.market_context.MANUAL_CATALYSTS_YAML", yaml_path)
+
+    df = load_planned_transit()
+    assert len(df) == 1
+    assert df.iloc[0]["line_name"] == "GTX-A"
+    assert "동탄" in df.iloc[0]["stations"]
+
+
+def test_load_planned_transit_empty_when_section_missing(tmp_path, monkeypatch):
+    yaml_path = tmp_path / "manual_catalysts.yaml"
+    yaml_path.write_text("redevelopment: []\n", encoding="utf-8")
+    monkeypatch.setattr("scoring.market_context.MANUAL_CATALYSTS_YAML", yaml_path)
+
+    df = load_planned_transit()
+    assert df.empty
+    assert list(df.columns) == ["line_name", "stations", "stage", "expected_open_year"]
+
+
+def test_load_planned_transit_handles_multiple_entries(tmp_path, monkeypatch):
+    yaml_path = tmp_path / "manual_catalysts.yaml"
+    yaml_path.write_text(textwrap.dedent("""
+        redevelopment: []
+        transit_planned:
+          - line_name: "GTX-A"
+            stations: ["동탄", "판교"]
+            stage: "공사중"
+            expected_open_year: 2026
+          - line_name: "GTX-C"
+            stations: ["하남", "여주"]
+            stage: "착공"
+            expected_open_year: 2027
+    """), encoding="utf-8")
+    monkeypatch.setattr("scoring.market_context.MANUAL_CATALYSTS_YAML", yaml_path)
+
+    df = load_planned_transit()
+    assert len(df) == 2
+    assert df.iloc[0]["line_name"] == "GTX-A"
+    assert df.iloc[1]["line_name"] == "GTX-C"
