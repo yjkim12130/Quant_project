@@ -42,8 +42,11 @@ def parse_kakao_address(data):
     docs = data.get("documents") or []
     if not docs:
         return None
-    addr = docs[0]["address"]
-    return (float(addr["y"]), float(addr["x"]))
+    # 문서 최상위 x/y는 address_type이 ROAD/REGION_ADDR 어느 쪽이든 항상 채워진다.
+    # address 서브필드는 도로명에 건물번호가 없는 매치(도로 자체만 특정됨)일 때 null이 될 수 있어
+    # 여기로 파고들면 깨진다 — 최상위 값을 바로 쓴다.
+    doc = docs[0]
+    return (float(doc["y"]), float(doc["x"]))
 
 
 def parse_kakao_keyword(data):
