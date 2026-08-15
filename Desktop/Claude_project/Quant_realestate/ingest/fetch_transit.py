@@ -13,6 +13,7 @@
     python ingest/fetch_transit.py --smoke-test    # 원본 응답 1페이지 출력만
     python ingest/fetch_transit.py                 # 노선/역 적재 + 그래프 구성 + 소요시간 계산
 """
+import math
 import sys
 import time
 from pathlib import Path
@@ -133,6 +134,65 @@ def shortest_minutes(adj, start_id, target_ids):
     return found
 
 
+def haversine_km(lat1, lon1, lat2, lon2):
+    r = 6371.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+
+def nearest_station(lat, lon, stations):
+    """stations: station_id/lat/lon 컬럼 DataFrame. 가장 가까운 station_id 반환."""
+    d = stations.apply(lambda s: haversine_km(lat, lon, s["lat"], s["lon"]), axis=1)
+    return stations.loc[d.idxmin(), "station_id"]
+
+
+def compute_transit_times(conn):
+    """complex_coords 전체에 대해 5개 업무지구까지 소요시간 계산 후 complex_transit_time 적재."""
+    coords = pd.read_sql_query("SELECT ckey, lat, lon FROM complex_coords WHERE lat IS NOT NULL", conn)
+    stations = pd.read_sql_query("SELECT station_id, station_name, lat, lon FROM station_node", conn)
+    edges = pd.read_sql_query("SELECT from_id, to_id, minutes FROM station_edge", conn)
+
+    adj = {}
+    for r in edges.itertuples():
+        adj.setdefault(r.from_id, []).append((r.to_id, r.minutes))
+
+    target_ids = {}
+    for dest, station_name in TARGET_STATIONS.items():
+        matches = stations[stations["station_name"] == station_name]
+        if matches.empty:
+            print(f"[경고] 목적지 역 '{station_name}'({dest}) 이 station_node에 없어 건너뜁니다.")
+            continue
+        target_ids[dest] = matches.iloc[0]["station_id"]
+
+    coords["nearest_id"] = coords.apply(
+        lambda r: nearest_station(r["lat"], r["lon"], stations), axis=1)
+
+    # 동일 최근접역을 공유하는 단지가 많으므로 역 단위로 한 번만 다익스트라 실행
+    cache = {}
+    now = pd.Timestamp.utcnow().isoformat()
+    rows = []
+    for start_id in coords["nearest_id"].unique():
+        if start_id not in cache:
+            cache[start_id] = shortest_minutes(adj, start_id, set(target_ids.values()))
+        result = cache[start_id]
+        id_to_dest = {v: k for k, v in target_ids.items()}
+        for target_id, minutes in result.items():
+            dest = id_to_dest[target_id]
+            for ckey in coords.loc[coords["nearest_id"] == start_id, "ckey"]:
+                nearest_name = stations.loc[stations["station_id"] == start_id, "station_name"].iloc[0]
+                rows.append((ckey, dest, minutes, nearest_name, now))
+
+    conn.execute("DELETE FROM complex_transit_time")
+    conn.executemany(
+        "INSERT INTO complex_transit_time (ckey, dest, minutes, nearest_station, calculated_at) "
+        "VALUES (?,?,?,?,?)", rows)
+    conn.commit()
+    print(f"완료: {coords['ckey'].nunique()}개 단지 x {len(target_ids)}개 목적지 = {len(rows)}행")
+
+
 def main():
     import argparse
     ap = argparse.ArgumentParser(description="지하철 노선/역 적재 + 그래프 구성")
@@ -170,6 +230,7 @@ def main():
     if missing:
         print(f"[경고] 목표 업무지구 대표역이 노선 데이터에 없음: {missing} — "
               "역명 표기가 다를 수 있으니 station_node 테이블을 확인하세요.")
+    compute_transit_times(conn)
     conn.close()
 
 

@@ -1,6 +1,8 @@
+import math
+
 import pandas as pd
 
-from ingest.fetch_transit import normalize_route_rows, build_edges, COLUMN_MAP, shortest_minutes
+from ingest.fetch_transit import normalize_route_rows, build_edges, COLUMN_MAP, shortest_minutes, nearest_station, haversine_km
 
 RAW_SAMPLE = [
     {"LNCD_NM": "2호선", "STIN_NM": "강남", "STIN_SEQ": "1", "LAT": "37.4979", "LOT": "127.0276"},
@@ -118,3 +120,21 @@ def test_shortest_minutes_empty_targets():
     }
     result = shortest_minutes(adj, "A", [])
     assert result == {}, f"Expected empty dict, got {result}"
+
+
+def test_haversine_km_zero_distance():
+    assert haversine_km(37.5, 127.0, 37.5, 127.0) == 0.0
+
+
+def test_haversine_km_known_pair():
+    # 강남역(37.4979,127.0276) ~ 역삼역(37.5006,127.0364) 실측 약 0.8km
+    d = haversine_km(37.4979, 127.0276, 37.5006, 127.0364)
+    assert 0.5 < d < 1.2
+
+
+def test_nearest_station_picks_closest():
+    stations = pd.DataFrame({
+        "station_id": ["A", "B"], "lat": [37.50, 37.60], "lon": [127.03, 127.10],
+    })
+    result = nearest_station(37.501, 127.031, stations)
+    assert result == "A"
