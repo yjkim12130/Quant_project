@@ -1,4 +1,6 @@
 # ManageStock/app.py
+import datetime
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -49,6 +51,11 @@ with tab1:
 
             category_df = portfolio.aggregate_by_category(valid_df)
 
+            today = datetime.date.today().isoformat()
+            snapshot_values = dict(zip(category_df["category"], category_df["value_krw"]))
+            snapshot_values["TOTAL"] = totals["total_value_krw"]
+            data_io.append_snapshot(today, snapshot_values)
+
             if category_df.empty:
                 st.warning("시세를 조회할 수 있는 종목이 없어 차트를 표시할 수 없습니다.")
             else:
@@ -82,6 +89,19 @@ with tab1:
                 ]],
                 use_container_width=True,
             )
+
+            history_df = data_io.load_history()
+            total_history = history_df[history_df["category"] == "TOTAL"].sort_values("date")
+            if len(total_history) < 2:
+                st.info("데이터가 쌓이면 자산 추이가 표시됩니다.")
+            else:
+                trend = go.Figure(go.Scatter(
+                    x=total_history["date"], y=total_history["value_krw"],
+                    mode="lines+markers",
+                    line=dict(color=categories.TREND_COLOR, width=2),
+                ))
+                trend.update_layout(title="총자산 추이 (KRW)", xaxis_title=None, yaxis_title="평가금액 (원)")
+                st.plotly_chart(trend, use_container_width=True)
 
 with tab2:
     st.subheader("종목 추가")
