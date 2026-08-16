@@ -19,6 +19,7 @@ import plotly.graph_objects as go
 
 import advisor_data as ad
 import advisor_llm as al
+import advisor_briefing as ab
 
 st.set_page_config(page_title="자문역 인사이트 — 종목 분석",
                    page_icon="🧮", layout="wide")
@@ -71,6 +72,11 @@ def load_signals(ticker: str) -> dict:
 def load_ojs(ticker: str, market_cap, revenue_ttm, per) -> dict:
     quant = {"market_cap": market_cap, "revenue_ttm": revenue_ttm, "per": per}
     return ad.compute_ojs_signals(load_history(ticker), quant)
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def load_briefing() -> dict:
+    return ab.build_briefing()
 
 
 def price_chart(close, ojs: dict):
@@ -162,214 +168,279 @@ st.sidebar.caption("와이제이링크 · 헥토파이낸셜 · 켄코아에어�
 # ════════════════════════════════════════════════════════════════════
 # 메인
 # ════════════════════════════════════════════════════════════════════
-if not (run_clicked or name):
-    st.info("좌측에서 종목을 입력하고 **분석 실행**을 눌러주세요.")
-    st.stop()
+tab1, tab2 = st.tabs(["🧮 종목 분석", "📰 시황 브리핑"])
 
-with st.spinner(f"'{name}' 데이터 수집 중…"):
-    card = load_card(name, us)
+with tab1:
+    if not (run_clicked or name):
+        st.info("좌측에서 종목을 입력하고 **분석 실행**을 눌러주세요.")
+        st.stop()
 
-if card.get("_error"):
-    st.error(f"❌ {card['_error']}")
-    st.info("한국 종목은 **정확한 한글 종목명**(예: 유한양행, 에스티팜)을, "
-            "미국 종목은 좌측 체크 후 **티커**(예: AAPL)를 입력하세요.")
-    st.stop()
+    with st.spinner(f"'{name}' 데이터 수집 중…"):
+        card = load_card(name, us)
 
-q = card.get("quant", {})
+    if card.get("_error"):
+        st.error(f"❌ {card['_error']}")
+        st.info("한국 종목은 **정확한 한글 종목명**(예: 유한양행, 에스티팜)을, "
+                "미국 종목은 좌측 체크 후 **티커**(예: AAPL)를 입력하세요.")
+        st.stop()
 
-# yfinance 빈 응답 가드 — 조용한 null 대신 명확한 경고 + 재시도
-if q.get("_status") in ("NO_DATA", "NO_YFINANCE") or q.get("price") is None:
-    st.error(f"⚠️ '{card['name']}' ({card.get('ticker','')}) 의 시세를 받지 못했습니다.")
-    st.warning(
-        "원인은 보통 **yfinance 일시적 rate-limit**(종목을 빠르게 연속 입력하면 발생)이거나 "
-        "해당 티커를 yfinance가 커버하지 않는 경우입니다.\n\n"
-        "- **20~30초 후 다시 '분석 실행'** 을 눌러보세요 (대개 해결됩니다).\n"
-        "- 데이터 레이어는 정상이며, 캐시(10분)에 빈 결과가 남지 않도록 재조회합니다."
-    )
-    # 빈 결과가 캐시에 굳지 않도록 무효화
-    load_card.clear()
-    load_signals.clear()
-    st.stop()
+    q = card.get("quant", {})
 
-tkr_full = q.get("ticker", "")
-sig = load_signals(tkr_full) if tkr_full else {"_status": "NO_TICKER"}
-ojs = (load_ojs(tkr_full, q.get("market_cap"), q.get("revenue_ttm"), q.get("per"))
-       if tkr_full else {"_status": "NO_TICKER"})
+    # yfinance 빈 응답 가드 — 조용한 null 대신 명확한 경고 + 재시도
+    if q.get("_status") in ("NO_DATA", "NO_YFINANCE") or q.get("price") is None:
+        st.error(f"⚠️ '{card['name']}' ({card.get('ticker','')}) 의 시세를 받지 못했습니다.")
+        st.warning(
+            "원인은 보통 **yfinance 일시적 rate-limit**(종목을 빠르게 연속 입력하면 발생)이거나 "
+            "해당 티커를 yfinance가 커버하지 않는 경우입니다.\n\n"
+            "- **20~30초 후 다시 '분석 실행'** 을 눌러보세요 (대개 해결됩니다).\n"
+            "- 데이터 레이어는 정상이며, 캐시(10분)에 빈 결과가 남지 않도록 재조회합니다."
+        )
+        # 빈 결과가 캐시에 굳지 않도록 무효화
+        load_card.clear()
+        load_signals.clear()
+        st.stop()
 
-# ── 헤더 ──────────────────────────────────────────────────────────────
-regime = sig.get("regime", "—")
-top1, top2 = st.columns([3, 2])
-with top1:
-    st.markdown(f"## {card['name']} "
-                f"<span class='badge b-reg'>{card.get('market','')}</span>",
-                unsafe_allow_html=True)
-    st.caption(f"{card.get('ticker','')} · {q.get('name','')} · "
-               f"{q.get('sector','')}/{q.get('industry','')} · 분석일 {card.get('as_of','')}")
-with top2:
-    st.metric("간이 레짐 (독립 신호)", regime,
-              delta=f"RSI {sig.get('rsi14','—')}", delta_color="off")
+    tkr_full = q.get("ticker", "")
+    sig = load_signals(tkr_full) if tkr_full else {"_status": "NO_TICKER"}
+    ojs = (load_ojs(tkr_full, q.get("market_cap"), q.get("revenue_ttm"), q.get("per"))
+           if tkr_full else {"_status": "NO_TICKER"})
 
-# ── ① 정량 데이터 (yfinance LIVE) ─────────────────────────────────────
-st.markdown("### ① 정량 데이터 <span class='badge b-live'>yfinance LIVE</span>",
-            unsafe_allow_html=True)
-c = st.columns(5)
-cur = q.get("currency", "")
-c[0].metric("현재가", f"{q.get('price','—'):,}" if isinstance(q.get('price'), (int, float)) else "—",
-            help=cur)
-c[1].metric("시가총액", _krw(q.get("market_cap")))
-c[2].metric("매출 TTM", _krw(q.get("revenue_ttm")))
-pm = q.get("profit_margin")
-c[3].metric("순이익률", f"{pm*100:.1f}%" if isinstance(pm, (int, float)) else "—")
-c[4].metric("52주 밴드",
-            f"{q.get('wk52_low','—'):,}~{q.get('wk52_high','—'):,}"
-            if isinstance(q.get('wk52_low'), (int, float)) else "—")
-
-# ── 차트 (종가 + 200일선 + 오재승 그물망 리본) ───────────────────────
-close = load_history(tkr_full) if tkr_full else None
-if close is not None and len(close) >= 30:
-    arr = ojs.get("net_arrangement", "—") if isinstance(ojs, dict) else "—"
-    st.markdown(f"### 📈 가격 차트 <span class='badge b-reg'>그물망 12 MA · {arr}</span>",
-                unsafe_allow_html=True)
-    st.plotly_chart(price_chart(close, ojs), use_container_width=True)
-
-# ── ② 정량 신호 (간이 레짐) ───────────────────────────────────────────
-st.markdown("### ② 정량 신호 <span class='badge b-reg'>개별종목 자체 계산 · v9.3 미의존</span>",
-            unsafe_allow_html=True)
-if sig.get("_status"):
-    st.warning(f"신호 계산 불가: {sig['_status']}")
-else:
-    s = st.columns(5)
-    s[0].metric("200일선 이격", f"{sig.get('ma200_dev_pct','—')}%")
-    s[1].metric("RSI(14)", sig.get("rsi14", "—"))
-    s[2].metric("52주 위치", f"{sig.get('wk52_pos_pct','—')}%")
-    s[3].metric("1개월 수익", f"{sig.get('ret_1m_pct','—')}%")
-    s[4].metric("3개월 수익", f"{sig.get('ret_3m_pct','—')}%")
-
-    st.markdown("#### 🔵 오재승 타이밍 — 7룰 자동 매칭 "
-                "<span class='badge b-reg'>가격 데이터 정량</span>",
-                unsafe_allow_html=True)
-    for h in ojs_hint(sig):
-        st.caption(f"💡 {h}")
-
-    if isinstance(ojs, dict) and not ojs.get("_status"):
-        ojs_rb = ad.load_ojs_rulebook()
-        rb_by_id = {r["id"]: r for r in ojs_rb["rules"]} if ojs_rb else {}
-        rules = ad.evaluate_ojs_rules(ojs)
-        active_n = sum(1 for r in rules if r["active"])
-        st.caption(f"🟢 활성 신호 {active_n}/{len(rules)}룰 "
-                   f"(OJS-MA-01·LINE-01·SEASON-01은 룰북 참조)")
-        for r in rules:
-            icon = "🟢" if r["active"] else "⚪"
-            meta = rb_by_id.get(r["id"], {})
-            st.markdown(
-                f"{icon} **{r['id']}** · {r['name']} — {r['note']}")
-            if meta.get("then"):
-                st.markdown(
-                    f"<div class='ev'>→ {meta['then']}</div>",
+    # ── 헤더 ──────────────────────────────────────────────────────────────
+    regime = sig.get("regime", "—")
+    top1, top2 = st.columns([3, 2])
+    with top1:
+        st.markdown(f"## {card['name']} "
+                    f"<span class='badge b-reg'>{card.get('market','')}</span>",
                     unsafe_allow_html=True)
+        st.caption(f"{card.get('ticker','')} · {q.get('name','')} · "
+                   f"{q.get('sector','')}/{q.get('industry','')} · 분석일 {card.get('as_of','')}")
+    with top2:
+        st.metric("간이 레짐 (독립 신호)", regime,
+                  delta=f"RSI {sig.get('rsi14','—')}", delta_color="off")
+
+    # ── ① 정량 데이터 (yfinance LIVE) ─────────────────────────────────────
+    st.markdown("### ① 정량 데이터 <span class='badge b-live'>yfinance LIVE</span>",
+                unsafe_allow_html=True)
+    c = st.columns(5)
+    cur = q.get("currency", "")
+    c[0].metric("현재가", f"{q.get('price','—'):,}" if isinstance(q.get('price'), (int, float)) else "—",
+                help=cur)
+    c[1].metric("시가총액", _krw(q.get("market_cap")))
+    c[2].metric("매출 TTM", _krw(q.get("revenue_ttm")))
+    pm = q.get("profit_margin")
+    c[3].metric("순이익률", f"{pm*100:.1f}%" if isinstance(pm, (int, float)) else "—")
+    c[4].metric("52주 밴드",
+                f"{q.get('wk52_low','—'):,}~{q.get('wk52_high','—'):,}"
+                if isinstance(q.get('wk52_low'), (int, float)) else "—")
+
+    # ── 차트 (종가 + 200일선 + 오재승 그물망 리본) ───────────────────────
+    close = load_history(tkr_full) if tkr_full else None
+    if close is not None and len(close) >= 30:
+        arr = ojs.get("net_arrangement", "—") if isinstance(ojs, dict) else "—"
+        st.markdown(f"### 📈 가격 차트 <span class='badge b-reg'>그물망 12 MA · {arr}</span>",
+                    unsafe_allow_html=True)
+        st.plotly_chart(price_chart(close, ojs), use_container_width=True)
+
+    # ── ② 정량 신호 (간이 레짐) ───────────────────────────────────────────
+    st.markdown("### ② 정량 신호 <span class='badge b-reg'>개별종목 자체 계산 · v9.3 미의존</span>",
+                unsafe_allow_html=True)
+    if sig.get("_status"):
+        st.warning(f"신호 계산 불가: {sig['_status']}")
     else:
-        st.caption("그물망/MACD 신호 계산을 위한 가격 히스토리가 부족합니다.")
+        s = st.columns(5)
+        s[0].metric("200일선 이격", f"{sig.get('ma200_dev_pct','—')}%")
+        s[1].metric("RSI(14)", sig.get("rsi14", "—"))
+        s[2].metric("52주 위치", f"{sig.get('wk52_pos_pct','—')}%")
+        s[3].metric("1개월 수익", f"{sig.get('ret_1m_pct','—')}%")
+        s[4].metric("3개월 수익", f"{sig.get('ret_3m_pct','—')}%")
 
-# ── ④ 빈규리 룰북 평가 ────────────────────────────────────────────────
-st.markdown("### ③ 빈규리 펀더멘탈 룰북 평가 "
-            "<span class='badge b-live'>코드 자동</span> "
-            "<span class='badge b-pend'>정성 수동</span>", unsafe_allow_html=True)
+        st.markdown("#### 🔵 오재승 타이밍 — 7룰 자동 매칭 "
+                    "<span class='badge b-reg'>가격 데이터 정량</span>",
+                    unsafe_allow_html=True)
+        for h in ojs_hint(sig):
+            st.caption(f"💡 {h}")
 
-rb = ad.load_rulebook()
-if not rb:
-    st.warning("binkyuri_rulebook.json 을 찾을 수 없습니다.")
-else:
-    auto_ids = {m["id"] for m in card.get("rulebook", {}).get("auto_matched", [])}
-    rules_by_cat: dict[str, list] = {}
-    for r in rb["rules"]:
-        rules_by_cat.setdefault(r["category"], []).append(r)
-
-    # ── Claude 정성 평가 트리거 + 캐시(세션) ──────────────────────────
-    eval_key = f"llm_eval::{card.get('ticker')}"
-    bc1, bc2 = st.columns([1, 2])
-    with bc1:
-        if st.button("🤖 Claude로 정성 룰 자동 평가", disabled=not llm_ok,
-                     use_container_width=True):
-            with st.spinner("Claude가 11개 정성 룰 평가 중…"):
-                st.session_state[eval_key] = al.evaluate_qualitative_rules(card, rb, sig)
-    with bc2:
-        if not llm_ok:
-            st.caption(f"🟠 {llm_why}")
-        elif eval_key not in st.session_state:
-            st.caption("버튼을 누르면 해자·진위판별 등 11개 정성 룰을 Claude가 판정·근거 제시합니다.")
-
-    llm_res = st.session_state.get(eval_key)
-    llm_map: dict[str, dict] = {}
-    if llm_res:
-        if llm_res.get("_status") == "ok":
-            llm_map = {e["rule_id"]: e for e in llm_res["evaluations"]}
-            u = llm_res.get("usage", {})
-            st.caption(f"✅ Claude({llm_res.get('model','')}) 평가 완료 · "
-                       f"met={sum(1 for e in llm_map.values() if e['verdict']=='met')}/{len(llm_map)} · "
-                       f"토큰 in {u.get('input',0)}(cache {u.get('cache_read',0)})/out {u.get('output',0)}")
+        if isinstance(ojs, dict) and not ojs.get("_status"):
+            ojs_rb = ad.load_ojs_rulebook()
+            rb_by_id = {r["id"]: r for r in ojs_rb["rules"]} if ojs_rb else {}
+            rules = ad.evaluate_ojs_rules(ojs)
+            active_n = sum(1 for r in rules if r["active"])
+            st.caption(f"🟢 활성 신호 {active_n}/{len(rules)}룰 "
+                       f"(OJS-MA-01·LINE-01·SEASON-01은 룰북 참조)")
+            for r in rules:
+                icon = "🟢" if r["active"] else "⚪"
+                meta = rb_by_id.get(r["id"], {})
+                st.markdown(
+                    f"{icon} **{r['id']}** · {r['name']} — {r['note']}")
+                if meta.get("then"):
+                    st.markdown(
+                        f"<div class='ev'>→ {meta['then']}</div>",
+                        unsafe_allow_html=True)
         else:
-            st.warning(f"평가 실패 [{llm_res.get('_status')}]: {llm_res.get('_msg','')}")
+            st.caption("그물망/MACD 신호 계산을 위한 가격 히스토리가 부족합니다.")
 
-    st.caption("🟢자동=코드 확인 · 🤖Claude=LLM 판정(met 자동 체크) · 그 외=근거 보고 직접 체크. "
-               "체크한 룰의 가중치 합으로 점수 산출.")
+    # ── ④ 빈규리 룰북 평가 ────────────────────────────────────────────────
+    st.markdown("### ③ 빈규리 펀더멘탈 룰북 평가 "
+                "<span class='badge b-live'>코드 자동</span> "
+                "<span class='badge b-pend'>정성 수동</span>", unsafe_allow_html=True)
 
-    _VICON = {"met": "✅", "not_met": "❌", "unknown": "❔"}
-    checked_w = 0
-    total_w = 0
-    cat_scores: dict[str, tuple] = {}
-    for cat in _CAT_ORDER:
-        if cat not in rules_by_cat:
-            continue
-        with st.expander(f"📁 {cat}  ({len(rules_by_cat[cat])}룰)", expanded=(cat in ("해자", "진위판별"))):
-            cw = ct = 0
-            for r in rules_by_cat[cat]:
-                w = _W.get(r.get("weight", "mid"), 2)
-                total_w += w
-                ct += w
-                is_auto = r["id"] in auto_ids
-                ev = llm_map.get(r["id"])
-                llm_met = bool(ev and ev["verdict"] == "met")
-                default = is_auto or llm_met
-                label = f"**{r['id']}** · {r['name']}  ·  ({r.get('weight','mid')})"
-                if is_auto:
-                    label += "  🟢자동"
-                if ev:
-                    label += f"  🤖{_VICON.get(ev['verdict'],'')}{ev['verdict']}({ev['confidence']})"
-                # LLM 재평가 시 위젯 기본값을 새로 반영하기 위해 key에 평가 유무 포함
-                ck = f"chk_{r['id']}_{'L' if ev else '0'}"
-                checked = st.checkbox(label, value=default, key=ck)
-                st.markdown(f"<div class='rule-if'>IF: {r['if']}</div>"
-                            f"<div class='rule-then'>→ {r['then']}</div>",
-                            unsafe_allow_html=True)
-                if ev:
-                    st.markdown(f"<div class='ev'>🤖 {ev['reasoning']} "
-                                f"<b>근거:</b> {ev['evidence']}</div>", unsafe_allow_html=True)
-                elif r.get("evidence"):
-                    e = r["evidence"][0]
-                    st.markdown(f"<div class='ev'>예: [{e['stock']}] {e['quote']}</div>",
+    rb = ad.load_rulebook()
+    if not rb:
+        st.warning("binkyuri_rulebook.json 을 찾을 수 없습니다.")
+    else:
+        auto_ids = {m["id"] for m in card.get("rulebook", {}).get("auto_matched", [])}
+        rules_by_cat: dict[str, list] = {}
+        for r in rb["rules"]:
+            rules_by_cat.setdefault(r["category"], []).append(r)
+
+        # ── Claude 정성 평가 트리거 + 캐시(세션) ──────────────────────────
+        eval_key = f"llm_eval::{card.get('ticker')}"
+        bc1, bc2 = st.columns([1, 2])
+        with bc1:
+            if st.button("🤖 Claude로 정성 룰 자동 평가", disabled=not llm_ok,
+                         use_container_width=True):
+                with st.spinner("Claude가 11개 정성 룰 평가 중…"):
+                    st.session_state[eval_key] = al.evaluate_qualitative_rules(card, rb, sig)
+        with bc2:
+            if not llm_ok:
+                st.caption(f"🟠 {llm_why}")
+            elif eval_key not in st.session_state:
+                st.caption("버튼을 누르면 해자·진위판별 등 11개 정성 룰을 Claude가 판정·근거 제시합니다.")
+
+        llm_res = st.session_state.get(eval_key)
+        llm_map: dict[str, dict] = {}
+        if llm_res:
+            if llm_res.get("_status") == "ok":
+                llm_map = {e["rule_id"]: e for e in llm_res["evaluations"]}
+                u = llm_res.get("usage", {})
+                st.caption(f"✅ Claude({llm_res.get('model','')}) 평가 완료 · "
+                           f"met={sum(1 for e in llm_map.values() if e['verdict']=='met')}/{len(llm_map)} · "
+                           f"토큰 in {u.get('input',0)}(cache {u.get('cache_read',0)})/out {u.get('output',0)}")
+            else:
+                st.warning(f"평가 실패 [{llm_res.get('_status')}]: {llm_res.get('_msg','')}")
+
+        st.caption("🟢자동=코드 확인 · 🤖Claude=LLM 판정(met 자동 체크) · 그 외=근거 보고 직접 체크. "
+                   "체크한 룰의 가중치 합으로 점수 산출.")
+
+        _VICON = {"met": "✅", "not_met": "❌", "unknown": "❔"}
+        checked_w = 0
+        total_w = 0
+        cat_scores: dict[str, tuple] = {}
+        for cat in _CAT_ORDER:
+            if cat not in rules_by_cat:
+                continue
+            with st.expander(f"📁 {cat}  ({len(rules_by_cat[cat])}룰)", expanded=(cat in ("해자", "진위판별"))):
+                cw = ct = 0
+                for r in rules_by_cat[cat]:
+                    w = _W.get(r.get("weight", "mid"), 2)
+                    total_w += w
+                    ct += w
+                    is_auto = r["id"] in auto_ids
+                    ev = llm_map.get(r["id"])
+                    llm_met = bool(ev and ev["verdict"] == "met")
+                    default = is_auto or llm_met
+                    label = f"**{r['id']}** · {r['name']}  ·  ({r.get('weight','mid')})"
+                    if is_auto:
+                        label += "  🟢자동"
+                    if ev:
+                        label += f"  🤖{_VICON.get(ev['verdict'],'')}{ev['verdict']}({ev['confidence']})"
+                    # LLM 재평가 시 위젯 기본값을 새로 반영하기 위해 key에 평가 유무 포함
+                    ck = f"chk_{r['id']}_{'L' if ev else '0'}"
+                    checked = st.checkbox(label, value=default, key=ck)
+                    st.markdown(f"<div class='rule-if'>IF: {r['if']}</div>"
+                                f"<div class='rule-then'>→ {r['then']}</div>",
                                 unsafe_allow_html=True)
-                if checked:
-                    checked_w += w
-                    cw += w
-            cat_scores[cat] = (cw, ct)
+                    if ev:
+                        st.markdown(f"<div class='ev'>🤖 {ev['reasoning']} "
+                                    f"<b>근거:</b> {ev['evidence']}</div>", unsafe_allow_html=True)
+                    elif r.get("evidence"):
+                        e = r["evidence"][0]
+                        st.markdown(f"<div class='ev'>예: [{e['stock']}] {e['quote']}</div>",
+                                    unsafe_allow_html=True)
+                    if checked:
+                        checked_w += w
+                        cw += w
+                cat_scores[cat] = (cw, ct)
 
-    # 점수 패널
-    st.markdown("#### 📊 룰북 점수")
-    pct = (checked_w / total_w * 100) if total_w else 0
-    st.progress(min(pct / 100, 1.0),
-                text=f"종합 {checked_w}/{total_w} ({pct:.0f}%)")
-    pcols = st.columns(len(cat_scores))
-    for i, (cat, (cw, ct)) in enumerate(cat_scores.items()):
-        pcols[i].metric(cat, f"{cw}/{ct}")
+        # 점수 패널
+        st.markdown("#### 📊 룰북 점수")
+        pct = (checked_w / total_w * 100) if total_w else 0
+        st.progress(min(pct / 100, 1.0),
+                    text=f"종합 {checked_w}/{total_w} ({pct:.0f}%)")
+        pcols = st.columns(len(cat_scores))
+        for i, (cat, (cw, ct)) in enumerate(cat_scores.items()):
+            pcols[i].metric(cat, f"{cw}/{ct}")
 
-# ── ⑤ 종목카드 JSON ───────────────────────────────────────────────────
-with st.expander("📦 종목카드 JSON (advisor_data.py 원본 출력 + 신호)"):
-    out = dict(card)
-    out["signals"] = sig
-    out["ojs_signals"] = ojs
-    st.code(json.dumps(out, ensure_ascii=False, indent=2), language="json")
+    # ── ⑤ 종목카드 JSON ───────────────────────────────────────────────────
+    with st.expander("📦 종목카드 JSON (advisor_data.py 원본 출력 + 신호)"):
+        out = dict(card)
+        out["signals"] = sig
+        out["ojs_signals"] = ojs
+        st.code(json.dumps(out, ensure_ascii=False, indent=2), language="json")
 
-st.markdown("---")
-st.caption("자문역 인사이트 통합 분석 (P3, 독립 앱) · 정량=yfinance LIVE / DART · "
-           "정성=빈규리 룰북(BKR-*) · 타이밍=오재승 룰(OJS-*) · "
-           "v9.3과 독립 — 안정화 후 v9.4 트랙 merge 예정")
+    st.markdown("---")
+    st.caption("자문역 인사이트 통합 분석 (P3, 독립 앱) · 정량=yfinance LIVE / DART · "
+               "정성=빈규리 룰북(BKR-*) · 타이밍=오재승 룰(OJS-*) · "
+               "v9.3과 독립 — 안정화 후 v9.4 트랙 merge 예정")
+
+with tab2:
+    st.caption("오재승(매크로·타이밍) × 빈규리(펀더멘탈) 페르소나 해설 결합 · 온디맨드 생성")
+    if st.button("📰 브리핑 생성", type="primary"):
+        with st.spinner("시황 데이터 수집 + 페르소나 해설 생성 중…"):
+            st.session_state["briefing"] = load_briefing()
+
+    briefing = st.session_state.get("briefing")
+    if not briefing:
+        st.info("위 버튼을 눌러 오늘의 시황 브리핑을 생성하세요.")
+    else:
+        st.caption(f"생성 시각: {briefing['generated_at']}")
+
+        st.markdown("### ① Tech Dashboard")
+        dash = briefing["dashboard"]
+        if dash.get("_status") == "NO_YFINANCE":
+            st.warning("yfinance 미설치로 시황 데이터를 가져올 수 없습니다.")
+        else:
+            _labels = {"sp500": "S&P500", "nasdaq": "Nasdaq", "dow": "Dow",
+                      "sox": "SOX(반도체)", "vix": "VIX", "dxy": "DXY", "usdkrw": "USD/KRW"}
+            _cols = st.columns(len(_labels))
+            for i, (k, label) in enumerate(_labels.items()):
+                v = dash.get(k, {})
+                price = v.get("price")
+                chg = v.get("chg_pct")
+                _cols[i].metric(
+                    label,
+                    f"{price:,.2f}" if isinstance(price, (int, float)) else "—",
+                    delta=f"{chg}%" if chg is not None else None,
+                )
+
+        st.markdown("### ② TOP News")
+        hl = briefing["headlines"]
+        if hl.get("_status") not in ("ok",):
+            st.warning(f"뉴스 선별 실패 [{hl.get('_status')}]: {hl.get('_msg','')}")
+        elif not hl.get("top"):
+            st.info("오늘 선별된 헤드라인이 없습니다.")
+        else:
+            for item in hl["top"]:
+                st.markdown(f"**[{item['source']}]** [{item['title']}]({item['link']})")
+                st.caption(item["why"])
+
+        st.markdown("### ③ 🔵 오재승 해설 — 매크로·타이밍")
+        ojs = briefing["ojs"]
+        if ojs.get("_status") == "ok":
+            st.markdown(ojs["commentary"])
+            st.success(f"💡 {ojs['action']}")
+            with st.expander("근거 신호"):
+                st.json(ojs.get("signals", {}))
+        else:
+            st.warning(f"오재승 해설 생성 실패 [{ojs.get('_status')}]: {ojs.get('_msg','')}")
+
+        st.markdown("### ④ 🟣 빈규리 해설 — 펀더멘탈")
+        bkr = briefing["bkr"]
+        if bkr.get("_status") == "ok":
+            st.markdown(f"**{bkr['focus_stock']}**")
+            st.markdown(bkr["commentary"])
+            st.caption(bkr["disclaimer"])
+        elif bkr.get("_status") == "NO_FOCUS_STOCK":
+            st.info(bkr.get("_msg", "오늘은 해당되는 종목이 없습니다."))
+        else:
+            st.warning(f"빈규리 해설 생성 실패 [{bkr.get('_status')}]: {bkr.get('_msg','')}")
