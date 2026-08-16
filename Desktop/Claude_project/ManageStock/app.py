@@ -1,14 +1,87 @@
 # ManageStock/app.py
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
 import categories
 import data_io
+import market_data
+import portfolio
 
 st.set_page_config(page_title="ManageStock", layout="wide")
 st.title("ManageStock — 포트폴리오 대시보드")
 
 tab1, tab2 = st.tabs(["포트폴리오 대시보드", "종목 관리"])
+
+with tab1:
+    holdings_df = data_io.load_holdings()
+    if holdings_df.empty:
+        st.info("종목 관리 탭에서 보유 종목을 먼저 등록해주세요.")
+    else:
+        tickers = holdings_df["ticker"].tolist()
+        prices, failed_tickers = market_data.fetch_prices(tickers)
+        fetched_fx = market_data.fetch_fx_rate()
+        last_fx = st.session_state.get("last_fx_rate")
+        fx_rate, fx_is_stale = market_data.resolve_fx_rate(fetched_fx, last_fx)
+        if fx_rate is not None:
+            st.session_state["last_fx_rate"] = fx_rate
+
+        if failed_tickers:
+            st.warning("시세 조회 실패: " + ", ".join(failed_tickers))
+
+        if fx_rate is None:
+            st.error("환율 조회 실패 — USD 종목 금액을 계산할 수 없습니다.")
+        else:
+            if fx_is_stale:
+                st.caption(f"⚠️ 환율 조회 실패, 마지막 확인 환율 사용: {fx_rate:,.2f} KRW/USD")
+            else:
+                st.metric("현재 환율 (USD/KRW)", f"{fx_rate:,.2f}")
+
+            metrics_df = portfolio.compute_holding_metrics(holdings_df, prices, fx_rate)
+            valid_df = metrics_df.dropna(subset=["value_krw"])
+
+            totals = portfolio.compute_totals(valid_df)
+            col1, col2, col3 = st.columns(3)
+            col1.metric("총평가금액", f"{totals['total_value_krw']:,.0f} 원")
+            col2.metric("총손익금", f"{totals['total_pnl_krw']:,.0f} 원")
+            col3.metric("총수익률", f"{totals['total_return_pct']:.2f} %")
+
+            category_df = portfolio.aggregate_by_category(valid_df)
+
+            if category_df.empty:
+                st.warning("시세를 조회할 수 있는 종목이 없어 차트를 표시할 수 없습니다.")
+            else:
+                color_map = categories.get_category_color_map(category_df["category"].tolist())
+
+                pie = px.pie(
+                    category_df, names="category", values="value_krw",
+                    color="category", color_discrete_map=color_map,
+                    title="카테고리별 비중",
+                )
+                pie.update_traces(textinfo="percent+label")
+                st.plotly_chart(pie, use_container_width=True)
+
+                bar_colors = [
+                    categories.POSITIVE_COLOR if v >= 0 else categories.NEGATIVE_COLOR
+                    for v in category_df["return_pct"]
+                ]
+                bar = go.Figure(go.Bar(
+                    x=category_df["return_pct"], y=category_df["category"],
+                    orientation="h", marker_color=bar_colors,
+                ))
+                bar.update_layout(title="카테고리별 수익률 (%)", xaxis_title="수익률 (%)", yaxis_title=None)
+                st.plotly_chart(bar, use_container_width=True)
+
+            display_df = metrics_df.copy()
+            display_df["시세조회"] = display_df["current_price"].apply(lambda v: "실패" if pd.isna(v) else "정상")
+            st.dataframe(
+                display_df[[
+                    "category", "name", "ticker", "currency", "quantity", "avg_price",
+                    "current_price", "value_krw", "pnl_krw", "return_pct", "beta", "시세조회",
+                ]],
+                use_container_width=True,
+            )
 
 with tab2:
     st.subheader("종목 추가")
