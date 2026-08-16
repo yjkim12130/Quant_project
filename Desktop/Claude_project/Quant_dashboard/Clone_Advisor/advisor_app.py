@@ -170,6 +170,68 @@ st.sidebar.caption("와이제이링크 · 헥토파이낸셜 · 켄코아에어�
 # ════════════════════════════════════════════════════════════════════
 tab1, tab2 = st.tabs(["🧮 종목 분석", "📰 시황 브리핑"])
 
+with tab2:
+    st.caption("오재승(매크로·타이밍) × 빈규리(펀더멘탈) 페르소나 해설 결합 · 온디맨드 생성")
+    if st.button("📰 브리핑 생성", type="primary"):
+        with st.spinner("시황 데이터 수집 + 페르소나 해설 생성 중…"):
+            st.session_state["briefing"] = load_briefing()
+
+    briefing = st.session_state.get("briefing")
+    if not briefing:
+        st.info("위 버튼을 눌러 오늘의 시황 브리핑을 생성하세요.")
+    else:
+        st.caption(f"생성 시각: {briefing['generated_at']}")
+
+        st.markdown("### ① Tech Dashboard")
+        dash = briefing["dashboard"]
+        if dash.get("_status") == "NO_YFINANCE":
+            st.warning("yfinance 미설치로 시황 데이터를 가져올 수 없습니다.")
+        else:
+            _labels = {"sp500": "S&P500", "nasdaq": "Nasdaq", "dow": "Dow",
+                      "sox": "SOX(반도체)", "vix": "VIX", "dxy": "DXY", "usdkrw": "USD/KRW"}
+            _cols = st.columns(len(_labels))
+            for i, (k, label) in enumerate(_labels.items()):
+                v = dash.get(k, {})
+                price = v.get("price")
+                chg = v.get("chg_pct")
+                _cols[i].metric(
+                    label,
+                    f"{price:,.2f}" if isinstance(price, (int, float)) else "—",
+                    delta=f"{chg}%" if chg is not None else None,
+                )
+
+        st.markdown("### ② TOP News")
+        hl = briefing["headlines"]
+        if hl.get("_status") not in ("ok",):
+            st.warning(f"뉴스 선별 실패 [{hl.get('_status')}]: {hl.get('_msg','')}")
+        elif not hl.get("top"):
+            st.info("오늘 선별된 헤드라인이 없습니다.")
+        else:
+            for item in hl["top"]:
+                st.markdown(f"**[{item['source']}]** [{item['title']}]({item['link']})")
+                st.caption(item["why"])
+
+        st.markdown("### ③ 🔵 오재승 해설 — 매크로·타이밍")
+        ojs = briefing["ojs"]
+        if ojs.get("_status") == "ok":
+            st.markdown(ojs["commentary"])
+            st.success(f"💡 {ojs['action']}")
+            with st.expander("근거 신호"):
+                st.json(ojs.get("signals", {}))
+        else:
+            st.warning(f"오재승 해설 생성 실패 [{ojs.get('_status')}]: {ojs.get('_msg','')}")
+
+        st.markdown("### ④ 🟣 빈규리 해설 — 펀더멘탈")
+        bkr = briefing["bkr"]
+        if bkr.get("_status") == "ok":
+            st.markdown(f"**{bkr['focus_stock']}**")
+            st.markdown(bkr["commentary"])
+            st.caption(bkr["disclaimer"])
+        elif bkr.get("_status") == "NO_FOCUS_STOCK":
+            st.info(bkr.get("_msg", "오늘은 해당되는 종목이 없습니다."))
+        else:
+            st.warning(f"빈규리 해설 생성 실패 [{bkr.get('_status')}]: {bkr.get('_msg','')}")
+
 with tab1:
     if not (run_clicked or name):
         st.info("좌측에서 종목을 입력하고 **분석 실행**을 눌러주세요.")
@@ -382,65 +444,3 @@ with tab1:
     st.caption("자문역 인사이트 통합 분석 (P3, 독립 앱) · 정량=yfinance LIVE / DART · "
                "정성=빈규리 룰북(BKR-*) · 타이밍=오재승 룰(OJS-*) · "
                "v9.3과 독립 — 안정화 후 v9.4 트랙 merge 예정")
-
-with tab2:
-    st.caption("오재승(매크로·타이밍) × 빈규리(펀더멘탈) 페르소나 해설 결합 · 온디맨드 생성")
-    if st.button("📰 브리핑 생성", type="primary"):
-        with st.spinner("시황 데이터 수집 + 페르소나 해설 생성 중…"):
-            st.session_state["briefing"] = load_briefing()
-
-    briefing = st.session_state.get("briefing")
-    if not briefing:
-        st.info("위 버튼을 눌러 오늘의 시황 브리핑을 생성하세요.")
-    else:
-        st.caption(f"생성 시각: {briefing['generated_at']}")
-
-        st.markdown("### ① Tech Dashboard")
-        dash = briefing["dashboard"]
-        if dash.get("_status") == "NO_YFINANCE":
-            st.warning("yfinance 미설치로 시황 데이터를 가져올 수 없습니다.")
-        else:
-            _labels = {"sp500": "S&P500", "nasdaq": "Nasdaq", "dow": "Dow",
-                      "sox": "SOX(반도체)", "vix": "VIX", "dxy": "DXY", "usdkrw": "USD/KRW"}
-            _cols = st.columns(len(_labels))
-            for i, (k, label) in enumerate(_labels.items()):
-                v = dash.get(k, {})
-                price = v.get("price")
-                chg = v.get("chg_pct")
-                _cols[i].metric(
-                    label,
-                    f"{price:,.2f}" if isinstance(price, (int, float)) else "—",
-                    delta=f"{chg}%" if chg is not None else None,
-                )
-
-        st.markdown("### ② TOP News")
-        hl = briefing["headlines"]
-        if hl.get("_status") not in ("ok",):
-            st.warning(f"뉴스 선별 실패 [{hl.get('_status')}]: {hl.get('_msg','')}")
-        elif not hl.get("top"):
-            st.info("오늘 선별된 헤드라인이 없습니다.")
-        else:
-            for item in hl["top"]:
-                st.markdown(f"**[{item['source']}]** [{item['title']}]({item['link']})")
-                st.caption(item["why"])
-
-        st.markdown("### ③ 🔵 오재승 해설 — 매크로·타이밍")
-        ojs = briefing["ojs"]
-        if ojs.get("_status") == "ok":
-            st.markdown(ojs["commentary"])
-            st.success(f"💡 {ojs['action']}")
-            with st.expander("근거 신호"):
-                st.json(ojs.get("signals", {}))
-        else:
-            st.warning(f"오재승 해설 생성 실패 [{ojs.get('_status')}]: {ojs.get('_msg','')}")
-
-        st.markdown("### ④ 🟣 빈규리 해설 — 펀더멘탈")
-        bkr = briefing["bkr"]
-        if bkr.get("_status") == "ok":
-            st.markdown(f"**{bkr['focus_stock']}**")
-            st.markdown(bkr["commentary"])
-            st.caption(bkr["disclaimer"])
-        elif bkr.get("_status") == "NO_FOCUS_STOCK":
-            st.info(bkr.get("_msg", "오늘은 해당되는 종목이 없습니다."))
-        else:
-            st.warning(f"빈규리 해설 생성 실패 [{bkr.get('_status')}]: {bkr.get('_msg','')}")
