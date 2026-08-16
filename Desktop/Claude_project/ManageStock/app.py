@@ -13,10 +13,10 @@ tab1, tab2 = st.tabs(["포트폴리오 대시보드", "종목 관리"])
 with tab2:
     st.subheader("종목 추가")
     preset_names = ["직접 입력"] + sorted(categories.TICKER_PRESETS.keys())
+    preset_choice = st.selectbox("종목 (프리셋)", preset_names)
     with st.form("add_holding_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
-            preset_choice = st.selectbox("종목 (프리셋)", preset_names)
             if preset_choice == "직접 입력":
                 name = st.text_input("종목명")
                 ticker = st.text_input("티커 (예: 005930.KS, QQQ)")
