@@ -36,3 +36,36 @@ def test_infer_currency_detects_korean_suffix():
 def test_infer_currency_defaults_to_usd():
     assert data_io.infer_currency("QQQ") == "USD"
     assert data_io.infer_currency("NVDA") == "USD"
+
+
+def test_load_history_returns_empty_template_when_missing(tmp_path):
+    path = str(tmp_path / "history.csv")
+    df = data_io.load_history(path=path)
+    assert list(df.columns) == data_io.HISTORY_COLUMNS
+    assert len(df) == 0
+
+
+def test_append_snapshot_creates_rows(tmp_path):
+    path = str(tmp_path / "history.csv")
+    data_io.append_snapshot("2026-08-16", {"한국 개별주": 700000.0, "TOTAL": 700000.0}, path=path)
+    df = data_io.load_history(path=path)
+    assert len(df) == 2
+    assert set(df["category"]) == {"한국 개별주", "TOTAL"}
+
+
+def test_append_snapshot_overwrites_same_date(tmp_path):
+    path = str(tmp_path / "history.csv")
+    data_io.append_snapshot("2026-08-16", {"TOTAL": 100.0}, path=path)
+    data_io.append_snapshot("2026-08-16", {"TOTAL": 200.0}, path=path)
+    df = data_io.load_history(path=path)
+    assert len(df) == 1
+    assert df.iloc[0]["value_krw"] == 200.0
+
+
+def test_append_snapshot_keeps_previous_dates(tmp_path):
+    path = str(tmp_path / "history.csv")
+    data_io.append_snapshot("2026-08-15", {"TOTAL": 100.0}, path=path)
+    data_io.append_snapshot("2026-08-16", {"TOTAL": 110.0}, path=path)
+    df = data_io.load_history(path=path)
+    assert len(df) == 2
+    assert set(df["date"]) == {"2026-08-15", "2026-08-16"}
