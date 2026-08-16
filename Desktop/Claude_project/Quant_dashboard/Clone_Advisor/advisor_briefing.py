@@ -1,10 +1,11 @@
 """
 advisor_briefing.py — 시황 브리핑 LLM 오케스트레이션 (P2)
 ═══════════════════════════════════════════════════════════════════════
-advisor_news.py가 모은 원본(시황 수치·뉴스 헤드라인)을 바탕으로:
-  1) 오늘 핵심 뉴스 3건 선별(select_top_headlines)
+advisor_news.py가 모은 원본(시황 수치·영문/한국어 뉴스 헤드라인)을 바탕으로:
+  1) 오늘 핵심 뉴스(영문) 3건 선별(select_top_headlines)
   2) 오재승 페르소나 해설 — 구체적 추천 포함(generate_ojs_commentary)
-  3) 빈규리 페르소나 해설 — 해자/재무 서술만, 매수가·타이밍 없음(generate_bkr_commentary)
+  3) 빈규리 페르소나 해설 — 해자/재무 서술만, 매수가·타이밍 없음(generate_bkr_commentary,
+     한국어 뉴스 원문 풀에서 코스닥 종목명 매칭 — 영문 TOP News와는 별개 소스)
 를 생성한다. Claude 클라이언트 사용 패턴(구조화 출력, 프롬프트 캐싱,
 에러 분류)은 advisor_llm.py와 동일하게 맞춘다.
 
@@ -36,12 +37,9 @@ _BKR_DISCLAIMER = "본 카드는 투자의견이 아닌 종목 소개입니다."
 # 코스닥 승강제 프리미엄리그 예상 수혜주 40종목
 # 출처: 코스닥 승강제 종합분석보고서(QIA-2026-MK-0703, 빈규리 작성, 2026-07-03)
 #
-# 알려진 한계(2026-08 릴리스 기준 수용됨): 아래 후보군은 전부 한글 종목명인데,
-# advisor_news.py가 연결한 RSS 소스 두 곳(Yahoo Finance, Investing.com)은 모두
-# 영어 헤드라인만 제공한다. 따라서 _pick_bkr_focus가 실제로 매치를 찾는 경우는
-# 드물며, 대부분 NO_FOCUS_STOCK으로 귀결된다. 이 카드를 안정적으로 동작시키려면
-# 한국어 금융 뉴스 소스 연동이 필요 — 별도 후속 작업으로 남겨둔다(이번 수정
-# 범위 아님, 새 RSS 소스 추가나 번역 매칭 워크어라운드는 하지 않는다).
+# 전부 한글 종목명이라 advisor_news.fetch_raw_headlines()(영문 RSS)로는 매치가
+# 거의 안 걸린다 — 그래서 빈규리 전용으로 advisor_news.fetch_korean_headlines()
+# (한국경제/연합뉴스, 한글) 원문 풀을 따로 받아 여기에 매칭한다.
 KOSDAQ_PREMIUM_CANDIDATES = [
     "리노공업", "ISC", "피에스케이", "HPSP", "코미코", "테스", "고영",
     "하나마이크론", "동진쎄미켐", "주성엔지니어링", "티씨케이", "티에스이",
@@ -215,8 +213,9 @@ _BKR_SCHEMA = {
 _BKR_CANDIDATES_BY_LEN = sorted(KOSDAQ_PREMIUM_CANDIDATES, key=len, reverse=True)
 
 
-def _pick_bkr_focus(top_headlines: list[dict]) -> Optional[str]:
-    """헤드라인 제목에서 코스닥 승강제 40종목 후보군과 일치하는 첫 종목명.
+def _pick_bkr_focus(kr_headlines: list[dict]) -> Optional[tuple[str, dict]]:
+    """한국어 헤드라인 원문에서 코스닥 승강제 40종목 후보군과 일치하는 첫
+    (종목명, 매치된 헤드라인) 쌍. 매치 없으면 None.
 
     두 가지 함정을 피한다:
       1) 순서 의존 오귀속 — 짧은 이름이 긴 이름의 부분 문자열인 경우
@@ -226,27 +225,33 @@ def _pick_bkr_focus(top_headlines: list[dict]) -> Optional[str]:
          경계(\\b) 매치를 요구한다. 한글 종목명은 단어 경계 개념이 다르게
          적용되고 "ISC" 사례 같은 오탐 위험이 없어 부분 문자열 매치로 충분하다.
     """
-    for h in top_headlines:
+    for h in kr_headlines:
         title = h.get("title", "")
         for name in _BKR_CANDIDATES_BY_LEN:
             if name.isascii() and name.isupper():
                 if re.search(rf"\b{re.escape(name)}\b", title):
-                    return name
+                    return name, h
             elif name in title:
-                return name
+                return name, h
     return None
 
 
-def generate_bkr_commentary(dashboard: dict, top_headlines: list[dict]) -> dict:
-    """빈규리 페르소나: 해자·재무 서술만. 매수가/타이밍 필드 자체가 스키마에 없음."""
+def generate_bkr_commentary(dashboard: dict, kr_headlines: list[dict]) -> dict:
+    """빈규리 페르소나: 해자·재무 서술만. 매수가/타이밍 필드 자체가 스키마에 없음.
+
+    kr_headlines는 advisor_news.fetch_korean_headlines()의 한국어 원문 풀
+    (advisor_news.fetch_raw_headlines()의 영문 TOP News와는 별개 소스) — 코스닥
+    종목명이 한글이라 매칭에는 한국어 뉴스가 필요하다.
+    """
     ok, why = al.llm_available()
     if not ok:
         return {"_status": "UNAVAILABLE", "_msg": why}
 
-    focus = _pick_bkr_focus(top_headlines)
-    if not focus:
+    picked = _pick_bkr_focus(kr_headlines)
+    if not picked:
         return {"_status": "NO_FOCUS_STOCK",
                 "_msg": "오늘 헤드라인에 코스닥승강제 후보군 종목이 없습니다."}
+    focus, matched_headline = picked
 
     bkr_rb = ad.load_rulebook()
     philosophy = " ".join(bkr_rb.get("philosophy", [])) if bkr_rb else ""
@@ -264,10 +269,12 @@ def generate_bkr_commentary(dashboard: dict, top_headlines: list[dict]) -> dict:
     )
     # 참고: 이 페르소나는 사업·해자·재무 서술만 하며 매크로/가격 데이터를 다루지
     # 않으므로(BKR-STYLE-01 및 설계 스펙 §3), 오재승 해설과 달리 시장 대시보드
-    # (지수·VIX·DXY 등 가격 데이터)는 프롬프트에 포함하지 않는다.
+    # (지수·VIX·DXY 등 가격 데이터)는 프롬프트에 포함하지 않는다. 뉴스도 관련
+    # 없는 나머지 원문을 다 넣지 않고, 실제로 매치를 유발한 헤드라인 1건만 근거로
+    # 준다 — 잡음을 줄이고 "왜 이 종목을 골랐는지"를 명확히 한다.
     user = (
         f"[오늘 헤드라인에서 발견된 종목] {focus}\n"
-        f"[오늘 핵심 뉴스] {json.dumps(top_headlines, ensure_ascii=False)}\n"
+        f"[촉발 뉴스] {json.dumps(matched_headline, ensure_ascii=False)}\n"
         "위 정보로 해설을 JSON으로 반환하세요."
     )
     result = _call_claude(system, user, _BKR_SCHEMA, max_tokens=1500)
@@ -281,13 +288,18 @@ def generate_bkr_commentary(dashboard: dict, top_headlines: list[dict]) -> dict:
 # 4) 오케스트레이션
 # ─────────────────────────────────────────────────────────────────────
 def build_briefing() -> dict:
-    """시황 브리핑 전체 파이프라인 실행."""
+    """시황 브리핑 전체 파이프라인 실행.
+
+    영문 원문(TOP News/오재승용)과 한국어 원문(빈규리 매칭용)은 서로 다른
+    풀이다 — advisor_news.fetch_raw_headlines() vs .fetch_korean_headlines().
+    """
     dashboard = an.get_market_dashboard()
     raw = an.fetch_raw_headlines()
     headlines = select_top_headlines(raw)
     top = headlines.get("top", [])
+    kr_raw = an.fetch_korean_headlines()
     ojs = generate_ojs_commentary(dashboard, top)
-    bkr = generate_bkr_commentary(dashboard, top)
+    bkr = generate_bkr_commentary(dashboard, kr_raw)
     return {
         "dashboard": dashboard,
         "headlines": headlines,

@@ -31,6 +31,10 @@ _DASHBOARD_TICKERS = {
 _RSS_PRIMARY = ("https://finance.yahoo.com/news/rssindex", "Yahoo Finance")
 _RSS_FALLBACK = ("https://www.investing.com/rss/news.rss", "Investing.com")
 
+# 빈규리(BKR) 페르소나 매칭 전용 — 코스닥 종목명은 한글이라 영문 소스로는 거의 안 걸린다.
+_RSS_KR_PRIMARY = ("https://www.hankyung.com/feed/economy", "한국경제")
+_RSS_KR_FALLBACK = ("https://www.yna.co.kr/rss/economy.xml", "연합뉴스")
+
 
 def get_market_dashboard() -> dict:
     """주요 지수/VIX/DXY/원달러를 fast_info로 조회. 종목별 실패는 개별 _status로."""
@@ -69,9 +73,9 @@ def _parse_rss(xml_text: str, source_label: str, limit: int) -> list[dict]:
     return out
 
 
-def fetch_raw_headlines(limit: int = 20) -> list[dict]:
-    """Yahoo Finance RSS(1차) → 실패/빈 결과 시 Investing.com RSS(폴백). 둘 다 실패하면 []."""
-    for url, label in (_RSS_PRIMARY, _RSS_FALLBACK):
+def _fetch_rss(sources: tuple[tuple[str, str], ...], limit: int) -> list[dict]:
+    """소스 목록을 순서대로 시도, 첫 성공(빈 결과 아님)을 반환. 전부 실패하면 []."""
+    for url, label in sources:
         try:
             r = requests.get(url, headers=_HEADERS, timeout=10)
             r.raise_for_status()
@@ -81,3 +85,13 @@ def fetch_raw_headlines(limit: int = 20) -> list[dict]:
         except Exception:
             continue
     return []
+
+
+def fetch_raw_headlines(limit: int = 20) -> list[dict]:
+    """Yahoo Finance RSS(1차) → 실패/빈 결과 시 Investing.com RSS(폴백). 둘 다 실패하면 []."""
+    return _fetch_rss((_RSS_PRIMARY, _RSS_FALLBACK), limit)
+
+
+def fetch_korean_headlines(limit: int = 20) -> list[dict]:
+    """한국경제 RSS(1차) → 실패/빈 결과 시 연합뉴스 RSS(폴백). 빈규리 종목매칭 전용. 둘 다 실패하면 []."""
+    return _fetch_rss((_RSS_KR_PRIMARY, _RSS_KR_FALLBACK), limit)
