@@ -201,22 +201,55 @@ def get_dart_financials(corp_code: str, year: int, reprt: str, api_key: str,
     if data.get("status") != "000":
         return {"_error": f"DART {data.get('status')}: {data.get('message')}"}
 
-    def _amt(name: str) -> Optional[float]:
+    # 계정의 한글 표시명(account_nm)은 회사·업종마다 다르다(실측 2026-08-16):
+    #   매출액(삼성전자) / 영업수익(헥토파이낸셜) — 둘 다 account_id는 ifrs-full_Revenue
+    #   영업이익 / 영업이익(손실)(와이제이링크) — 둘 다 dart_OperatingIncomeLoss
+    #   당기순이익 / 분기순이익(삼성전자 1Q) / 당기순이익(손실) — 셋 다 ifrs-full_ProfitLoss
+    # account_id(DART/XBRL 표준계정코드)는 한글 라벨과 무관하게 고정이라 회사 간에
+    # 안정적으로 매칭된다. sj_div(재무제표 종류)로 손익계산서/재무상태표만 보고,
+    # account_detail == "-"로 자본변동표 등의 세부 breakdown 행을 제외해
+    # 같은 account_id의 다른 금액과 섞이지 않게 한다. 한글 라벨 매칭은 방어적
+    # 폴백으로만 남긴다.
+    _TAGS = {
+        "revenue": (("ifrs-full_Revenue",), ("IS", "CIS"),
+                    ("매출액", "영업수익", "수익(매출액)")),
+        "operating_income": (("dart_OperatingIncomeLoss",), ("IS", "CIS"),
+                             ("영업이익", "영업이익(손실)")),
+        "net_income": (("ifrs-full_ProfitLoss",), ("IS", "CIS"),
+                       ("당기순이익", "당기순이익(손실)", "분기순이익", "반기순이익")),
+        "assets": (("ifrs-full_Assets",), ("BS",), ("자산총계",)),
+        "liabilities": (("ifrs-full_Liabilities",), ("BS",), ("부채총계",)),
+        "equity": (("ifrs-full_Equity",), ("BS",), ("자본총계",)),
+    }
+
+    def _to_float(raw) -> Optional[float]:
+        raw = (raw or "").replace(",", "")
+        try:
+            return float(raw)
+        except ValueError:
+            return None
+
+    def _find(key: str) -> Optional[float]:
+        ids, sj_divs, names = _TAGS[key]
         for it in data["list"]:
-            if it.get("account_nm") == name:
-                raw = (it.get("thstrm_amount") or "").replace(",", "")
-                try:
-                    return float(raw)
-                except ValueError:
-                    return None
+            if (it.get("account_id") in ids and it.get("sj_div") in sj_divs
+                    and it.get("account_detail", "-") == "-"):
+                v = _to_float(it.get("thstrm_amount"))
+                if v is not None:
+                    return v
+        for it in data["list"]:  # 폴백: 한글 라벨 매칭
+            if it.get("account_nm") in names:
+                v = _to_float(it.get("thstrm_amount"))
+                if v is not None:
+                    return v
         return None
 
-    rev = _amt("매출액") or _amt("수익(매출액)")
-    op = _amt("영업이익")
-    net = _amt("당기순이익")
-    assets = _amt("자산총계")
-    liab = _amt("부채총계")
-    equity = _amt("자본총계")
+    rev = _find("revenue")
+    op = _find("operating_income")
+    net = _find("net_income")
+    assets = _find("assets")
+    liab = _find("liabilities")
+    equity = _find("equity")
     return {
         "year": year, "reprt": reprt, "fs_div": fs_div,
         "revenue": rev, "operating_income": op, "net_income": net,
