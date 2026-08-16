@@ -139,7 +139,7 @@ st.sidebar.caption("빈규리(펀더멘탈) × 오재승(타이밍) · 독립 �
 name = st.sidebar.text_input("종목명 / 티커", value="와이제이링크",
                              help="한국: 한글 종목명(예: 와이제이링크) · 미국: 티커(예: AAPL)")
 us = st.sidebar.checkbox("미국 종목 (yfinance 티커 직접 입력)", value=False)
-go = st.sidebar.button("분석 실행", type="primary", use_container_width=True)
+run_clicked = st.sidebar.button("분석 실행", type="primary", use_container_width=True)
 
 dart_on = ad.get_dart_key() is not None
 st.sidebar.markdown("---")
@@ -162,7 +162,7 @@ st.sidebar.caption("와이제이링크 · 헥토파이낸셜 · 켄코아에어�
 # ════════════════════════════════════════════════════════════════════
 # 메인
 # ════════════════════════════════════════════════════════════════════
-if not (go or name):
+if not (run_clicked or name):
     st.info("좌측에서 종목을 입력하고 **분석 실행**을 눌러주세요.")
     st.stop()
 
