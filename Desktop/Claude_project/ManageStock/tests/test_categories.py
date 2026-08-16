@@ -38,3 +38,22 @@ def test_get_category_color_map_is_deterministic_regardless_of_input_order():
     map1 = categories.get_category_color_map(["가상자산", "원자재"])
     map2 = categories.get_category_color_map(["원자재", "가상자산"])
     assert map1 == map2
+
+
+def test_get_category_color_map_override_wins_for_default_category():
+    color_map = categories.get_category_color_map(
+        ["한국 개별주"], overrides={"한국 개별주": "#123456"}
+    )
+    assert color_map["한국 개별주"] == "#123456"
+
+
+def test_get_category_color_map_override_wins_for_custom_category():
+    color_map = categories.get_category_color_map(
+        ["가상자산"], overrides={"가상자산": "#abcdef"}
+    )
+    assert color_map["가상자산"] == "#abcdef"
+
+
+def test_get_category_color_map_without_overrides_unaffected():
+    color_map = categories.get_category_color_map(["한국 개별주"])
+    assert color_map["한국 개별주"] == categories.CATEGORY_COLORS["한국 개별주"]

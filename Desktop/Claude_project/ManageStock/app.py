@@ -17,7 +17,7 @@ st.title("ManageStock — 포트폴리오 대시보드")
 tab1, tab2 = st.tabs(["포트폴리오 대시보드", "종목 관리"])
 
 with tab1:
-    holdings_df = data_io.load_holdings()
+    holdings_df, _ = data_io.drop_incomplete_holdings(data_io.load_holdings())
     if holdings_df.empty:
         st.info("종목 관리 탭에서 보유 종목을 먼저 등록해주세요.")
     else:
@@ -59,7 +59,10 @@ with tab1:
                 snapshot_values["TOTAL"] = totals["total_value_krw"]
                 data_io.append_snapshot(today, snapshot_values)
 
-                color_map = categories.get_category_color_map(category_df["category"].tolist())
+                color_overrides = data_io.load_category_colors()
+                color_map = categories.get_category_color_map(
+                    category_df["category"].tolist(), overrides=color_overrides
+                )
 
                 pie = px.pie(
                     category_df, names="category", values="value_krw",
@@ -157,6 +160,27 @@ with tab2:
         use_container_width=True,
     )
     if st.button("변경사항 저장"):
-        data_io.save_holdings(edited_df)
+        cleaned_df, dropped = data_io.drop_incomplete_holdings(edited_df)
+        data_io.save_holdings(cleaned_df)
+        if dropped:
+            st.warning(f"티커/종목명/카테고리가 비어있는 행 {dropped}건은 저장하지 않았습니다.")
         st.success("저장 완료")
         st.rerun()
+
+    st.subheader("카테고리 색상 설정")
+    st.caption("비중 파이차트에만 적용됩니다. 수익률 바차트(상승/하락)와 자산 추이 차트는 대상이 아닙니다.")
+    current_categories = sorted(holdings_df["category"].dropna().unique().tolist())
+    if not current_categories:
+        st.caption("등록된 종목이 없어 카테고리 색상을 설정할 수 없습니다.")
+    else:
+        saved_colors = data_io.load_category_colors()
+        default_color_map = categories.get_category_color_map(current_categories)
+        with st.form("category_color_form"):
+            picked_colors = {}
+            for cat in current_categories:
+                default_value = saved_colors.get(cat, default_color_map.get(cat, categories.FALLBACK_CATEGORY_COLOR))
+                picked_colors[cat] = st.color_picker(cat, value=default_value)
+            if st.form_submit_button("색상 저장"):
+                data_io.save_category_colors(picked_colors)
+                st.success("카테고리 색상 저장 완료")
+                st.rerun()

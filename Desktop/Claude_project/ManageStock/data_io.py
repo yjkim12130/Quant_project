@@ -27,6 +27,36 @@ def infer_currency(ticker):
     return "USD"
 
 
+CATEGORY_COLORS_COLUMNS = ["category", "color"]
+CATEGORY_COLORS_PATH = os.path.join("data", "category_colors.csv")
+
+
+def load_category_colors(path=CATEGORY_COLORS_PATH):
+    if not os.path.exists(path):
+        return {}
+    df = pd.read_csv(path, dtype={"category": str, "color": str})
+    return dict(zip(df["category"], df["color"]))
+
+
+def save_category_colors(colors, path=CATEGORY_COLORS_PATH):
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    df = pd.DataFrame(list(colors.items()), columns=CATEGORY_COLORS_COLUMNS)
+    df.to_csv(path, index=False, columns=CATEGORY_COLORS_COLUMNS)
+
+
+def drop_incomplete_holdings(df):
+    """ticker/name/category 중 하나라도 비어있는 행을 제거한다.
+    returns (정제된 DataFrame, 제거된 행 수)."""
+    required = ["ticker", "name", "category"]
+    filled = df[required].fillna("").astype(str).apply(lambda s: s.str.strip())
+    valid_mask = (filled != "").all(axis=1)
+    cleaned = df[valid_mask].reset_index(drop=True)
+    dropped = len(df) - len(cleaned)
+    return cleaned, dropped
+
+
 HISTORY_COLUMNS = ["date", "category", "value_krw"]
 HISTORY_PATH = os.path.join("data", "history.csv")
 

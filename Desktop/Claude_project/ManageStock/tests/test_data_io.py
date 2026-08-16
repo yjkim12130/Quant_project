@@ -69,3 +69,59 @@ def test_append_snapshot_keeps_previous_dates(tmp_path):
     df = data_io.load_history(path=path)
     assert len(df) == 2
     assert set(df["date"]) == {"2026-08-15", "2026-08-16"}
+
+
+def test_drop_incomplete_holdings_removes_fully_blank_row():
+    df = pd.DataFrame([
+        {"ticker": "QQQ", "name": "QQQ", "category": "미국 지수 ETF",
+         "currency": "USD", "quantity": 5, "avg_price": 400.0, "beta": 1.0},
+        {"ticker": None, "name": None, "category": None,
+         "currency": None, "quantity": None, "avg_price": None, "beta": None},
+    ], columns=data_io.HOLDINGS_COLUMNS)
+    cleaned, dropped = data_io.drop_incomplete_holdings(df)
+    assert len(cleaned) == 1
+    assert dropped == 1
+    assert cleaned.iloc[0]["ticker"] == "QQQ"
+
+
+def test_drop_incomplete_holdings_removes_row_missing_one_required_field():
+    df = pd.DataFrame([
+        {"ticker": "QQQ", "name": "QQQ", "category": "",
+         "currency": "USD", "quantity": 5, "avg_price": 400.0, "beta": 1.0},
+    ], columns=data_io.HOLDINGS_COLUMNS)
+    cleaned, dropped = data_io.drop_incomplete_holdings(df)
+    assert len(cleaned) == 0
+    assert dropped == 1
+
+
+def test_load_category_colors_returns_empty_dict_when_missing(tmp_path):
+    path = str(tmp_path / "category_colors.csv")
+    colors = data_io.load_category_colors(path=path)
+    assert colors == {}
+
+
+def test_save_and_load_category_colors_roundtrip(tmp_path):
+    path = str(tmp_path / "category_colors.csv")
+    data_io.save_category_colors({"한국 개별주": "#ff0000", "암호화폐": "#00ff00"}, path=path)
+    colors = data_io.load_category_colors(path=path)
+    assert colors == {"한국 개별주": "#ff0000", "암호화폐": "#00ff00"}
+
+
+def test_save_category_colors_overwrites_previous_file(tmp_path):
+    path = str(tmp_path / "category_colors.csv")
+    data_io.save_category_colors({"한국 개별주": "#ff0000"}, path=path)
+    data_io.save_category_colors({"암호화폐": "#00ff00"}, path=path)
+    colors = data_io.load_category_colors(path=path)
+    assert colors == {"암호화폐": "#00ff00"}
+
+
+def test_drop_incomplete_holdings_keeps_all_valid_rows():
+    df = pd.DataFrame([
+        {"ticker": "QQQ", "name": "QQQ", "category": "미국 지수 ETF",
+         "currency": "USD", "quantity": 5, "avg_price": 400.0, "beta": 1.0},
+        {"ticker": "005930.KS", "name": "삼성전자", "category": "한국 개별주",
+         "currency": "KRW", "quantity": 10, "avg_price": 70000.0, "beta": 1.0},
+    ], columns=data_io.HOLDINGS_COLUMNS)
+    cleaned, dropped = data_io.drop_incomplete_holdings(df)
+    assert len(cleaned) == 2
+    assert dropped == 0

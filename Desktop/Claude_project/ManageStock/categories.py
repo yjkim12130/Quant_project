@@ -42,10 +42,12 @@ NEUTRAL_COLOR = "#898781"
 TREND_COLOR = "#2a78d6"
 
 
-def get_category_color_map(categories_present):
+def get_category_color_map(categories_present, overrides=None):
     """categories_present: list[str] (중복 가능) -> dict[str, str] 카테고리별 색상.
     기본 6개 카테고리는 항상 고정 색상, 그 외는 알파벳/가나다 순으로 EXTRA_CATEGORY_PALETTE를
-    소진한 뒤 FALLBACK_CATEGORY_COLOR로 폴백한다(호출 순서가 바뀌어도 색이 안정적으로 유지됨)."""
+    소진한 뒤 FALLBACK_CATEGORY_COLOR로 폴백한다(호출 순서가 바뀌어도 색이 안정적으로 유지됨).
+    overrides: dict[str, str] — 사용자가 직접 지정한 카테고리별 색상. 지정된 카테고리는
+    기본/자동배정 색상보다 항상 우선한다."""
     colors = dict(CATEGORY_COLORS)
     custom = sorted({c for c in categories_present if c not in colors})
     for i, cat in enumerate(custom):
@@ -53,4 +55,6 @@ def get_category_color_map(categories_present):
             colors[cat] = EXTRA_CATEGORY_PALETTE[i]
         else:
             colors[cat] = FALLBACK_CATEGORY_COLOR
+    if overrides:
+        colors.update(overrides)
     return colors
