@@ -1,0 +1,83 @@
+"""
+advisor_news.py — 시황 브리핑 데이터 레이어 (P2)
+═══════════════════════════════════════════════════════════════════════
+객관적 시장 데이터(지수·VIX·DXY 등)와 뉴스 헤드라인 원문을 공급한다.
+페르소나 해설·헤드라인 선별 등 LLM 해석은 advisor_briefing.py의 몫 —
+여기선 원본 수집만 담당한다(advisor_data.py와 동일한 설계 원칙:
+의존성 최소화, graceful degradation).
+"""
+from __future__ import annotations
+import xml.etree.ElementTree as ET
+
+import requests
+
+try:
+    import yfinance as yf
+except Exception:  # pragma: no cover
+    yf = None
+
+_HEADERS = {"User-Agent": "Mozilla/5.0"}
+
+_DASHBOARD_TICKERS = {
+    "sp500": "^GSPC",
+    "nasdaq": "^IXIC",
+    "dow": "^DJI",
+    "sox": "^SOX",
+    "vix": "^VIX",
+    "dxy": "DX-Y.NYB",
+    "usdkrw": "KRW=X",
+}
+
+_RSS_PRIMARY = ("https://finance.yahoo.com/news/rssindex", "Yahoo Finance")
+_RSS_FALLBACK = ("https://www.investing.com/rss/news.rss", "Investing.com")
+
+
+def get_market_dashboard() -> dict:
+    """주요 지수/VIX/DXY/원달러를 fast_info로 조회. 종목별 실패는 개별 _status로."""
+    if yf is None:
+        return {"_status": "NO_YFINANCE"}
+    out: dict = {}
+    for key, ticker in _DASHBOARD_TICKERS.items():
+        try:
+            fi = dict(yf.Ticker(ticker).fast_info)
+            price = fi.get("lastPrice")
+            prev = fi.get("previousClose") or fi.get("regularMarketPreviousClose")
+            chg_pct = ((price / prev - 1) * 100) if (price and prev) else None
+            out[key] = {
+                "ticker": ticker,
+                "price": price,
+                "chg_pct": round(chg_pct, 2) if chg_pct is not None else None,
+            }
+        except Exception:
+            out[key] = {"ticker": ticker, "price": None, "chg_pct": None, "_status": "NO_DATA"}
+    return out
+
+
+def _parse_rss(xml_text: str, source_label: str, limit: int) -> list[dict]:
+    """RSS 2.0 <item> 목록 → [{title, link, source, published}]."""
+    out: list[dict] = []
+    root = ET.fromstring(xml_text)
+    for item in root.iter("item"):
+        title = (item.findtext("title") or "").strip()
+        link = (item.findtext("link") or "").strip()
+        pub = (item.findtext("pubDate") or "").strip()
+        if not title:
+            continue
+        out.append({"title": title, "link": link, "source": source_label, "published": pub})
+        if len(out) >= limit:
+            break
+    return out
+
+
+def fetch_raw_headlines(limit: int = 20) -> list[dict]:
+    """Yahoo Finance RSS(1차) → 실패/빈 결과 시 Investing.com RSS(폴백). 둘 다 실패하면 []."""
+    for url, label in (_RSS_PRIMARY, _RSS_FALLBACK):
+        try:
+            r = requests.get(url, headers=_HEADERS, timeout=10)
+            r.raise_for_status()
+            items = _parse_rss(r.text, label, limit)
+            if items:
+                return items
+        except Exception:
+            continue
+    return []
