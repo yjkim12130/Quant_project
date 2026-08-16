@@ -1,12 +1,15 @@
 """
 advisor_app.py — 자문역 인사이트 통합 분석 (P3, 독립 앱)
 ═══════════════════════════════════════════════════════════════════════
-종목 하나를 입력하면 한 화면에:
+🧮 종목 분석 탭 — 종목 하나를 입력하면 한 화면에:
   ① 정량 데이터        — yfinance LIVE (시세·시총·52주·매출)
   ② 정량 신호          — 개별종목 간이 레짐/RSI/200일선 이격 (자체 계산)
   ③ 오재승 룰 매칭     — 정량 신호 → OJS-* 트레이딩 룰 자동 힌트
   ④ 빈규리 룰북 평가   — 13개 BKR-* 룰 (코드 자동 + 정성 수동 체크) → 점수
   ⑤ 종목카드 JSON      — advisor_data.py 원본 출력
+
+📰 시황 브리핑 탭 — 온디맨드로 오늘의 시장 대시보드·핵심 뉴스·오재승/빈규리
+페르소나 해설을 생성한다(advisor_briefing.py 오케스트레이션, P2).
 
 ★ v9.3(app.py)과 완전 독립. 안정화·품질 확보 후 v9.4 트랙으로 merge 예정.
 실행:  streamlit run advisor_app.py
@@ -21,7 +24,7 @@ import advisor_data as ad
 import advisor_llm as al
 import advisor_briefing as ab
 
-st.set_page_config(page_title="자문역 인사이트 — 종목 분석",
+st.set_page_config(page_title="자문역 인사이트 · 종목 분석 · 시황 브리핑",
                    page_icon="🧮", layout="wide")
 
 # ── 테마 (샘플 리포트와 동일 팔레트) ──────────────────────────────────
@@ -168,13 +171,31 @@ st.sidebar.caption("와이제이링크 · 헥토파이낸셜 · 켄코아에어�
 # ════════════════════════════════════════════════════════════════════
 # 메인
 # ════════════════════════════════════════════════════════════════════
+# ⚠️ `with tab2:` 블록은 반드시 `with tab1:` 보다 먼저 실행되어야 한다.
+# tab1 블록은 입력이 없으면 st.stop()으로 스크립트 실행을 완전히 중단시키므로
+# (d4a28c7), tab1이 먼저 오면 "브리핑 생성" 버튼 클릭이 tab2 렌더링에 도달하지
+# 못하고 조용히 삼켜진다. 이 순서를 다시 뒤집지 말 것 — 필요하면 st.stop() 의존을
+# 먼저 제거해야 한다.
 tab1, tab2 = st.tabs(["🧮 종목 분석", "📰 시황 브리핑"])
 
 with tab2:
     st.caption("오재승(매크로·타이밍) × 빈규리(펀더멘탈) 페르소나 해설 결합 · 온디맨드 생성")
     if st.button("📰 브리핑 생성", type="primary"):
         with st.spinner("시황 데이터 수집 + 페르소나 해설 생성 중…"):
-            st.session_state["briefing"] = load_briefing()
+            result = load_briefing()
+            st.session_state["briefing"] = result
+
+            # 실패 상태가 30분 TTL 캐시에 그대로 굳어버리면 재클릭해도 같은
+            # 실패가 반복 반환된다 — RSS 장애/LLM rate-limit/키 미설정 등
+            # "깨끗하지 않은" 결과일 때만 캐시를 비워 다음 클릭이 재시도되게 한다.
+            # NO_FOCUS_STOCK(빈규리 후보군이 오늘 뉴스에 없음)은 정상적인
+            # 결정론적 결과이지 실패가 아니므로 캐시를 비우지 않는다.
+            hl_clean = result.get("headlines", {}).get("_status") == "ok"
+            ojs_clean = result.get("ojs", {}).get("_status") == "ok"
+            bkr_clean = result.get("bkr", {}).get("_status") in ("ok", "NO_FOCUS_STOCK")
+            dash_clean = result.get("dashboard", {}).get("_status") != "NO_YFINANCE"
+            if not (hl_clean and ojs_clean and bkr_clean and dash_clean):
+                load_briefing.clear()
 
     briefing = st.session_state.get("briefing")
     if not briefing:
@@ -212,14 +233,14 @@ with tab2:
                 st.caption(item["why"])
 
         st.markdown("### ③ 🔵 오재승 해설 — 매크로·타이밍")
-        ojs = briefing["ojs"]
-        if ojs.get("_status") == "ok":
-            st.markdown(ojs["commentary"])
-            st.success(f"💡 {ojs['action']}")
+        ojs_brief = briefing["ojs"]
+        if ojs_brief.get("_status") == "ok":
+            st.markdown(ojs_brief["commentary"])
+            st.success(f"💡 {ojs_brief['action']}")
             with st.expander("근거 신호"):
-                st.json(ojs.get("signals", {}))
+                st.json(ojs_brief.get("signals", {}))
         else:
-            st.warning(f"오재승 해설 생성 실패 [{ojs.get('_status')}]: {ojs.get('_msg','')}")
+            st.warning(f"오재승 해설 생성 실패 [{ojs_brief.get('_status')}]: {ojs_brief.get('_msg','')}")
 
         st.markdown("### ④ 🟣 빈규리 해설 — 펀더멘탈")
         bkr = briefing["bkr"]

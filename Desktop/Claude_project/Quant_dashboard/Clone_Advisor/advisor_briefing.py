@@ -19,6 +19,7 @@ advisor_news.py가 모은 원본(시황 수치·뉴스 헤드라인)을 바탕�
 """
 from __future__ import annotations
 import json
+import re
 from datetime import datetime
 from typing import Optional
 
@@ -26,10 +27,21 @@ import advisor_data as ad
 import advisor_llm as al
 import advisor_news as an
 
+# 빈규리 페르소나 디스클레이머 — 반드시 코드 상수. LLM이 생성하는 자유 텍스트가
+# 아니다(BKR-STYLE-01, codeable=yes). advisor_data.py apply_rulebook()의 동일 룰
+# 표기(약 545행)와 문구를 그대로 맞춘다 — 두 곳이 달라지면 안 된다.
+_BKR_DISCLAIMER = "본 카드는 투자의견이 아닌 종목 소개입니다."
+
 # ─────────────────────────────────────────────────────────────────────
 # 코스닥 승강제 프리미엄리그 예상 수혜주 40종목
 # 출처: 코스닥 승강제 종합분석보고서(QIA-2026-MK-0703, 빈규리 작성, 2026-07-03)
-# ─────────────────────────────────────────────────────────────────────
+#
+# 알려진 한계(2026-08 릴리스 기준 수용됨): 아래 후보군은 전부 한글 종목명인데,
+# advisor_news.py가 연결한 RSS 소스 두 곳(Yahoo Finance, Investing.com)은 모두
+# 영어 헤드라인만 제공한다. 따라서 _pick_bkr_focus가 실제로 매치를 찾는 경우는
+# 드물며, 대부분 NO_FOCUS_STOCK으로 귀결된다. 이 카드를 안정적으로 동작시키려면
+# 한국어 금융 뉴스 소스 연동이 필요 — 별도 후속 작업으로 남겨둔다(이번 수정
+# 범위 아님, 새 RSS 소스 추가나 번역 매칭 워크어라운드는 하지 않는다).
 KOSDAQ_PREMIUM_CANDIDATES = [
     "리노공업", "ISC", "피에스케이", "HPSP", "코미코", "테스", "고영",
     "하나마이크론", "동진쎄미켐", "주성엔지니어링", "티씨케이", "티에스이",
@@ -108,7 +120,8 @@ _TOP_SCHEMA = {
 def select_top_headlines(raw_headlines: list[dict], limit: int = 3) -> dict:
     """뉴스 원문 목록 → 오늘 핵심 limit건 + 왜 중요한지 1줄."""
     if not raw_headlines:
-        return {"_status": "NO_HEADLINES", "top": []}
+        return {"_status": "NO_HEADLINES", "top": [],
+                "_msg": "뉴스 소스 일시 장애 — RSS 두 곳 모두 응답 없음"}
     ok, why = al.llm_available()
     if not ok:
         return {"_status": "UNAVAILABLE", "_msg": why, "top": []}
@@ -148,7 +161,15 @@ def generate_ojs_commentary(dashboard: dict, top_headlines: list[dict],
 
     close = ad.get_price_history(target_ticker)
     signals = ad.compute_ojs_signals(close) if close is not None else {"_status": "INSUFFICIENT_HISTORY"}
-    rules = ad.evaluate_ojs_rules(signals) if not signals.get("_status") else []
+    if signals.get("_status"):
+        # 실제 가격 히스토리를 받지 못해 정량 신호가 하나도 없는 상태(주로 yfinance
+        # rate-limit). 숫자 근거가 전혀 없는 채로 LLM에 "구체적 action을 써라"고
+        # 요청하면 모델이 숫자를 지어낼 수밖에 없다 — 이 경우 LLM을 호출하지 않고
+        # 조용히 반환한다.
+        return {"_status": "NO_SIGNALS",
+                "_msg": "가격 히스토리를 받지 못해 정량 신호를 계산할 수 없습니다.",
+                "target": target_ticker}
+    rules = ad.evaluate_ojs_rules(signals)
 
     ojs_rb = ad.load_ojs_rulebook()
     philosophy = " ".join(ojs_rb.get("philosophy", [])) if ojs_rb else ""
@@ -185,19 +206,33 @@ _BKR_SCHEMA = {
     "type": "object",
     "properties": {
         "commentary": {"type": "string"},
-        "disclaimer": {"type": "string"},
     },
-    "required": ["commentary", "disclaimer"],
+    "required": ["commentary"],
     "additionalProperties": False,
 }
 
+# 길이 내림차순 — "테스"가 "두산테스나"보다 먼저 매치되어 오귀속되는 것을 방지.
+_BKR_CANDIDATES_BY_LEN = sorted(KOSDAQ_PREMIUM_CANDIDATES, key=len, reverse=True)
+
 
 def _pick_bkr_focus(top_headlines: list[dict]) -> Optional[str]:
-    """헤드라인 제목에서 코스닥 승강제 40종목 후보군과 일치하는 첫 종목명."""
+    """헤드라인 제목에서 코스닥 승강제 40종목 후보군과 일치하는 첫 종목명.
+
+    두 가지 함정을 피한다:
+      1) 순서 의존 오귀속 — 짧은 이름이 긴 이름의 부분 문자열인 경우
+         (예: "테스" ⊂ "두산테스나") 긴 이름을 먼저 검사해야 한다.
+      2) 영문 대문자 약칭의 오탐 — "ISC" 같은 짧은 ASCII 티커는 "DISCLOSES",
+         "DISCOVER" 등 무관한 영단어 안의 부분 문자열로도 매치되므로 단어
+         경계(\\b) 매치를 요구한다. 한글 종목명은 단어 경계 개념이 다르게
+         적용되고 "ISC" 사례 같은 오탐 위험이 없어 부분 문자열 매치로 충분하다.
+    """
     for h in top_headlines:
         title = h.get("title", "")
-        for name in KOSDAQ_PREMIUM_CANDIDATES:
-            if name in title:
+        for name in _BKR_CANDIDATES_BY_LEN:
+            if name.isascii() and name.isupper():
+                if re.search(rf"\b{re.escape(name)}\b", title):
+                    return name
+            elif name in title:
                 return name
     return None
 
@@ -223,18 +258,22 @@ def generate_bkr_commentary(dashboard: dict, top_headlines: list[dict]) -> dict:
         f"철학: {philosophy}\n"
         "사업·해자·재무 관점으로만 2~3문장 해설을 씁니다. "
         "절대 금지: 매수가, 목표가, 매수 시점, 진입 타이밍 등 구체적 가격·타이밍 언급. "
-        "실제 빈규리는 이런 언급을 한 적이 없고(BKR-STYLE-01), "
-        "늘 '종목 소개이지 투자의견이 아니다'로 마무리합니다."
+        "실제 빈규리는 이런 언급을 한 적이 없습니다(BKR-STYLE-01). "
+        "'종목 소개이지 투자의견이 아니다'라는 안내 문구는 화면에 코드가 별도로 "
+        "고정 표기하므로 당신이 직접 쓸 필요는 없습니다."
     )
+    # 참고: 이 페르소나는 사업·해자·재무 서술만 하며 매크로/가격 데이터를 다루지
+    # 않으므로(BKR-STYLE-01 및 설계 스펙 §3), 오재승 해설과 달리 시장 대시보드
+    # (지수·VIX·DXY 등 가격 데이터)는 프롬프트에 포함하지 않는다.
     user = (
         f"[오늘 헤드라인에서 발견된 종목] {focus}\n"
-        f"[오늘 시장 대시보드] {json.dumps(dashboard, ensure_ascii=False)}\n"
         f"[오늘 핵심 뉴스] {json.dumps(top_headlines, ensure_ascii=False)}\n"
-        "위 정보로 해설과 disclaimer를 JSON으로 반환하세요."
+        "위 정보로 해설을 JSON으로 반환하세요."
     )
     result = _call_claude(system, user, _BKR_SCHEMA, max_tokens=1500)
     if result["_status"] == "ok":
         result["focus_stock"] = focus
+        result["disclaimer"] = _BKR_DISCLAIMER
     return result
 
 
