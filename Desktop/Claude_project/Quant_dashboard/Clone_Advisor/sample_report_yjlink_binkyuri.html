@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>빈규리식 종목 분석 리포트 (샘플·실데이터) — 와이제이링크</title>
+<style>
+  :root {
+    --bg: #0e1117; --surface: #1a1d26; --surface2: #22263a;
+    --green: #00d084; --blue: #2196f3; --orange: #ff9800;
+    --red: #ff4444; --purple: #ab47bc; --yellow: #ffd700;
+    --text: #e0e0e0; --muted: #8899aa; --border: #2e3650;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.75; }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 32px 22px 80px; }
+
+  .demo-banner {
+    background: repeating-linear-gradient(45deg, rgba(0,208,132,0.10), rgba(0,208,132,0.10) 12px, rgba(0,208,132,0.04) 12px, rgba(0,208,132,0.04) 24px);
+    border: 1px solid var(--green); border-radius: 10px; padding: 12px 16px; margin-bottom: 24px;
+    font-size: 13.5px; color: #b7f0d8;
+  }
+  .demo-banner b { color: var(--green); }
+
+  .stock-head {
+    background: linear-gradient(135deg, var(--surface2), var(--surface));
+    border: 1px solid var(--border); border-radius: 14px; padding: 22px 26px; margin-bottom: 22px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 18px;
+  }
+  .stock-head .name { font-size: 28px; font-weight: 700; color: #fff; }
+  .stock-head .code { font-size: 14px; color: var(--muted); }
+  .pill { display:inline-block; font-size: 12px; padding: 3px 10px; border-radius: 20px; margin-left: 6px; }
+  .pill-mkt { background: rgba(255,68,68,0.15); color: var(--red); border:1px solid var(--red); }
+  .pill-sec { background: rgba(0,208,132,0.15); color: var(--green); border:1px solid var(--green); }
+  .verdict-box { margin-left:auto; text-align:right; }
+  .verdict-box .lbl { font-size: 12px; color: var(--muted); }
+  .verdict-box .val { font-size: 20px; font-weight: 700; }
+
+  .analyst-tag { display:inline-flex; align-items:center; gap:8px; font-size:13px; color:var(--muted);
+    background: var(--surface); border:1px solid var(--border); border-radius:8px; padding:6px 12px; margin-bottom:18px; }
+  .analyst-tag b { color: var(--purple); }
+
+  .section { background: var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px 24px; margin-bottom:18px; }
+  .section h2 { font-size: 18px; color:#fff; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .section h2 .num { color: var(--purple); margin-right:8px; }
+  .section p { margin-bottom: 11px; } .section p:last-child { margin-bottom:0; }
+  .voice { color:#d6dde8; } .voice em { color: var(--yellow); font-style: normal; font-weight:600; }
+
+  /* LIVE 데이터 카드 */
+  .live-grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:4px 0; }
+  .live-item { background: var(--surface2); border:1px solid var(--border); border-radius:8px; padding:11px 13px; }
+  .live-item .l { font-size:11.5px; color:var(--muted); margin-bottom:3px; }
+  .live-item .v { font-size:17px; font-weight:700; color:#fff; font-variant-numeric: tabular-nums; }
+  .badge-live { display:inline-block; font-size:10.5px; font-weight:700; letter-spacing:.4px; padding:2px 8px; border-radius:20px;
+    background: rgba(0,208,132,0.18); color:var(--green); border:1px solid var(--green); vertical-align:middle; }
+  .badge-pend { display:inline-block; font-size:10.5px; font-weight:700; letter-spacing:.4px; padding:2px 8px; border-radius:20px;
+    background: rgba(255,152,0,0.15); color:var(--orange); border:1px solid var(--orange); vertical-align:middle; }
+
+  .biz-grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin:6px 0 4px; }
+  .biz-card { background: var(--surface2); border:1px solid var(--border); border-left:4px solid var(--blue); border-radius:8px; padding:13px 15px; }
+  .biz-card .role { font-size:11.5px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; margin-bottom:4px; }
+  .biz-card .bn { font-size:15px; font-weight:700; color:#fff; margin-bottom:5px; }
+  .biz-card .bd { font-size:13px; color:var(--muted); line-height:1.55; }
+  .role-moat { color: var(--purple); } .biz-card.moat { border-left-color: var(--purple); }
+  .role-grow { color: var(--blue); } .biz-card.grow { border-left-color: var(--blue); }
+  .role-risk { color: var(--red); } .biz-card.risk { border-left-color: var(--red); }
+
+  table { width:100%; border-collapse: collapse; margin: 8px 0; font-size: 13.5px; }
+  th, td { border:1px solid var(--border); padding: 8px 11px; text-align:left; }
+  th { background: var(--surface2); color:#cdd6e4; font-weight:600; }
+  td.num { text-align:right; font-variant-numeric: tabular-nums; }
+  .up { color: var(--green); } .down { color: var(--red); }
+
+  .callout { background: rgba(0,208,132,0.08); border:1px solid var(--green); border-radius:8px; padding:13px 16px; margin-top:8px; font-size:14px; }
+  .callout.warn { background: rgba(255,152,0,0.08); border-color: var(--orange); }
+  .callout.ojs  { background: rgba(33,150,243,0.07); border-color: var(--blue); }
+  .callout b { color:#fff; }
+
+  pre { background:#0a0c12; border:1px solid var(--border); border-radius:8px; padding:16px; overflow-x:auto; font-size:12.5px; line-height:1.6; color:#cdd6e4; }
+  .k { color:#79b8ff; } .s { color:#9ecbff; } .n2 { color:#f8c555; }
+
+  ul { margin: 4px 0 4px 20px; } li { margin-bottom: 5px; }
+  footer { margin-top:30px; padding-top:16px; border-top:1px solid var(--border); font-size:12px; color:var(--muted); text-align:center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="demo-banner">
+    <b>✅ 실데이터 연동 샘플</b> — 빈규리 CPA의 실제 분석(<code>chathistory.txt</code> 88,940행, 2026-05-27)을 기반으로 한 <b>와이제이링크(코스닥 스몰캡)</b> 리포트입니다.
+    아래 <span class="badge-live">LIVE</span> 표시 수치는 <b>advisor_data.py가 yfinance에서 실시간으로 받아온 실제 값</b>이고,
+    <span class="badge-pend">DART 대기</span> 표시는 API 키 연결 시 자동으로 채워집니다.
+  </div>
+
+  <div class="stock-head">
+    <div>
+      <div class="name">와이제이링크
+        <span class="pill pill-mkt">KOSDAQ</span>
+        <span class="pill pill-sec">반도체 장비</span>
+      </div>
+      <div class="code">209640 · YJ LINK · SMT/PCB 공정장비 · 분석일 2026-06-04</div>
+    </div>
+    <div class="verdict-box">
+      <div class="lbl">빈규리 종합 판단</div>
+      <div class="val" style="color:var(--blue);">스페이스X 밸류체인 · 관심</div>
+    </div>
+  </div>
+
+  <div class="analyst-tag">🧮 분석 프레임 · <b>빈규리 CPA</b> · 정성=RAG(채팅 원문) · 정량=advisor_data.py(yfinance LIVE + DART)</div>
+
+  <!-- 0. 정량 LIVE -->
+  <div class="section" style="border-color:var(--green);">
+    <h2>📡 정량 데이터 <span class="badge-live">yfinance LIVE · 2026-06-04</span></h2>
+    <div class="live-grid">
+      <div class="live-item"><div class="l">현재가</div><div class="v">5,870 <span style="font-size:12px;color:var(--muted);">원</span></div></div>
+      <div class="live-item"><div class="l">시가총액</div><div class="v">~1,670 <span style="font-size:12px;color:var(--muted);">억</span></div></div>
+      <div class="live-item"><div class="l">발행주식수</div><div class="v">28.44 <span style="font-size:12px;color:var(--muted);">백만주</span></div></div>
+      <div class="live-item"><div class="l">52주 밴드</div><div class="v" style="font-size:14px;">2,390 ~ 10,350</div></div>
+      <div class="live-item"><div class="l">고점대비</div><div class="v down">-43%</div></div>
+      <div class="live-item"><div class="l">매출 TTM</div><div class="v">~532 <span style="font-size:12px;color:var(--muted);">억</span></div></div>
+    </div>
+    <p style="color:var(--muted);font-size:13px;margin-top:10px;">※ 시총 1,670억 원의 전형적 <b>코스닥 스몰캡</b>. 52주 고점(10,350) 대비 약 -43% 구간 — 빈규리가 "관심" 단계로 본 자리.
+      PER/PBR은 yfinance 미집계(분기 적자·데이터 갭) → DART 연동 시 정밀 산출.</p>
+  </div>
+
+  <!-- 1. 사업부문 -->
+  <div class="section">
+    <h2><span class="num">1.</span>사업 — 무엇으로 돈을 버나</h2>
+    <p class="voice">오늘 소개해드릴 종목은 <em>"와이제이링크"</em>입니다. 간단히 말하면... <em>반도체 PCB 기판을 생산하는 공정 장비를 공급하는 기업</em>이에요. 요즘 스페이스X 관련주로 많이 언급되는데, 진짜 수혜주가 뭔지 저도 열심히 공부했거든요.^^</p>
+    <ul>
+      <li>해외 고객사가 <em>569개</em> 정도로 굉장히 많은데요, 대표 고객이 <b>스페이스X · 테슬라 · 현대모비스 · 폭스콘</b>입니다.</li>
+      <li>스페이스X에는 <em>2010년부터</em> 장비를 공급해왔어요. 생각보다 더 오래된 협력사죠~?</li>
+      <li>2026년 1분기 매출·영업이익이 <em>전분기·전년동기 대비 2배</em>나 뛰었습니다.</li>
+    </ul>
+    <p class="voice">생산 라인에 들어가는 장비는 설비 교체·증설 때 <em>기존 라인과의 정합성</em> 때문에 기존 공급사가 계속 납품하는 경향이 있거든요. 오래된 레퍼런스가 곧 <em>단가 협상력</em>이 됩니다.</p>
+  </div>
+
+  <!-- 2. 시장/촉매 -->
+  <div class="section">
+    <h2><span class="num">2.</span>시장 · 촉매 (스페이스X 밸류체인)</h2>
+    <p class="voice">자, 우리가 와이제이링크를 봐야 하는 이유는요 — 스페이스X의 그 원대한 계획이 <em>성공하든, 늦춰지든</em> 상관없이, 그 시도 과정과 성공 후 증설에서 <em>와이제이링크 장비는 필요하다</em>는 거예요.</p>
+    <ul>
+      <li><b>테라팹</b> — 스페이스X·테슬라가 추진하는 테라팹 공장에 와이제이링크 장비 진입 가능성.</li>
+      <li><b>옵티머스</b> — 테슬라 휴머노이드 옵티머스 생산 라인에 SMT 후공정 장비 채택 가능성. 멕시코 공장이 <em>텍사스 기가팩토리와 인접</em>해 양산 증설 시 즉각 대응.</li>
+      <li><b>레퍼런스</b> — 2025년 하반기 테슬라 구매담당자가 멕시코 공장 방문.</li>
+    </ul>
+  </div>
+
+  <!-- 3. 해자 -->
+  <div class="section">
+    <h2><span class="num">3.</span>해자 · 독점력 — 왜 와이제이링크인가</h2>
+    <div class="biz-grid">
+      <div class="biz-card moat">
+        <div class="role role-moat">풀라인업</div>
+        <div class="bn">SMT 공정 전 라인</div>
+        <div class="bd">경쟁사와 달리 SMT 풀 라인업 보유 → 여러 회사에 따로 발주할 필요 없이 한 곳에서 라인 전체 구성.</div>
+      </div>
+      <div class="biz-card moat">
+        <div class="role role-moat">생산기지 선점</div>
+        <div class="bn">베트남·멕시코·인도</div>
+        <div class="bd">탈중국 흐름에서 경쟁사가 아직 못 간 곳에 공장 확보 완료. 인도 공장 2027년 가동 예정.</div>
+      </div>
+      <div class="biz-card moat">
+        <div class="role role-moat">전환비용</div>
+        <div class="bn">기존 라인 정합성</div>
+        <div class="bd">2010년부터 직납해온 레퍼런스 → 증설·교체 시 재선택되는 구조적 락인 + 단가 협상력.</div>
+      </div>
+    </div>
+    <div class="callout warn">
+      <b>리스크도 솔직하게</b> (빈규리 원문) — "강점만 있는 것은 아니겠죠." <b>스페이스X·테슬라 의존도가 집중</b>되어 있어, 테라팹 계획 지연·옵티머스 양산 지연이 곧바로 실적 리스크입니다. 대박 기회가 열려 있는 만큼 그 반대 리스크도 같이 봐야 합니다.
+    </div>
+  </div>
+
+  <!-- 4. 재무 -->
+  <div class="section">
+    <h2><span class="num">4.</span>재무 — CPA의 눈 <span class="badge-live">yfinance LIVE</span> <span class="badge-pend">상세 DART 대기</span></h2>
+    <table>
+      <thead><tr><th>지표</th><th>값</th><th>출처</th><th>해석</th></tr></thead>
+      <tbody>
+        <tr><td>매출 TTM</td><td class="num">~532억</td><td>yfinance</td><td>스몰캡 외형, 1Q 2배 성장 모멘텀</td></tr>
+        <tr><td>순이익률</td><td class="num">2.5%</td><td>yfinance</td><td>장비업 특성상 수주·믹스에 따라 변동</td></tr>
+        <tr><td>시가총액</td><td class="num">~1,670억</td><td>yfinance</td><td>경량 스몰캡 — 모멘텀 시 탄력 큼</td></tr>
+        <tr><td>영업이익률</td><td class="num">—</td><td><span class="badge-pend">DART</span></td><td>분기보고서 연동 시 자동 산출</td></tr>
+        <tr><td>부채비율</td><td class="num">—</td><td><span class="badge-pend">DART</span></td><td>재무 안정성 핵심 — CPA 1순위 체크</td></tr>
+      </tbody>
+    </table>
+    <p style="color:var(--muted);font-size:13px;">※ 위 빈칸 2개는 <code>advisor_data.py</code>가 DART API 키 연결 즉시 <code>get_dart_financials()</code>로 채웁니다(영업이익률·부채비율 자동 계산 로직 구현 완료).</p>
+  </div>
+
+  <!-- 5. 결론 -->
+  <div class="section" style="border-color:var(--blue);">
+    <h2><span class="num">5.</span>총정리 — 결론</h2>
+    <p class="voice">오늘의 1일 1종목은 여기까지입니다.^^ (투자의견이 아닌 종목 소개) 정리하면 —</p>
+    <ul>
+      <li><b>1.</b> 스페이스X 2010년~ 오래된 협력사, <em>성공/지연 무관하게 장비 수요 발생</em>하는 밸류체인 포지션.</li>
+      <li><b>2.</b> SMT 풀라인업 + 글로벌 생산기지 선점이라는 <em>구조적 해자</em>.</li>
+      <li><b>3.</b> 단, <em>스페이스X·테슬라 집중 의존</em>이 양날의 검 — 모멘텀과 리스크가 같은 곳에서 나온다.</li>
+    </ul>
+    <div class="callout">
+      <b>빈규리 한 줄 결론</b> — "스페이스X 수혜주로 눈여겨봐야 할 이유는 충분합니다. 다만 <b>의존도 집중</b>이 리스크이니, 52주 고점 -43% 구간에서 <b>분할로 관심</b>가져갈 종목."
+    </div>
+    <div class="callout ojs" style="margin-top:10px;">
+      <b>오재승 자문역 코멘트 (타이밍 관점)</b> — "코스닥은 폭락하면 땡큐죠, 밑에서 주우면 되니까. 좋은 건 <b>유니버스에 넣어두고</b>, 코스닥 눌릴 때 더 싸게 담는 자리." <span style="color:var(--muted);font-size:12px;">(OJS-CASH-01 만수르 분할 / OJS-MA-01 눌림목 자동 매칭)</span>
+    </div>
+  </div>
+
+  <!-- 종목카드 JSON -->
+  <div class="section">
+    <h2>📦 종목카드 (JSON) — advisor_data.py 실제 출력 + RAG 정성 병합</h2>
+    <p style="color:var(--muted);font-size:13px;">아래 <span class="badge-live">LIVE</span> 블록은 <code>python advisor_data.py 와이제이링크</code>의 <b>실제 실행 결과</b>입니다.</p>
+<pre><span class="k">{</span>
+  <span class="s">"name"</span>: <span class="s">"와이제이링크"</span>, <span class="s">"ticker"</span>: <span class="s">"209640"</span>, <span class="s">"market"</span>: <span class="s">"KOSDAQ"</span>,
+  <span class="s">"analyst_frame"</span>: <span class="s">"binkyuri"</span>, <span class="s">"as_of"</span>: <span class="s">"2026-06-04"</span>,
+  <span class="cm">// ── advisor_data.py LIVE (yfinance 실측) ──────────────</span>
+  <span class="s">"quant"</span>: <span class="k">{</span>
+    <span class="s">"ticker"</span>: <span class="s">"209640.KQ"</span>, <span class="s">"name"</span>: <span class="s">"YJ LINK"</span>,
+    <span class="s">"price"</span>: <span class="n2">5870.0</span>, <span class="s">"currency"</span>: <span class="s">"KRW"</span>,
+    <span class="s">"market_cap"</span>: <span class="n2">166961266688</span>, <span class="s">"shares"</span>: <span class="n2">28443146</span>,
+    <span class="s">"wk52_high"</span>: <span class="n2">10350.0</span>, <span class="s">"wk52_low"</span>: <span class="n2">2390.0</span>,
+    <span class="s">"revenue_ttm"</span>: <span class="n2">53192040448</span>, <span class="s">"profit_margin"</span>: <span class="n2">0.02516</span>,
+    <span class="s">"sector"</span>: <span class="s">"Technology"</span>, <span class="s">"industry"</span>: <span class="s">"Semiconductors"</span>
+  <span class="k">}</span>,
+  <span class="cm">// ── DART 키 연결 시 자동 채움 ─────────────────────────</span>
+  <span class="s">"financials"</span>: <span class="k">{</span> <span class="s">"_status"</span>: <span class="s">"DART_KEY_MISSING"</span>, <span class="s">"op_margin"</span>: <span class="k">null</span>, <span class="s">"debt_ratio"</span>: <span class="k">null</span> <span class="k">}</span>,
+  <span class="cm">// ── RAG 정성(빈규리 채팅 원문에서 증류) ───────────────</span>
+  <span class="s">"moat"</span>: [ <span class="s">"SMT 풀라인업"</span>, <span class="s">"글로벌 생산기지 선점"</span>, <span class="s">"기존라인 정합성 락인"</span> ],
+  <span class="s">"catalyst"</span>: [ <span class="s">"스페이스X 테라팹"</span>, <span class="s">"테슬라 옵티머스 라인"</span> ],
+  <span class="s">"risks"</span>: [ <span class="s">"스페이스X·테슬라 의존도 집중"</span>, <span class="s">"테라팹/옵티머스 양산 지연"</span> ],
+  <span class="s">"verdict"</span>: <span class="s">"스페이스X 밸류체인 관심 / 52주 고점 -43% 분할접근"</span>,
+  <span class="s">"ojs_rule_match"</span>: [ <span class="s">"OJS-MA-01"</span>, <span class="s">"OJS-CASH-01"</span> ],
+  <span class="s">"sources"</span>: [ <span class="s">"naver(code)"</span>, <span class="s">"yfinance(quote)"</span>, <span class="s">"chathistory.txt#88940"</span> ]
+<span class="k">}</span></pre>
+  </div>
+
+  <footer>
+    빈규리식 종목 분석 리포트 — 실데이터 샘플 · 정성 출처: chathistory.txt 88,940행(2026-05-27 와이제이링크 분석) · 정량: advisor_data.py(yfinance LIVE) · 재무 상세는 DART 키 연동 시 자동 · 2026-06-04
+  </footer>
+</div>
+</body>
+</html>

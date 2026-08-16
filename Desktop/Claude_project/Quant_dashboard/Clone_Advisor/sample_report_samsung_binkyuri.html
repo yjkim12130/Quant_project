@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>빈규리식 종목 분석 리포트 (샘플) — 삼성전자</title>
+<style>
+  :root {
+    --bg: #0e1117; --surface: #1a1d26; --surface2: #22263a;
+    --green: #00d084; --blue: #2196f3; --orange: #ff9800;
+    --red: #ff4444; --purple: #ab47bc; --yellow: #ffd700;
+    --text: #e0e0e0; --muted: #8899aa; --border: #2e3650;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.75; }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 32px 22px 80px; }
+
+  /* 데모 배너 */
+  .demo-banner {
+    background: repeating-linear-gradient(45deg, rgba(255,152,0,0.10), rgba(255,152,0,0.10) 12px, rgba(255,152,0,0.04) 12px, rgba(255,152,0,0.04) 24px);
+    border: 1px solid var(--orange); border-radius: 10px; padding: 12px 16px; margin-bottom: 24px;
+    font-size: 13.5px; color: #ffcf99;
+  }
+  .demo-banner b { color: var(--orange); }
+
+  /* 종목 헤더 카드 */
+  .stock-head {
+    background: linear-gradient(135deg, var(--surface2), var(--surface));
+    border: 1px solid var(--border); border-radius: 14px; padding: 22px 26px; margin-bottom: 22px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 18px;
+  }
+  .stock-head .name { font-size: 28px; font-weight: 700; color: #fff; }
+  .stock-head .code { font-size: 14px; color: var(--muted); }
+  .pill { display:inline-block; font-size: 12px; padding: 3px 10px; border-radius: 20px; margin-left: 6px; }
+  .pill-mkt { background: rgba(33,150,243,0.18); color: var(--blue); border:1px solid var(--blue); }
+  .pill-sec { background: rgba(0,208,132,0.15); color: var(--green); border:1px solid var(--green); }
+  .verdict-box { margin-left:auto; text-align:right; }
+  .verdict-box .lbl { font-size: 12px; color: var(--muted); }
+  .verdict-box .val { font-size: 20px; font-weight: 700; }
+
+  .analyst-tag {
+    display:inline-flex; align-items:center; gap:8px; font-size:13px; color:var(--muted);
+    background: var(--surface); border:1px solid var(--border); border-radius:8px; padding:6px 12px; margin-bottom:18px;
+  }
+  .analyst-tag b { color: var(--purple); }
+
+  .section { background: var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px 24px; margin-bottom:18px; }
+  .section h2 { font-size: 18px; color:#fff; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .section h2 .num { color: var(--purple); margin-right:8px; }
+  .section p { margin-bottom: 11px; }
+  .section p:last-child { margin-bottom:0; }
+  .voice { color:#d6dde8; }
+  .voice em { color: var(--yellow); font-style: normal; font-weight:600; }
+
+  .biz-grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin:6px 0 4px; }
+  .biz-card { background: var(--surface2); border:1px solid var(--border); border-left:4px solid var(--blue); border-radius:8px; padding:13px 15px; }
+  .biz-card .role { font-size:11.5px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; margin-bottom:4px; }
+  .biz-card .bn { font-size:15px; font-weight:700; color:#fff; margin-bottom:5px; }
+  .biz-card .bd { font-size:13px; color:var(--muted); line-height:1.55; }
+  .role-cash { color: var(--green); } .biz-card.cash { border-left-color: var(--green); }
+  .role-grow { color: var(--blue); } .biz-card.grow { border-left-color: var(--blue); }
+  .role-moat { color: var(--purple); } .biz-card.moat { border-left-color: var(--purple); }
+
+  table { width:100%; border-collapse: collapse; margin: 8px 0; font-size: 13.5px; }
+  th, td { border:1px solid var(--border); padding: 8px 11px; text-align:left; }
+  th { background: var(--surface2); color:#cdd6e4; font-weight:600; }
+  td.num { text-align:right; font-variant-numeric: tabular-nums; }
+  .up { color: var(--green); } .down { color: var(--red); }
+
+  .callout { background: rgba(0,208,132,0.08); border:1px solid var(--green); border-radius:8px; padding:13px 16px; margin-top:8px; font-size:14px; }
+  .callout.warn { background: rgba(255,152,0,0.08); border-color: var(--orange); }
+  .callout.ojs  { background: rgba(33,150,243,0.07); border-color: var(--blue); }
+  .callout b { color:#fff; }
+
+  pre { background:#0a0c12; border:1px solid var(--border); border-radius:8px; padding:16px; overflow-x:auto; font-size:12.5px; line-height:1.6; color:#cdd6e4; }
+  .k { color:#79b8ff; } .s { color:#9ecbff; } .n2 { color:#f8c555; }
+
+  ul { margin: 4px 0 4px 20px; } li { margin-bottom: 5px; }
+  footer { margin-top:30px; padding-top:16px; border-top:1px solid var(--border); font-size:12px; color:var(--muted); text-align:center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="demo-banner">
+    <b>⚠ 샘플 / 목업 데모</b> — 본 문서는 빈규리 CPA 자문역의 채팅 분석 프레임(사업부문 → 시장규모 → 해자 → 재무 → 결론)을
+    <b>삼성전자</b>에 적용해본 <b>리포트 출력 예시</b>입니다. 재무 수치는 공개적으로 널리 알려진 개략치이며 <b>실시간 DART/yfinance 연동 전의 플레이스홀더</b>입니다.
+    실제 에이전트는 이 수치를 API로 자동 채웁니다. (빈규리는 스몰캡 전문이나, 프레임 적용 데모를 위해 대형주를 선택)
+  </div>
+
+  <!-- 종목 헤더 -->
+  <div class="stock-head">
+    <div>
+      <div class="name">삼성전자
+        <span class="pill pill-mkt">KOSPI</span>
+        <span class="pill pill-sec">반도체 / IT</span>
+      </div>
+      <div class="code">005930 · Samsung Electronics · 분석일 2026-06-04</div>
+    </div>
+    <div class="verdict-box">
+      <div class="lbl">빈규리 종합 판단</div>
+      <div class="val" style="color:var(--green);">펀더멘탈 견조 · 사이클 모멘텀</div>
+    </div>
+  </div>
+
+  <div class="analyst-tag">🧮 분석 프레임 · <b>빈규리 CPA</b> (재무구조 + 성장성 + 비전) · 톤·구조 RAG 학습 기반 자동 생성</div>
+
+  <!-- 1. 사업부문 -->
+  <div class="section">
+    <h2><span class="num">1.</span>사업부문 — 무엇으로 돈을 버나</h2>
+    <p class="voice">안녕하세요~ 오늘 분석할 기업은 모두가 아는 <em>"삼성전자"</em>입니다.^^ 너무 큰 기업이라 오히려 "한 문장으로 뭐 하는 회사냐" 물으면 헷갈리시는 분들이 많은데요... 삼성전자는 크게 <em>네 개의 엔진</em>으로 돌아가는 기업이라고 보시면 됩니다.</p>
+    <div class="biz-grid">
+      <div class="biz-card cash">
+        <div class="role role-cash">캐시카우</div>
+        <div class="bn">DS · 메모리 반도체</div>
+        <div class="bd">DRAM·NAND 글로벌 1위. 회사 영업이익의 대부분을 책임지는 심장. 사이클 따라 이익이 출렁이지만 호황기 레버리지가 압도적입니다.</div>
+      </div>
+      <div class="biz-card grow">
+        <div class="role role-grow">성장축</div>
+        <div class="bn">DS · HBM / 파운드리</div>
+        <div class="bd">AI 가속기에 들어가는 고대역폭메모리(HBM)와 위탁생산. 지금 시장이 가장 주목하는, 그리고 가장 논쟁적인 부분이에요.</div>
+      </div>
+      <div class="biz-card moat">
+        <div class="role role-moat">해자축</div>
+        <div class="bn">SDC · 디스플레이</div>
+        <div class="bd">중소형 OLED 사실상 독점적 1위. 아이폰에도 패널을 납품하죠. 이익 변동성이 작아 메모리 사이클을 받쳐주는 안전판입니다.</div>
+      </div>
+      <div class="biz-card">
+        <div class="role" style="color:var(--muted);">현금흐름 안정</div>
+        <div class="bn">DX · 모바일/가전 + 하만</div>
+        <div class="bd">갤럭시 스마트폰(출하량 글로벌 톱), TV·가전, 전장(하만). 폭발 성장은 아니지만 매출 볼륨과 브랜드를 깔아주는 토대.</div>
+      </div>
+    </div>
+    <p class="voice" style="margin-top:10px;">정리하면, <em>메모리(DS)가 이익을 폭발시키는 엔진</em>이고, 디스플레이(SDC)·모바일(DX)이 그 변동성을 받쳐주는 구조거든요. 그래서 삼성전자를 볼 땐 "메모리 사이클 어디쯤이냐"를 가장 먼저 봐야 합니다.</p>
+  </div>
+
+  <!-- 2. 시장규모 -->
+  <div class="section">
+    <h2><span class="num">2.</span>시장 규모 · 성장성 (TAM)</h2>
+    <p class="voice">자, 그러면 가장 중요한 건 뭐냐면... <em>삼성이 노는 시장이 얼마나 커지고 있냐</em>입니다. 특히 지금 주가를 끌고 갈 핵심은 메모리, 그 중에서도 HBM이에요.</p>
+    <table>
+      <thead><tr><th>시장</th><th>현재 규모(개략)</th><th>전망</th><th>드라이버</th></tr></thead>
+      <tbody>
+        <tr><td><b>HBM</b></td><td class="num">~$0.4조</td><td class="num up">2030년 $1조+ 전망</td><td>AI 가속기 1대당 HBM 탑재량 급증</td></tr>
+        <tr><td>전체 DRAM</td><td class="num">~$0.9조</td><td class="num up">AI 서버향 고부가 전환</td><td>온디바이스AI·데이터센터 증설</td></tr>
+        <tr><td>중소형 OLED</td><td class="num">~$0.4조</td><td class="num">완만 성장</td><td>스마트폰·태블릿·차량용 확대</td></tr>
+      </tbody>
+    </table>
+    <p class="voice">2025년까지 HBM 시장이 약 <em>4천억 달러</em> 수준이었는데, 시장에서는 2030년경 <em>1조 달러</em>를 바라보고 있거든요. 단순히 보더라도 몇 배 성장하는 시장이고, 삼성은 여기서 SK하이닉스를 추격하는 2위 플레이어입니다. <span style="color:var(--muted);">(* 규모는 출처별 편차가 커서 개략치로 표기 — 실제 에이전트는 최신 리서치 수치로 갱신)</span></p>
+  </div>
+
+  <!-- 3. 해자 -->
+  <div class="section">
+    <h2><span class="num">3.</span>해자 · 독점력 — 왜 삼성이어야 하나</h2>
+    <p class="voice">그런데 시장이 크다고 다 되는 게 아니에요. <em>"왜 굳이 삼성이냐"</em>를 따져봐야 하거든요. 삼성전자의 해자는 세 갈래로 보입니다.</p>
+    <ul>
+      <li><b>① 메모리 과점 구조</b> — DRAM은 사실상 삼성·SK하이닉스·마이크론 <em>3사 과점</em>입니다. 신규 진입에 수십조 원의 설비투자가 필요해서, 누구나 들어올 수 있는 시장이 아니에요. 이게 가장 단단한 해자입니다.</li>
+      <li><b>② 수직계열화</b> — 메모리·파운드리·디스플레이·세트(완제품)를 <em>한 회사가 다 가진</em> 기업은 전 세계에 삼성이 유일에 가깝습니다. 원가·공급망 통제력이 다르죠.</li>
+      <li><b>③ 자본 체력</b> — CPA 관점에서 가장 중요하게 보는 부분인데요, 삼성은 <em>순현금(무차입에 가까운)</em> 기업입니다. 메모리 불황이 와도 버티고, 오히려 그때 투자를 늘려 점유율을 가져가는 체력이 있어요.</li>
+    </ul>
+    <div class="callout warn">
+      <b>리스크도 솔직하게</b> — HBM에서는 현재 SK하이닉스가 앞서 있습니다. 삼성의 해자가 "메모리 전체"에선 강하지만 "HBM 한정"에선 <b>추격자 입장</b>이라는 점, 파운드리는 TSMC와 격차가 크다는 점은 반드시 같이 봐야 합니다.
+    </div>
+  </div>
+
+  <!-- 4. 재무 -->
+  <div class="section">
+    <h2><span class="num">4.</span>재무 — CPA의 눈 <span style="font-size:0.65em;color:var(--muted);">(예시 수치 / 실연동 시 자동 갱신)</span></h2>
+    <p class="voice">자, 제가 CPA 출신이다 보니 이 부분을 제일 꼼꼼히 봅니다.^^ 삼성전자는 <em>재무구조가 탄탄하면서 성장 옵션이 살아있는</em> 보기 드문 대형주거든요.</p>
+    <table>
+      <thead><tr><th>지표</th><th>개략치</th><th>해석</th></tr></thead>
+      <tbody>
+        <tr><td>연 매출</td><td class="num">~300조 원</td><td>국내 1위 매출 볼륨</td></tr>
+        <tr><td>부채비율</td><td class="num up">낮음(순현금)</td><td>불황 방어력 최상위 — CPA 핵심 체크</td></tr>
+        <tr><td>영업이익률</td><td class="num">메모리 호황 시 급등</td><td>사이클 레버리지가 큼(상저하고형 이익 탄력)</td></tr>
+        <tr><td>배당</td><td class="num">분기 배당 지속</td><td>성장 + 배분 병행 → 오재승 자문역이 중시하는 포인트</td></tr>
+      </tbody>
+    </table>
+    <p class="voice">핵심은 <em>"이익이 늘면서 빚이 거의 없다"</em>는 거예요. 성장주인데 재무 위험은 낮은... 흔치 않은 조합입니다. 다만 메모리 사이클 기업이라 분기 이익 변동이 크다는 점은 감안하셔야 해요.</p>
+  </div>
+
+  <!-- 5. 결론 -->
+  <div class="section" style="border-color:var(--green);">
+    <h2><span class="num">5.</span>총정리 — 결론</h2>
+    <p class="voice">총 정리를 하면, 삼성전자는</p>
+    <ul>
+      <li><b>1.</b> 기존 사업(메모리·디스플레이·세트)이 이미 압도적 1~2위로 <em>현금을 잘 벌고 있다.</em></li>
+      <li><b>2.</b> AI 메모리(HBM)라는 <em>구조적 성장 옵션</em>이 붙어 있고, 여기서 점유율을 회복하면 이익이 한 단계 점프한다.</li>
+      <li><b>3.</b> 그 모든 도전을 <em>순현금 재무구조</em>로 버틸 수 있다 — 즉, 실패해도 안 죽고, 성공하면 크게 먹는 비대칭 구조.</li>
+    </ul>
+    <div class="callout">
+      <b>빈규리 한 줄 결론</b> — "재무는 안전, 성장은 HBM에 베팅. <b>메모리 사이클 저점에서 모아가는 종목</b>이지, 단기 급등 종목은 아닙니다. HBM 점유율 회복 뉴스가 트리거예요."
+    </div>
+    <div class="callout ojs" style="margin-top:10px;">
+      <b>오재승 자문역 코멘트 (타이밍 관점)</b> — "펀더멘탈은 빈자문역 말이 다 맞죠. 저는 타이밍의 문제로 봅니다. 성장에 <b>배당(배분)</b>이 뒷받침되면 날아가니까, 눌릴 때 분할로 모으는 자리. 당장 풀매수보다 <b>유니버스에 넣어두고 200일선 눌림</b>에서 담는 종목." <span style="color:var(--muted);font-size:12px;">(오재승 룰북 OJS-MA-01 / OJS-CASH-01 자동 매칭)</span>
+    </div>
+  </div>
+
+  <!-- 종목카드 JSON -->
+  <div class="section">
+    <h2>📦 구조화 출력 — 종목카드 (JSON)</h2>
+    <p style="color:var(--muted);font-size:13px;">에이전트가 내부적으로 생성·저장하는 형식. UI 카드/대시보드 통합·정량 신호 결합에 사용됩니다.</p>
+<pre><span class="k">{</span>
+  <span class="s">"ticker"</span>: <span class="s">"005930"</span>, <span class="s">"name"</span>: <span class="s">"삼성전자"</span>, <span class="s">"market"</span>: <span class="s">"KOSPI"</span>,
+  <span class="s">"analyst_frame"</span>: <span class="s">"빈규리_CPA"</span>, <span class="s">"as_of"</span>: <span class="s">"2026-06-04"</span>,
+  <span class="s">"business_units"</span>: <span class="k">[</span>
+    <span class="k">{</span><span class="s">"name"</span>:<span class="s">"메모리(DS)"</span>, <span class="s">"role"</span>:<span class="s">"cash_cow"</span>, <span class="s">"rank"</span>:<span class="s">"글로벌 1위"</span><span class="k">}</span>,
+    <span class="k">{</span><span class="s">"name"</span>:<span class="s">"HBM/파운드리"</span>, <span class="s">"role"</span>:<span class="s">"growth"</span>, <span class="s">"rank"</span>:<span class="s">"추격 2위"</span><span class="k">}</span>,
+    <span class="k">{</span><span class="s">"name"</span>:<span class="s">"디스플레이(SDC)"</span>, <span class="s">"role"</span>:<span class="s">"moat"</span>, <span class="s">"rank"</span>:<span class="s">"중소형 OLED 1위"</span><span class="k">}</span>,
+    <span class="k">{</span><span class="s">"name"</span>:<span class="s">"모바일/가전/하만(DX)"</span>, <span class="s">"role"</span>:<span class="s">"stable_cf"</span><span class="k">}</span>
+  <span class="k">]</span>,
+  <span class="s">"tam"</span>: <span class="k">{</span><span class="s">"hbm_2030_usd"</span>: <span class="n2">1.0e12</span>, <span class="s">"note"</span>:<span class="s">"개략치, 리서치 갱신 필요"</span><span class="k">}</span>,
+  <span class="s">"moat"</span>: <span class="k">[</span><span class="s">"메모리 3사 과점"</span>, <span class="s">"수직계열화"</span>, <span class="s">"순현금 재무"</span><span class="k">]</span>,
+  <span class="s">"financials"</span>: <span class="k">{</span><span class="s">"revenue_krw"</span>:<span class="s">"~300조"</span>, <span class="s">"net_cash"</span>:<span class="k">true</span>, <span class="s">"source"</span>:<span class="s">"PLACEHOLDER→DART"</span><span class="k">}</span>,
+  <span class="s">"risks"</span>: <span class="k">[</span><span class="s">"HBM 점유율 SK하이닉스 우위"</span>, <span class="s">"파운드리 TSMC 격차"</span>, <span class="s">"메모리 사이클 이익 변동"</span><span class="k">]</span>,
+  <span class="s">"verdict"</span>: <span class="s">"사이클 저점 분할매집 / 트리거=HBM 점유율 회복"</span>,
+  <span class="s">"ojs_rule_match"</span>: <span class="k">[</span><span class="s">"OJS-MA-01"</span>, <span class="s">"OJS-CASH-01"</span><span class="k">]</span>,
+  <span class="s">"quant_link_v93"</span>: <span class="k">{</span><span class="s">"status"</span>:<span class="s">"TODO"</span>, <span class="s">"fields"</span>:<span class="k">[</span><span class="s">"regime"</span>,<span class="s">"RSI"</span>,<span class="s">"MA200_dev"</span><span class="k">]</span><span class="k">}</span>
+<span class="k">}</span></pre>
+  </div>
+
+  <!-- 정량 결합 안내 -->
+  <div class="section">
+    <h2>🔗 v9.3 정량 신호와의 결합 (다음 단계)</h2>
+    <p>위 정성 분석(빈규리) + 오재승 룰북은 <b>"무엇을·왜"</b>를 말해줍니다. 여기에 v9.3의 정량 엔진이 <b>"언제"</b>를 붙입니다:</p>
+    <table>
+      <thead><tr><th>레이어</th><th>출처</th><th>역할</th></tr></thead>
+      <tbody>
+        <tr><td>정성 — 기업 가치</td><td>빈규리 프레임 (이 리포트)</td><td>살 만한 회사인가</td></tr>
+        <tr><td>정성 — 매매 철학</td><td>오재승 룰북 (OJS-*)</td><td>어떻게 모아갈 것인가</td></tr>
+        <tr><td>정량 — 타이밍</td><td>v9.3 (레짐/RSI/VIX/200일선 이격)</td><td>지금이 그 자리인가</td></tr>
+      </tbody>
+    </table>
+    <div class="callout">
+      <b>의도된 통합 화면</b> — 종목 입력 → 이 빈규리 리포트 카드 + 오재승 룰 매칭 + v9.3 정량 신호가 <b>한 화면에 나란히</b> 표시. (로드맵 P3 → P4)
+    </div>
+  </div>
+
+  <footer>
+    빈규리식 종목 분석 리포트 — 샘플/목업 · 프레임 출처: chathistory.txt(헥토파이낸셜 분석 구조) · 재무 수치는 실연동 전 플레이스홀더 · 2026-06-04
+  </footer>
+</div>
+</body>
+</html>

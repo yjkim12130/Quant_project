@@ -1,0 +1,375 @@
+"""
+advisor_app.py — 자문역 인사이트 통합 분석 (P3, 독립 앱)
+═══════════════════════════════════════════════════════════════════════
+종목 하나를 입력하면 한 화면에:
+  ① 정량 데이터        — yfinance LIVE (시세·시총·52주·매출)
+  ② 정량 신호          — 개별종목 간이 레짐/RSI/200일선 이격 (자체 계산)
+  ③ 오재승 룰 매칭     — 정량 신호 → OJS-* 트레이딩 룰 자동 힌트
+  ④ 빈규리 룰북 평가   — 13개 BKR-* 룰 (코드 자동 + 정성 수동 체크) → 점수
+  ⑤ 종목카드 JSON      — advisor_data.py 원본 출력
+
+★ v9.3(app.py)과 완전 독립. 안정화·품질 확보 후 v9.4 트랙으로 merge 예정.
+실행:  streamlit run advisor_app.py
+"""
+from __future__ import annotations
+import json
+
+import streamlit as st
+import plotly.graph_objects as go
+
+import advisor_data as ad
+import advisor_llm as al
+
+st.set_page_config(page_title="자문역 인사이트 — 종목 분석",
+                   page_icon="🧮", layout="wide")
+
+# ── 테마 (샘플 리포트와 동일 팔레트) ──────────────────────────────────
+st.markdown("""
+<style>
+  :root { --green:#00d084; --blue:#2196f3; --orange:#ff9800; --red:#ff4444;
+          --purple:#ab47bc; --muted:#8899aa; }
+  .card { background:#1a1d26; border:1px solid #2e3650; border-radius:12px;
+          padding:16px 20px; margin-bottom:14px; }
+  .card-green { border-color:var(--green); }
+  .card-blue  { border-color:var(--blue); }
+  .badge { display:inline-block; font-size:12px; font-weight:700; padding:3px 11px;
+           border-radius:20px; margin-left:6px; }
+  .b-live { background:rgba(0,208,132,.18); color:var(--green); border:1px solid var(--green); }
+  .b-pend { background:rgba(255,152,0,.15); color:var(--orange); border:1px solid var(--orange); }
+  .b-reg  { background:rgba(33,150,243,.15); color:var(--blue); border:1px solid var(--blue); }
+  .rule-if { color:var(--muted); font-size:13px; }
+  .rule-then { color:#d6dde8; font-size:13px; }
+  .ev { color:var(--muted); font-size:12px; font-style:italic; }
+  h3.sec { border-bottom:1px solid #2e3650; padding-bottom:6px; margin:6px 0 10px; }
+</style>
+""", unsafe_allow_html=True)
+
+_W = {"high": 3, "mid": 2, "low": 1}
+_CAT_ORDER = ["해자", "진위판별", "사업구조", "성장", "재무", "리스크", "스타일"]
+_CAT_COLOR = {"해자": "purple", "진위판별": "red", "사업구조": "blue",
+              "성장": "green", "재무": "orange", "리스크": "red", "스타일": "muted"}
+
+
+# ── 캐시된 데이터 로딩 ────────────────────────────────────────────────
+@st.cache_data(ttl=600, show_spinner=False)
+def load_card(name: str, us: bool) -> dict:
+    card = ad.build_stock_card(name, us=us)
+    return ad.apply_rulebook(card)
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def load_history(ticker: str):
+    return ad.get_price_history(ticker)
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def load_signals(ticker: str) -> dict:
+    return ad.compute_quant_signals(load_history(ticker))
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def load_ojs(ticker: str, market_cap, revenue_ttm, per) -> dict:
+    quant = {"market_cap": market_cap, "revenue_ttm": revenue_ttm, "per": per}
+    return ad.compute_ojs_signals(load_history(ticker), quant)
+
+
+def price_chart(close, ojs: dict):
+    """종가 + 200일선 + 오재승 그물망 12 MA 리본(정/역배열 색)."""
+    fig = go.Figure()
+    periods = ojs.get("periods") if isinstance(ojs, dict) else None
+    periods = periods or list(range(20, 76, 5))
+    arr = ojs.get("net_arrangement", "") if isinstance(ojs, dict) else ""
+    ribbon = ("rgba(255,68,68,.22)" if "정배열" in arr
+              else "rgba(33,150,243,.22)" if "역배열" in arr
+              else "rgba(136,153,170,.20)")
+    for p in periods:                                   # 그물망 리본
+        ma = close.rolling(p).mean()
+        fig.add_trace(go.Scatter(x=ma.index, y=ma, mode="lines",
+                      line=dict(width=1, color=ribbon),
+                      showlegend=False, hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=close.index, y=close, mode="lines",
+                  line=dict(width=1.6, color="#d6dde8"), name="종가"))
+    if len(close) >= 200:                               # 200일선
+        ma200 = close.rolling(200).mean()
+        fig.add_trace(go.Scatter(x=ma200.index, y=ma200, mode="lines",
+                      line=dict(width=1.4, color="#ff9800", dash="dot"),
+                      name="200일선"))
+    fig.update_layout(template="plotly_dark", height=340,
+                      margin=dict(l=8, r=8, t=8, b=8),
+                      paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="#161922",
+                      legend=dict(orientation="h", y=1.04, x=0,
+                                  bgcolor="rgba(0,0,0,0)"))
+    fig.update_xaxes(gridcolor="#2e3650")
+    fig.update_yaxes(gridcolor="#2e3650")
+    return fig
+
+
+def _krw(v):
+    if not isinstance(v, (int, float)):
+        return "—"
+    if v >= 1e12:
+        return f"{v/1e12:.2f}조"
+    if v >= 1e8:
+        return f"{v/1e8:,.0f}억"
+    return f"{v:,.0f}"
+
+
+def ojs_hint(sig: dict) -> list[str]:
+    """정량 신호 → 오재승 룰 자동 힌트."""
+    out = []
+    reg = sig.get("regime", "")
+    rsi = sig.get("rsi14")
+    dev = sig.get("ma200_dev_pct")
+    if reg in ("정배열 눌림", "약세 과매도") and rsi is not None and rsi < 40:
+        out.append("OJS-MA-01 · 200일선 위 눌림 + 과매도 → 분할 매수 후보 자리")
+    if reg.startswith("강세"):
+        out.append("OJS-MACD-01 · 추세 구간 → 신고가 돌파 시 선취매 관점")
+    if dev is not None and dev < -5:
+        out.append("OJS-CASH-01 · 이격 음(-) 확대 → 만수르 분할(현금 분할 매집) 구간")
+    if not out:
+        out.append("뚜렷한 트레이딩 트리거 없음 — 관망 / 유니버스 편입 단계")
+    return out
+
+
+# ════════════════════════════════════════════════════════════════════
+# 사이드바
+# ════════════════════════════════════════════════════════════════════
+st.sidebar.title("🧮 자문역 인사이트")
+st.sidebar.caption("빈규리(펀더멘탈) × 오재승(타이밍) · 독립 앱")
+name = st.sidebar.text_input("종목명 / 티커", value="와이제이링크",
+                             help="한국: 한글 종목명(예: 와이제이링크) · 미국: 티커(예: AAPL)")
+us = st.sidebar.checkbox("미국 종목 (yfinance 티커 직접 입력)", value=False)
+go = st.sidebar.button("분석 실행", type="primary", use_container_width=True)
+
+dart_on = ad.get_dart_key() is not None
+st.sidebar.markdown("---")
+st.sidebar.markdown(
+    f"**DART 재무 연동**: {'🟢 ON' if dart_on else '🟠 키 대기'}")
+if not dart_on:
+    st.sidebar.caption("opendart.fss.or.kr 무료키 발급 후 "
+                       "`DART_API_KEY` 환경변수 또는 `.dart_api_key` 파일 설정 시 "
+                       "영업이익률·부채비율 자동 채움")
+
+llm_ok, llm_why = al.llm_available()
+st.sidebar.markdown(f"**Claude 정성 평가**: {'🟢 ON' if llm_ok else '🟠 미연결'}")
+if not llm_ok:
+    st.sidebar.caption(f"{llm_why} — 설정 시 11개 정성 룰을 Claude가 자동 판정")
+
+st.sidebar.markdown("---")
+st.sidebar.caption("빈규리 증류 종목 예시")
+st.sidebar.caption("와이제이링크 · 헥토파이낸셜 · 켄코아에어로스페이스 · 엔젤로보틱스")
+
+# ════════════════════════════════════════════════════════════════════
+# 메인
+# ════════════════════════════════════════════════════════════════════
+if not (go or name):
+    st.info("좌측에서 종목을 입력하고 **분석 실행**을 눌러주세요.")
+    st.stop()
+
+with st.spinner(f"'{name}' 데이터 수집 중…"):
+    card = load_card(name, us)
+
+if card.get("_error"):
+    st.error(f"❌ {card['_error']}")
+    st.info("한국 종목은 **정확한 한글 종목명**(예: 유한양행, 에스티팜)을, "
+            "미국 종목은 좌측 체크 후 **티커**(예: AAPL)를 입력하세요.")
+    st.stop()
+
+q = card.get("quant", {})
+
+# yfinance 빈 응답 가드 — 조용한 null 대신 명확한 경고 + 재시도
+if q.get("_status") in ("NO_DATA", "NO_YFINANCE") or q.get("price") is None:
+    st.error(f"⚠️ '{card['name']}' ({card.get('ticker','')}) 의 시세를 받지 못했습니다.")
+    st.warning(
+        "원인은 보통 **yfinance 일시적 rate-limit**(종목을 빠르게 연속 입력하면 발생)이거나 "
+        "해당 티커를 yfinance가 커버하지 않는 경우입니다.\n\n"
+        "- **20~30초 후 다시 '분석 실행'** 을 눌러보세요 (대개 해결됩니다).\n"
+        "- 데이터 레이어는 정상이며, 캐시(10분)에 빈 결과가 남지 않도록 재조회합니다."
+    )
+    # 빈 결과가 캐시에 굳지 않도록 무효화
+    load_card.clear()
+    load_signals.clear()
+    st.stop()
+
+tkr_full = q.get("ticker", "")
+sig = load_signals(tkr_full) if tkr_full else {"_status": "NO_TICKER"}
+ojs = (load_ojs(tkr_full, q.get("market_cap"), q.get("revenue_ttm"), q.get("per"))
+       if tkr_full else {"_status": "NO_TICKER"})
+
+# ── 헤더 ──────────────────────────────────────────────────────────────
+regime = sig.get("regime", "—")
+top1, top2 = st.columns([3, 2])
+with top1:
+    st.markdown(f"## {card['name']} "
+                f"<span class='badge b-reg'>{card.get('market','')}</span>",
+                unsafe_allow_html=True)
+    st.caption(f"{card.get('ticker','')} · {q.get('name','')} · "
+               f"{q.get('sector','')}/{q.get('industry','')} · 분석일 {card.get('as_of','')}")
+with top2:
+    st.metric("간이 레짐 (독립 신호)", regime,
+              delta=f"RSI {sig.get('rsi14','—')}", delta_color="off")
+
+# ── ① 정량 데이터 (yfinance LIVE) ─────────────────────────────────────
+st.markdown("### ① 정량 데이터 <span class='badge b-live'>yfinance LIVE</span>",
+            unsafe_allow_html=True)
+c = st.columns(5)
+cur = q.get("currency", "")
+c[0].metric("현재가", f"{q.get('price','—'):,}" if isinstance(q.get('price'), (int, float)) else "—",
+            help=cur)
+c[1].metric("시가총액", _krw(q.get("market_cap")))
+c[2].metric("매출 TTM", _krw(q.get("revenue_ttm")))
+pm = q.get("profit_margin")
+c[3].metric("순이익률", f"{pm*100:.1f}%" if isinstance(pm, (int, float)) else "—")
+c[4].metric("52주 밴드",
+            f"{q.get('wk52_low','—'):,}~{q.get('wk52_high','—'):,}"
+            if isinstance(q.get('wk52_low'), (int, float)) else "—")
+
+# ── 차트 (종가 + 200일선 + 오재승 그물망 리본) ───────────────────────
+close = load_history(tkr_full) if tkr_full else None
+if close is not None and len(close) >= 30:
+    arr = ojs.get("net_arrangement", "—") if isinstance(ojs, dict) else "—"
+    st.markdown(f"### 📈 가격 차트 <span class='badge b-reg'>그물망 12 MA · {arr}</span>",
+                unsafe_allow_html=True)
+    st.plotly_chart(price_chart(close, ojs), use_container_width=True)
+
+# ── ② 정량 신호 (간이 레짐) ───────────────────────────────────────────
+st.markdown("### ② 정량 신호 <span class='badge b-reg'>개별종목 자체 계산 · v9.3 미의존</span>",
+            unsafe_allow_html=True)
+if sig.get("_status"):
+    st.warning(f"신호 계산 불가: {sig['_status']}")
+else:
+    s = st.columns(5)
+    s[0].metric("200일선 이격", f"{sig.get('ma200_dev_pct','—')}%")
+    s[1].metric("RSI(14)", sig.get("rsi14", "—"))
+    s[2].metric("52주 위치", f"{sig.get('wk52_pos_pct','—')}%")
+    s[3].metric("1개월 수익", f"{sig.get('ret_1m_pct','—')}%")
+    s[4].metric("3개월 수익", f"{sig.get('ret_3m_pct','—')}%")
+
+    st.markdown("#### 🔵 오재승 타이밍 — 7룰 자동 매칭 "
+                "<span class='badge b-reg'>가격 데이터 정량</span>",
+                unsafe_allow_html=True)
+    for h in ojs_hint(sig):
+        st.caption(f"💡 {h}")
+
+    if isinstance(ojs, dict) and not ojs.get("_status"):
+        ojs_rb = ad.load_ojs_rulebook()
+        rb_by_id = {r["id"]: r for r in ojs_rb["rules"]} if ojs_rb else {}
+        rules = ad.evaluate_ojs_rules(ojs)
+        active_n = sum(1 for r in rules if r["active"])
+        st.caption(f"🟢 활성 신호 {active_n}/{len(rules)}룰 "
+                   f"(OJS-MA-01·LINE-01·SEASON-01은 룰북 참조)")
+        for r in rules:
+            icon = "🟢" if r["active"] else "⚪"
+            meta = rb_by_id.get(r["id"], {})
+            st.markdown(
+                f"{icon} **{r['id']}** · {r['name']} — {r['note']}")
+            if meta.get("then"):
+                st.markdown(
+                    f"<div class='ev'>→ {meta['then']}</div>",
+                    unsafe_allow_html=True)
+    else:
+        st.caption("그물망/MACD 신호 계산을 위한 가격 히스토리가 부족합니다.")
+
+# ── ④ 빈규리 룰북 평가 ────────────────────────────────────────────────
+st.markdown("### ③ 빈규리 펀더멘탈 룰북 평가 "
+            "<span class='badge b-live'>코드 자동</span> "
+            "<span class='badge b-pend'>정성 수동</span>", unsafe_allow_html=True)
+
+rb = ad.load_rulebook()
+if not rb:
+    st.warning("binkyuri_rulebook.json 을 찾을 수 없습니다.")
+else:
+    auto_ids = {m["id"] for m in card.get("rulebook", {}).get("auto_matched", [])}
+    rules_by_cat: dict[str, list] = {}
+    for r in rb["rules"]:
+        rules_by_cat.setdefault(r["category"], []).append(r)
+
+    # ── Claude 정성 평가 트리거 + 캐시(세션) ──────────────────────────
+    eval_key = f"llm_eval::{card.get('ticker')}"
+    bc1, bc2 = st.columns([1, 2])
+    with bc1:
+        if st.button("🤖 Claude로 정성 룰 자동 평가", disabled=not llm_ok,
+                     use_container_width=True):
+            with st.spinner("Claude가 11개 정성 룰 평가 중…"):
+                st.session_state[eval_key] = al.evaluate_qualitative_rules(card, rb, sig)
+    with bc2:
+        if not llm_ok:
+            st.caption(f"🟠 {llm_why}")
+        elif eval_key not in st.session_state:
+            st.caption("버튼을 누르면 해자·진위판별 등 11개 정성 룰을 Claude가 판정·근거 제시합니다.")
+
+    llm_res = st.session_state.get(eval_key)
+    llm_map: dict[str, dict] = {}
+    if llm_res:
+        if llm_res.get("_status") == "ok":
+            llm_map = {e["rule_id"]: e for e in llm_res["evaluations"]}
+            u = llm_res.get("usage", {})
+            st.caption(f"✅ Claude({llm_res.get('model','')}) 평가 완료 · "
+                       f"met={sum(1 for e in llm_map.values() if e['verdict']=='met')}/{len(llm_map)} · "
+                       f"토큰 in {u.get('input',0)}(cache {u.get('cache_read',0)})/out {u.get('output',0)}")
+        else:
+            st.warning(f"평가 실패 [{llm_res.get('_status')}]: {llm_res.get('_msg','')}")
+
+    st.caption("🟢자동=코드 확인 · 🤖Claude=LLM 판정(met 자동 체크) · 그 외=근거 보고 직접 체크. "
+               "체크한 룰의 가중치 합으로 점수 산출.")
+
+    _VICON = {"met": "✅", "not_met": "❌", "unknown": "❔"}
+    checked_w = 0
+    total_w = 0
+    cat_scores: dict[str, tuple] = {}
+    for cat in _CAT_ORDER:
+        if cat not in rules_by_cat:
+            continue
+        with st.expander(f"📁 {cat}  ({len(rules_by_cat[cat])}룰)", expanded=(cat in ("해자", "진위판별"))):
+            cw = ct = 0
+            for r in rules_by_cat[cat]:
+                w = _W.get(r.get("weight", "mid"), 2)
+                total_w += w
+                ct += w
+                is_auto = r["id"] in auto_ids
+                ev = llm_map.get(r["id"])
+                llm_met = bool(ev and ev["verdict"] == "met")
+                default = is_auto or llm_met
+                label = f"**{r['id']}** · {r['name']}  ·  ({r.get('weight','mid')})"
+                if is_auto:
+                    label += "  🟢자동"
+                if ev:
+                    label += f"  🤖{_VICON.get(ev['verdict'],'')}{ev['verdict']}({ev['confidence']})"
+                # LLM 재평가 시 위젯 기본값을 새로 반영하기 위해 key에 평가 유무 포함
+                ck = f"chk_{r['id']}_{'L' if ev else '0'}"
+                checked = st.checkbox(label, value=default, key=ck)
+                st.markdown(f"<div class='rule-if'>IF: {r['if']}</div>"
+                            f"<div class='rule-then'>→ {r['then']}</div>",
+                            unsafe_allow_html=True)
+                if ev:
+                    st.markdown(f"<div class='ev'>🤖 {ev['reasoning']} "
+                                f"<b>근거:</b> {ev['evidence']}</div>", unsafe_allow_html=True)
+                elif r.get("evidence"):
+                    e = r["evidence"][0]
+                    st.markdown(f"<div class='ev'>예: [{e['stock']}] {e['quote']}</div>",
+                                unsafe_allow_html=True)
+                if checked:
+                    checked_w += w
+                    cw += w
+            cat_scores[cat] = (cw, ct)
+
+    # 점수 패널
+    st.markdown("#### 📊 룰북 점수")
+    pct = (checked_w / total_w * 100) if total_w else 0
+    st.progress(min(pct / 100, 1.0),
+                text=f"종합 {checked_w}/{total_w} ({pct:.0f}%)")
+    pcols = st.columns(len(cat_scores))
+    for i, (cat, (cw, ct)) in enumerate(cat_scores.items()):
+        pcols[i].metric(cat, f"{cw}/{ct}")
+
+# ── ⑤ 종목카드 JSON ───────────────────────────────────────────────────
+with st.expander("📦 종목카드 JSON (advisor_data.py 원본 출력 + 신호)"):
+    out = dict(card)
+    out["signals"] = sig
+    out["ojs_signals"] = ojs
+    st.code(json.dumps(out, ensure_ascii=False, indent=2), language="json")
+
+st.markdown("---")
+st.caption("자문역 인사이트 통합 분석 (P3, 독립 앱) · 정량=yfinance LIVE / DART · "
+           "정성=빈규리 룰북(BKR-*) · 타이밍=오재승 룰(OJS-*) · "
+           "v9.3과 독립 — 안정화 후 v9.4 트랙 merge 예정")

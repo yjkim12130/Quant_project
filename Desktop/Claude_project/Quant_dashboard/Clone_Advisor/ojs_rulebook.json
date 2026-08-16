@@ -1,0 +1,112 @@
+{
+  "analyst": "오재승",
+  "role": "기술적 매매 (MA/MACD/PSR·PER) · 타이밍 콜",
+  "version": "0.3",
+  "distilled_at": "2026-08-16",
+  "distilled_from": [
+    {"doc": "refDoc #1", "technique": "만수르 기법 (피라미딩·마틴게일)"},
+    {"doc": "refDoc #2", "technique": "라인 트레이딩 (밸류라인 × MACD)"},
+    {"doc": "refDoc #3", "technique": "그물망 차트 (12 MA 리본)"},
+    {"doc": "refDoc #4", "technique": "주도주 발굴 (PSR×PER)"},
+    {"doc": "refDoc #5", "technique": "무릎어깨 MACD"},
+    {"doc": "refDoc #6", "technique": "왼쪽절단분포 (손절=좌측꼬리 절단, 대수의법칙/CLT 근거)", "source": "RecentData/Beta/왼쪽절단분포 만드는법.txt + 채팅 실강의(L107857-108759, 2026-08-03·08-06)"}
+  ],
+  "philosophy": [
+    "자산 = 가격 × 수량. 하락은 매수기회, 레버리지는 정배열에만.",
+    "바닥·꼭지는 신기루지만 무릎·어깨는 연구로 승률을 높인다.",
+    "기술적 지표만으로 좋은 종목을 싸게 살 수 없다 — 밸류 라인 + 기술적 진입 결합.",
+    "좋은 회사(빈규리 BKR) × 싼 자리·타이밍(오재승 OJS) 결합.",
+    "개인은 손절을 못한다 — 절단분포(손절선이 왼쪽 꼬리를 잘라 기댓값을 오른쪽으로 이동)를 손절 대신 구현하는 두 축이 피라미딩(OJS-CASH-01)과 모으기 주문(OJS-DCA-01)."
+  ],
+  "rules": [
+    {
+      "id": "OJS-CASH-01",
+      "technique": "만수르 기법",
+      "name": "피라미딩 5분할 (마틴게일)",
+      "if": "역배열 안전마진 가격 도달 후 첫 매수, 이후 −10%마다 추가",
+      "then": "−10%마다 2배씩 최대 5분할(KODEX 레버리지 기준), 진폭은 종목별 역사적 변동성으로 차등. 매도는 지수 매도신호 OR MFI/RSI 과열에서 분할",
+      "weight": "high",
+      "codeable": "yes",
+      "signal": "mansur_step",
+      "source": "refDoc #1"
+    },
+    {
+      "id": "OJS-LINE-01",
+      "technique": "라인 트레이딩",
+      "name": "밸류 라인 × MACD 트리거",
+      "if": "히스토리컬 PER밴드·영업이익으로 저평가/고평가 라인 사전 설정",
+      "then": "매수: 주가<저평가라인 AND MACD osc 양선전환 / 매도: 주가>고평가라인 AND 음선전환",
+      "weight": "high",
+      "codeable": "partial",
+      "signal": "macd_osc",
+      "source": "refDoc #2",
+      "note": "밸류 라인은 빈규리(BKR)/전문가 입력 → semi-auto. MACD 전환만 코드 자동."
+    },
+    {
+      "id": "OJS-NET-01",
+      "technique": "그물망 차트",
+      "name": "12 MA 리본 색전환",
+      "if": "20일 MA 기준 5일 간격 12개(20~75일) 리본의 정/역배열·수렴/발산",
+      "then": "정배열(빨강): 하단 반등 추매. 역배열(파랑): 상단 분할매도. ★ 파랑→빨강 첫 전환 후 하단 첫 진입 = 바닥주 매수",
+      "weight": "high",
+      "codeable": "yes",
+      "signal": "net_first_flip",
+      "source": "refDoc #3"
+    },
+    {
+      "id": "OJS-MACD-01",
+      "technique": "무릎어깨 MACD",
+      "name": "오실레이터 첫 반전 이후 그 방향만",
+      "if": "MACD osc 0선 구간별 양/음 절댓값 비교 → 첫 반전 방향 확정",
+      "then": "첫 상승반전 후 osc 음→양에 매수만 / 첫 하락반전 후 osc 양→음에 매도만. 코스닥 백테스트 누적 +58%",
+      "weight": "high",
+      "codeable": "yes",
+      "signal": "macd_state",
+      "source": "refDoc #5"
+    },
+    {
+      "id": "OJS-LEAD-01",
+      "technique": "주도주 발굴",
+      "name": "PSR × PER (10배 종목 출발점)",
+      "if": "PSR 1배 미만 + 높은 PER + 강한 산업성장 + 생산시설 확충(capex)",
+      "then": "탄력성 주가>영업이익>매출. PSR 저평가 + 산업성장 + capex = 정답",
+      "weight": "mid",
+      "codeable": "yes",
+      "signal": "psr_lead_candidate",
+      "source": "refDoc #4"
+    },
+    {
+      "id": "OJS-MA-01",
+      "technique": "200일선 눌림목",
+      "name": "200일선 돌파 후 눌림 재돌파 매수",
+      "if": "200일선 의미있는 돌파 → 눌림 후 재돌파 (≈CCI200)",
+      "then": "재돌파 지점에서 매수. 앱 자동 힌트 대상",
+      "weight": "mid",
+      "codeable": "yes",
+      "signal": "ma200_dev_pct",
+      "source": "채팅·유튜브"
+    },
+    {
+      "id": "OJS-SEASON-01",
+      "technique": "계절성",
+      "name": "1월효과·벚꽃매도",
+      "if": "계절 패턴 (1월 상승·봄 고점)",
+      "then": "계절 패턴 기반 선물 매매",
+      "weight": "low",
+      "codeable": "partial",
+      "signal": null,
+      "source": "채팅·유튜브"
+    },
+    {
+      "id": "OJS-DCA-01",
+      "technique": "모으기 주문",
+      "name": "기간분할 매집 (시간축 DCA)",
+      "if": "목표 매수가 이하 + 분할 기간(N=30/60/90일) 지정, HTS 자동예약매수 등록",
+      "then": "지정가 이하로 하락한 날에만 자동 체결 누적, 배증 없이 상한가만 고정. OJS-CASH-01(가격축 마틴게일 배증)과 별개 메커니즘 — 절단분포 철학의 시간축 구현체",
+      "weight": "high",
+      "codeable": "yes",
+      "signal": "dca_window",
+      "source": "refDoc #6 · 채팅(L98985,L99009,L100665,L108636, 2026-06-05~08-15 30회+ 반복)"
+    }
+  ]
+}

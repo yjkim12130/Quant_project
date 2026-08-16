@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>requirements_260604 검토 초안 — 자문 인사이트 AI 에이전트</title>
+<style>
+  :root {
+    --bg: #0e1117; --surface: #1a1d26; --surface2: #22263a;
+    --green: #00d084; --blue: #2196f3; --orange: #ff9800;
+    --red: #ff4444; --purple: #ab47bc; --yellow: #ffd700;
+    --text: #e0e0e0; --muted: #8899aa; --border: #2e3650;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.7; }
+  a { color: var(--blue); text-decoration: none; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 24px 80px; }
+  .hero { background: linear-gradient(135deg, #0a1628 0%, #1a2744 50%, #0e1117 100%);
+          border-bottom: 2px solid var(--green); padding: 48px 24px; text-align: center; }
+  .hero h1 { font-size: 2.2rem; color: var(--green); letter-spacing: 1px; }
+  .hero .sub { color: var(--muted); margin-top: 10px; font-size: 1rem; }
+  .badge { display: inline-block; background: var(--surface2); border: 1px solid var(--border);
+           border-radius: 20px; padding: 4px 14px; font-size: 0.82rem; margin: 4px; color: var(--muted); }
+  .toc { background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+         padding: 24px 28px; margin: 32px 0; }
+  .toc h2 { color: var(--green); font-size: 1.1rem; margin-bottom: 12px; }
+  .toc ol { padding-left: 20px; }
+  .toc li { padding: 3px 0; }
+  .section { margin: 44px 0; }
+  h2.sec { font-size: 1.5rem; color: var(--green); border-left: 4px solid var(--green);
+            padding-left: 14px; margin-bottom: 20px; }
+  h3.sub { font-size: 1.15rem; color: var(--blue); margin: 26px 0 10px; }
+  h4 { font-size: 1rem; color: var(--orange); margin: 18px 0 8px; }
+  p { margin: 8px 0 12px; color: var(--text); }
+  ul, ol { padding-left: 22px; margin: 8px 0 12px; }
+  li { margin: 4px 0; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+          padding: 20px 24px; margin: 14px 0; }
+  .card-green  { border-left: 4px solid var(--green); }
+  .card-blue   { border-left: 4px solid var(--blue); }
+  .card-orange { border-left: 4px solid var(--orange); }
+  .card-red    { border-left: 4px solid var(--red); }
+  .card-purple { border-left: 4px solid var(--purple); }
+  pre { background: #0b0d15; border: 1px solid var(--border); border-radius: 8px;
+        padding: 16px 18px; overflow-x: auto; font-size: 0.86rem; line-height: 1.6;
+        font-family: 'Consolas', 'Fira Code', monospace; margin: 12px 0; }
+  code { font-family: 'Consolas', 'Fira Code', monospace; font-size: 0.88em;
+         background: #151820; padding: 2px 6px; border-radius: 4px; color: #e0e0e0; }
+  pre code { background: none; padding: 0; }
+  .cm  { color: var(--muted); font-style: italic; }
+  .str { color: var(--green); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 0.9rem; }
+  th { background: var(--surface2); color: var(--green); padding: 10px 14px;
+       text-align: left; border-bottom: 2px solid var(--border); }
+  td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:hover td { background: rgba(255,255,255,0.03); }
+  .tag { display: inline-block; font-size: 0.78rem; padding: 2px 9px; border-radius: 12px; font-weight: 700; }
+  .tag-new  { background: rgba(0,208,132,0.2);   color: var(--green);  border: 1px solid var(--green); }
+  .tag-risk { background: rgba(255,68,68,0.2);   color: var(--red);    border: 1px solid var(--red); }
+  .tag-mid  { background: rgba(255,152,0,0.2);   color: var(--orange); border: 1px solid var(--orange); }
+  .callout { background: rgba(0,208,132,0.07); border-left: 4px solid var(--green);
+             padding: 14px 18px; border-radius: 8px; margin: 14px 0; font-size: 0.92rem; }
+  .callout.warn   { background: rgba(255,152,0,0.07);  border-left-color: var(--orange); }
+  .callout.danger { background: rgba(255,68,68,0.07);  border-left-color: var(--red); }
+  .callout.info   { background: rgba(33,150,243,0.07); border-left-color: var(--blue); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 700px) { .grid2 { grid-template-columns: 1fr; } }
+  footer { text-align: center; padding: 32px; color: var(--muted); font-size: 0.85rem;
+           border-top: 1px solid var(--border); margin-top: 60px; }
+  .summary-bar { display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0; }
+  .sum-item { flex: 1; min-width: 150px; background: var(--surface); border: 1px solid var(--border);
+              border-radius: 10px; padding: 14px 16px; text-align: center; }
+  .sum-item .s-num { font-size: 1.7rem; font-weight: 700; color: var(--green); }
+  .sum-item .s-lbl { font-size: 0.78rem; color: var(--muted); margin-top: 4px; }
+  .verdict { font-size: 1.05rem; font-weight: 700; }
+  .verdict .yes { color: var(--green); }
+  .pipeline { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; margin: 16px 0; }
+  .pstep { flex: 1; min-width: 120px; background: var(--surface2); border: 1px solid var(--border);
+           border-radius: 8px; padding: 12px 10px; text-align: center; font-size: 0.85rem; position: relative; }
+  .pstep .pt { color: var(--blue); font-weight: 700; display: block; margin-bottom: 4px; }
+  .arrow { display: flex; align-items: center; color: var(--muted); padding: 0 6px; font-size: 1.2rem; }
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>자문 인사이트 AI 에이전트 — 검토 초안</h1>
+  <div class="sub">requirements_260604 / sub1 검토 · 2026-06-04</div>
+  <div style="margin-top:14px;">
+    <span class="badge">대상: 2년치 채팅 + 유튜브 강의 자막</span>
+    <span class="badge">목표: 자문역 가치관 룰북 → 신규종목 이식</span>
+    <span class="badge">시한: 자문역 ~6개월 후 은퇴</span>
+    <span class="badge">연계: YJalgo v9.3 통합 검토</span>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="callout info" style="margin-top:28px;">
+    <b>이 문서의 위치</b> — 요구사항(<code>requirements_260604_sub1.txt</code>)에 대한 <b>1차 검토 초안</b>입니다.
+    구현 명세가 아니라 "가능한가 / 어떻게 / 무엇을 조심할까 / v9.3과 어떻게 합칠까"를 정리한 의사결정 자료입니다.
+    실제 착수 전 아래 <b>열린 질문(§8)</b>에 대한 결정이 필요합니다.
+  </div>
+
+  <div class="callout warn" style="margin-top:14px;">
+    <b>범위 확정 (2026-06-04 추가)</b> — 외부 서비스가 아니라 <b>본인 개인 내부 사용</b>.
+    <b>정량 예측·대응력은 이미 v9.3에서 검증 완료</b>(시장 상황에 맞춰 수익률 극대화)이므로, 이 에이전트의 본질적 역할은
+    <b>"시황을 친절하게 설명·분석해주는 해설 레이어"</b>(오재승/빈규리 자문역 스타일의 아침 시황 + 개별기업 해설)입니다.
+  </div>
+
+  <div class="callout danger" style="margin-top:14px;">
+    <b>★ 결정적 전환 (2026-06-04 2차 추가)</b> — <b>두 자문역(오재승·빈규리)이 약 6개월 뒤 활동을 종료</b>합니다.
+    따라서 이 프로젝트의 본질이 <b>"발언 검색·해설"에서 → "두 사람의 가치관·판단기준을 증류(distill)해 그들이 떠난 뒤에도
+    신규 종목·미래 시황에 그 기준을 이식하는 페르소나 엔진"</b>으로 격상됩니다. 원본 소스가 더는 늘어나지 않으므로,
+    <b>(1) 남은 6개월 = 데이터 보강 + 페르소나를 '검증 완료' 상태로 굳히는 마지막 창</b>,
+    <b>(2) 적중률 검증(§5★)의 1순위 KPI = "시장 적중"이 아니라 "에이전트가 자문역 본인을 얼마나 정확히 모사하나"</b>로 재정의됩니다.
+    유튜브 영상(아래 §2)이 채팅보다 구조적인 핵심 데이터 소스로 추가되었습니다.
+  </div>
+
+  <!-- 결론 요약 -->
+  <div class="card card-green">
+    <div class="verdict">결론: <span class="yes">기술적으로 충분히 가능</span>합니다. 개인용이므로 <span class="yes">"추천·예측까지 하는 에이전트"</span>로 만들어도 됩니다 — 단, 예측력은 공짜로 오지 않습니다.</div>
+    <p style="margin-bottom:0;"><b>핵심 통찰</b>: "예측력"은 LLM이 만들어내는 게 아니라 <b>(1) 자문역 콜이 실제로 맞았는지 주가로 검증해 적중률로 가중치를 매기고,
+    (2) v9.3의 정량 신호(레짐/RSI/VIX)와 결합</b>할 때 생깁니다.
+    그래서 "요약만 하는 봇"이 아니라 <b>"자문역 발언을 백테스트해 신뢰도를 매기는 봇"</b>으로 설계하는 것이 정답입니다.</p>
+  </div>
+
+  <!-- 데이터 현황 -->
+  <div class="summary-bar">
+    <div class="sum-item"><div class="s-num">~90,400</div><div class="s-lbl">chathistory.txt 라인 수</div></div>
+    <div class="sum-item"><div class="s-num">62,000+</div><div class="s-lbl">오재승 자문역 발화 추정</div></div>
+    <div class="sum-item"><div class="s-num">~181</div><div class="s-lbl">빈규리 CPA 발화(5.26~)</div></div>
+    <div class="sum-item"><div class="s-num">8 / 10</div><div class="s-lbl">유튜브 자막 추출 완료(오재승)</div></div>
+    <div class="sum-item"><div class="s-num">~6개월</div><div class="s-lbl">남은 학습·검증 창</div></div>
+  </div>
+
+  <!-- 목차 -->
+  <div class="toc">
+    <h2>목차</h2>
+    <ol>
+      <li><a href="#req">요구사항 재정리</a></li>
+      <li><a href="#data">데이터 진단 — 무엇이 들어있나</a></li>
+      <li><a href="#feasible">실현 가능성 판단</a></li>
+      <li><a href="#arch">권장 아키텍처 (RAG 기반)</a></li>
+      <li><a href="#agents">두 개의 에이전트 설계</a></li>
+      <li><a href="#demo">데모 — 두 에이전트의 출력 예시</a></li>
+      <li><a href="#predict">★ 예측력을 실제로 확보하는 법 (핵심)</a></li>
+      <li><a href="#risk">리스크 · 반드시 짚을 것 (개인용 기준 재평가)</a></li>
+      <li><a href="#merge">YJalgo v9.3 통합 방안</a></li>
+      <li><a href="#open">열린 질문 (결정 필요)</a></li>
+      <li><a href="#plan">단계별 로드맵</a></li>
+    </ol>
+  </div>
+
+  <!-- 1 -->
+  <div class="section" id="req">
+    <h2 class="sec">1. 요구사항 재정리</h2>
+    <div class="card card-blue">
+      <p style="margin-top:0;">원문(sub1)을 풀어보면 요구는 세 갈래입니다.</p>
+      <ul>
+        <li><b>원천 데이터</b>: 2024년부터 약 2년간 <b>오재승 자문역</b>이 리딩한 채팅방 원문(<code>chathistory.txt</code>) + 2026.05.26부터 합류한 <b>빈규리 CPA</b>의 스몰캡 분석 <span class="tag tag-new">+ 유튜브 강의 영상</span> — 두 자문역이 강조한 핵심 매매·분석 기법이 유튜브 링크로도 존재(자막 추출해 RAG 합류).</li>
+        <li><b>만들 것</b>: 두 자문역의 리딩 정보·의견·인사이트를 학습/참조하는 <b>(A) 매크로 경제·시황 분석 에이전트</b>와 <b>(B) 개별기업 분석 에이전트</b>.</li>
+        <li><b>녹일 곳</b>: 기존 <b>퀀트 대시보드(YJalgo)</b>에 통합. 향후 v9.3과 병합하여 단일 앱으로.</li>
+        <li><b>사용 범위(확정)</b>: <b>본인 개인 내부 사용 전용</b>. 외부 서비스·배포 없음. → 목표는 오직 <b>"내 투자 의사결정 품질·예측력 향상"</b>.</li>
+        <li><b>★ 시한(2차 추가)</b>: <b>두 자문역이 약 6개월 뒤 활동 종료</b>. → 핵심 요구가 "그들의 발언 열람"에서 <b>"그들의 가치관·판단기준을 룰북으로 증류해 떠난 뒤에도 신규 종목·미래 시황에 동일 기준 적용"</b>으로 바뀜. 즉 <b>페르소나 보존·이식</b>이 진짜 목표.</li>
+      </ul>
+      <p style="margin-bottom:0;">분석 축은 <b>시황분석</b>(매크로 + 기술기업 기술분석)과 <b>개별기업분석</b>(재무제표, 독점력/해자)으로 명시되어 있습니다.</p>
+    </div>
+  </div>
+
+  <!-- 2 -->
+  <div class="section" id="data">
+    <h2 class="sec">2. 데이터 진단 — 원문 샘플로 확인한 특성</h2>
+    <p>원문을 표본 점검한 결과, 데이터 가치는 높지만 <b>전처리 난이도</b>가 핵심 변수입니다.</p>
+    <div class="grid2">
+      <div class="card card-green">
+        <h4 style="margin-top:0;">✅ 강점 (활용 가치 높음)</h4>
+        <ul style="margin-bottom:0;">
+          <li>오재승 자문역의 <b>일간 아침 시황</b>이 반복 등장 — 금리/연준/FOMC/반도체/외국인 수급 등 매크로 논리 일관성 추적 가능.</li>
+          <li>빈규리 CPA의 분석은 <b>사업부문 → 시장규모 → 해자 → 결론</b> 구조가 또렷함(예: 헥토파이낸셜 분석). 개별기업 에이전트의 좋은 템플릿.</li>
+          <li>같은 종목·테마가 반복 언급되어 <b>"자문역의 일관된 관점"</b>을 종목 단위로 모을 수 있음.</li>
+          <li>날짜·시각·발화자가 라인 단위로 찍혀 있어 <b>타임스탬프 파싱이 쉬움</b>.</li>
+        </ul>
+      </div>
+      <div class="card card-orange">
+        <h4 style="margin-top:0;">⚠️ 약점 (전처리 필요)</h4>
+        <ul style="margin-bottom:0;">
+          <li><b>잡담·입장 알림·이모티콘</b>이 대량 혼입("…님이 들어왔습니다", "사진", "이모티콘"). 노이즈 필터링 필수.</li>
+          <li>핵심 근거가 <b>이미지/PDF</b>("사진", "파일: …pdf")로만 존재 — 텍스트엔 안 남음. OCR 없으면 누락.</li>
+          <li>발화가 <b>여러 줄로 쪼개짐</b> — 한 생각을 1메시지로 재조립(청킹)해야 의미 보존.</li>
+          <li>구어체·축약·오타 많음. 종목명이 한글/티커 혼용.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="callout warn">
+      <b>핵심 시사점</b> — 데이터의 80%는 노이즈일 가능성이 큽니다. "<b>발화자=오재승/빈규리 + 의미있는 분석 문단</b>"만 추출하는 전처리 파이프라인이 프로젝트 성패의 절반입니다.
+    </div>
+
+    <h3 class="sub">신규 데이터 소스 — 유튜브 강의 영상 <span class="tag tag-new">2차 추가 · 추출 완료</span></h3>
+    <div class="card card-green">
+      <p style="margin-top:0;">두 자문역이 강조한 핵심 기법이 <b>유튜브 강의</b>로도 존재합니다. <code>youtube-transcript-api</code>로 한국어 자동생성 자막을
+      추출해 같은 RAG 파이프라인에 합류시켰습니다. <b>채팅 원문보다 가치가 높은 이유</b>:</p>
+      <ul>
+        <li>채팅은 여러 줄로 쪼개진 단편이지만, 영상은 <b>한 기법을 처음부터 끝까지 구조적으로 설명</b> → 판단기준·룰 추출에 이상적.</li>
+        <li>채팅에서 "사진/PDF로만 존재"하던 핵심 근거(§2 약점)가 영상에선 <b>말로 설명</b>돼 있어 OCR 문제 일부 우회.</li>
+        <li>발화자가 명확(전부 자문역 본인) → 노이즈 필터링 거의 불필요.</li>
+      </ul>
+      <p style="margin-bottom:6px;"><b>오재승 영상 추출 현황 (10개 중 8개 자막 확보)</b>:</p>
+      <table>
+        <thead><tr><th>#</th><th>주제</th><th>자막</th><th>핵심 기법(추출)</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>지수 하락 시 현금비중(만수르 기법)</td><td>3.1K</td><td>레버리지 ETF 2종목 2배씩 분할매수, 평단 수렴</td></tr>
+          <tr><td>2</td><td>KORU(한국 3배 레버리지) ETF</td><td>3.5K</td><td>폭락 후 1~2년 반등 국면만, CCI200 0선 돌파 시 진입</td></tr>
+          <tr><td>3</td><td>바닥 잡는 기법</td><td><span class="tag tag-risk">비공개</span></td><td>영상 비공개(VideoUnavailable) — 링크 재확인 필요</td></tr>
+          <tr><td>4</td><td>무릎어깨(MACD) 매매 신고가 적용</td><td>3.5K</td><td>양봉폭&gt;음봉폭이면 다음 0선 돌파서 선취매</td></tr>
+          <tr><td>5</td><td>무릎어깨 매매 기초</td><td><span class="tag tag-mid">IP차단</span></td><td>YouTube IP 일시차단 — 재시도 예정</td></tr>
+          <tr><td>6</td><td>200일선 눌림목 종목 선별</td><td>5.5K</td><td>의미있는 돌파→눌림 재돌파 자리, 200일선≈CCI200</td></tr>
+          <tr><td>7</td><td>아껴둔 트레이딩 스킬(1월효과·벚꽃매도)</td><td>3.6K</td><td>1~3월 급등주 → 4월 중순 구라株 주식선물 매도</td></tr>
+          <tr><td>8</td><td>미국 ETF로 수십억 버는 법</td><td>5.9K</td><td>가치=가격×수량, 적립·하락매수, 급락 시 3배 스위칭</td></tr>
+          <tr><td>9</td><td>삼성 HTS CCI200 설정</td><td>0.8K</td><td>CCI 기준선 14→200, 빨강 보유/파랑 현금</td></tr>
+          <tr><td>10</td><td>라인 트레이딩</td><td>2.0K</td><td>밸류 라인 이하 + MACD 음→양 전환서 분할매집</td></tr>
+        </tbody>
+      </table>
+      <p style="margin-bottom:0; color:var(--muted); font-size:0.88rem;">저장 위치: <code>verify/transcripts/*.txt</code> (UTF-8). <b>빈규리는 유튜브가 없고 채팅 텍스트(<code>chathistory.txt</code>)만 소스</b> — 펀더멘털 룰북은 채팅에서만 증류.</p>
+    </div>
+  </div>
+
+  <!-- 3 -->
+  <div class="section" id="feasible">
+    <h2 class="sec">3. 실현 가능성 판단</h2>
+    <table>
+      <thead><tr><th>접근</th><th>설명</th><th>적합도</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>RAG (검색증강생성)</b></td>
+          <td>원문을 청킹·임베딩해 벡터DB에 저장 → 질문 시 관련 발화를 검색해 LLM이 근거와 함께 요약/답변.</td>
+          <td><span class="tag tag-new">강력 추천</span></td>
+        </tr>
+        <tr>
+          <td>파인튜닝 (말투 모사)</td>
+          <td>자문역 말투를 흉내내도록 모델 미세조정.</td>
+          <td><span class="tag tag-risk">비추천</span> 비용↑·환각↑·근거 추적 불가·법적 위험</td>
+        </tr>
+        <tr>
+          <td>단순 키워드 검색</td>
+          <td>종목명으로 grep해서 원문 보여주기.</td>
+          <td><span class="tag tag-mid">보조용</span> 빠르지만 요약·맥락이 없음</td>
+        </tr>
+      </tbody>
+    </table>
+    <p><b>결론:</b> <b>RAG가 정답</b>입니다. 이유 — (1) 출력에 <b>근거(원문 인용+날짜)</b>를 붙일 수 있어 신뢰·검증이 됨, (2) 파인튜닝 대비 저렴·빠름, (3) "자문역이 실제로 한 말"만 다루므로 환각·법적 위험이 가장 작음, (4) 신규 채팅 추가 시 재학습 없이 인덱스만 갱신.</p>
+  </div>
+
+  <!-- 4 -->
+  <div class="section" id="arch">
+    <h2 class="sec">4. 권장 아키텍처 (RAG 기반)</h2>
+    <div class="pipeline">
+      <div class="pstep"><span class="pt">① 전처리</span>발화자·날짜 파싱<br>노이즈 제거<br>문단 재조립</div>
+      <div class="arrow">→</div>
+      <div class="pstep"><span class="pt">② 청킹</span>주제 단위 분할<br>메타데이터<br>(날짜/발화자/종목)</div>
+      <div class="arrow">→</div>
+      <div class="pstep"><span class="pt">③ 임베딩</span>벡터화<br>로컬 벡터DB<br>(FAISS/Chroma)</div>
+      <div class="arrow">→</div>
+      <div class="pstep"><span class="pt">④ 검색</span>질문→관련 발화<br>날짜·종목 필터</div>
+      <div class="arrow">→</div>
+      <div class="pstep"><span class="pt">⑤ 생성</span>LLM이 근거 인용<br>+ 요약/관점</div>
+    </div>
+    <h3 class="sub">기술 스택 제안 (기존 환경과 호환)</h3>
+    <ul>
+      <li><b>전처리</b>: Python(정규식으로 <code>날짜, 시각, 발화자 : 내용</code> 파싱). 현재 프로젝트가 Python 기반이라 그대로 활용.</li>
+      <li><b>유튜브 자막 수집</b>: <code>youtube-transcript-api</code>(설치·검증 완료, 한국어 자동생성 자막 수집 가능). 자막 없는 영상은 <code>yt-dlp + Whisper</code> 폴백. 추출 텍스트는 영상별 메타데이터(제목/기법 태그)와 함께 동일 벡터DB에 색인.</li>
+      <li><b>임베딩</b>: 한국어 강한 모델 권장 — OpenAI <code>text-embedding-3</code> 또는 로컬 <code>bge-m3</code>(비용 0, 오프라인).</li>
+      <li><b>벡터DB</b>: <code>Chroma</code> 또는 <code>FAISS</code> — 로컬 파일로 충분(데이터 10MB 규모는 가벼움).</li>
+      <li><b>LLM</b>: Claude / GPT API. 근거 인용·한국어 요약 품질 양호.</li>
+      <li><b>UI</b>: 기존 Streamlit 대시보드에 탭 추가(§7 참조).</li>
+    </ul>
+    <div class="callout info">
+      데이터가 10MB로 작아 인프라 부담이 거의 없습니다. <b>임베딩 1회 비용</b>과 <b>질의당 LLM 호출 비용</b>만 들고, 로컬 벡터DB라 별도 서버 불필요합니다.
+    </div>
+  </div>
+
+  <!-- 5 -->
+  <div class="section" id="agents">
+    <h2 class="sec">5. 두 개의 에이전트 설계 <span style="font-size:0.7em; color:var(--muted);">(우선순위 재조정)</span></h2>
+
+    <div class="callout danger">
+      <b>우선순위 확정 (2026-06-04)</b> — 정량 예측·대응력은 v9.3 완료, 시황 해설은 비교적 가벼운 기능.
+      <b>진짜 빠져있는 핵심은 "빈규리 자문역처럼 개별기업을 깊게 파는 분석"</b>이며, v9.3엔 이 기능이 전무합니다.
+      → <b>(B) 개별기업 분석 에이전트가 이 프로젝트의 메인 산출물</b>이고, (A) 시황 에이전트는 보조입니다.
+    </div>
+
+    <div class="card card-green">
+      <h3 class="sub" style="margin-top:0;">★ 0순위 산출물 — "자문역 룰북" 증류 <span class="tag tag-new">신규 핵심</span></h3>
+      <p>자문역이 6개월 뒤 사라지므로, 두 에이전트보다 먼저 만들어야 할 토대는 <b>두 사람의 판단기준을 명시적 룰(if-then)로 증류한 "룰북"</b>입니다.
+      이게 있어야 그들이 떠난 뒤에도 <b>한 번도 본 적 없는 신규 종목·미래 시황</b>에 동일 기준을 적용할 수 있습니다. 단순 인용이 아니라 <b>판단 프레임의 이식</b>.</p>
+      <p style="margin-bottom:6px;"><b>실제 추출 샘플</b> — 위 §2의 유튜브 자막 8개에서 오재승 기법을 룰북으로 1차 증류한 결과(발췌):</p>
+      <pre><span class="cm">// 오재승 트레이딩 룰북 (유튜브 자막 8개에서 추출, 발췌)</span>
+{
+  <span class="str">"advisor"</span>: <span class="str">"오재승"</span>,
+  <span class="str">"philosophy"</span>: [
+    <span class="str">"자산가치 = 가격 × 수량. 가격에 집착 말고 '좋은 자산을 많이 모으기'에 집중 (08)"</span>,
+    <span class="str">"하락은 손실이 아니라 싸게 더 모을 기회 — 떨어져서 화나면 시작도 말라 (08)"</span>,
+    <span class="str">"레버리지는 정배열·추세돌파 국면 무기. 역배열·횡보엔 절대 보유 금지 (02)"</span>
+  ],
+  <span class="str">"rules"</span>: [
+    { <span class="str">"id"</span>: <span class="str">"OJS-MA-01"</span>, <span class="str">"name"</span>: <span class="str">"200일선=진짜 신호"</span>,
+      <span class="str">"if"</span>: <span class="str">"200일선 '의미있게' 돌파(눌림 후 2·3차 재돌파)"</span>,
+      <span class="str">"then"</span>: <span class="str">"매수 후보. 첫 돌파는 제외(너무 빠름). 200일이평 ≈ CCI200 0선"</span>,
+      <span class="str">"except"</span>: <span class="str">"시총 10조+ 대형주는 눌림 없이 천천히 상승 → 룰 다름"</span>, <span class="str">"src"</span>: <span class="str">"06,09"</span> },
+    { <span class="str">"id"</span>: <span class="str">"OJS-MACD-01"</span>, <span class="str">"name"</span>: <span class="str">"무릎어깨 신고가 선취매"</span>,
+      <span class="str">"if"</span>: <span class="str">"MACD 0선 위 양봉 |상승폭| > 직전 음봉 |하락폭|"</span>,
+      <span class="str">"then"</span>: <span class="str">"다음 0선 양선 돌파서 분할매수(신고가보다 ~2일 앞서 진입)"</span>, <span class="str">"src"</span>: <span class="str">"04"</span> },
+    { <span class="str">"id"</span>: <span class="str">"OJS-LINE-01"</span>, <span class="str">"name"</span>: <span class="str">"라인 트레이딩"</span>,
+      <span class="str">"if"</span>: <span class="str">"밸류 기반 라인 이하 가격 + MACD 오실레이터 음→양 전환"</span>,
+      <span class="str">"then"</span>: <span class="str">"분할 매집(저가+물량 동시 확보)"</span>, <span class="str">"src"</span>: <span class="str">"10"</span> },
+    { <span class="str">"id"</span>: <span class="str">"OJS-CASH-01"</span>, <span class="str">"name"</span>: <span class="str">"만수르 현금비중"</span>,
+      <span class="str">"if"</span>: <span class="str">"지수 하락 국면"</span>,
+      <span class="str">"then"</span>: <span class="str">"레버리지 ETF 2종목 단계적 2배씩 분할(평단 수렴). 현금 고갈이 진짜 리스크 → 비중 압축"</span>, <span class="str">"src"</span>: <span class="str">"01"</span> },
+    { <span class="str">"id"</span>: <span class="str">"OJS-SEASON-01"</span>, <span class="str">"name"</span>: <span class="str">"1월효과·벚꽃매도"</span>,
+      <span class="str">"if"</span>: <span class="str">"1~3월 급등주 중 펀더멘털 대비 과열('구라 센') 종목"</span>,
+      <span class="str">"then"</span>: <span class="str">"4월 중순(벚꽃)부터 주식선물 매도. 6~8월 반기실적 검증 구간 위험"</span>, <span class="str">"src"</span>: <span class="str">"07"</span> }
+  ]
+}</pre>
+      <div class="callout info" style="margin-bottom:0;">
+        <b>왜 핵심인가</b> — 이 룰북을 에이전트 시스템 프롬프트로 넣으면, 오재승이 본 적 없는 종목에도 "200일선 의미있게 돌파 후 눌림인가?
+        MACD 양봉폭이 음봉폭보다 큰가?"를 <b>그의 기준 그대로</b> 판정. 게다가 OJS-MA·MACD·CCI 룰은 전부 <b>정량 코딩 가능</b>해서
+        <b>v9.3 백테스트에 즉시 결합</b>됩니다(§7). 빈규리 룰북은 펀더멘털(해자·재무) 축으로 동일하게 증류 <b>→ ✅ 완료(아래 카드)</b>.
+      </div>
+    </div>
+
+    <!-- 빈규리 룰북 (실제 증류 완료) -->
+    <div class="card card-green">
+      <h3 class="sub" style="margin-top:0;">★ 빈규리 펀더멘털 룰북 — 증류 완료 <span class="tag tag-new">신규</span></h3>
+      <p style="margin-bottom:6px;">빈규리가 분석한 <b>코스닥 스몰캡 4종목</b>(헥토파이낸셜·와이제이링크·켄코아에어로스페이스·엔젤로보틱스, <code>chathistory.txt</code>)에서
+        반복되는 판단기준을 <b>13개 if-then 룰</b>로 증류했습니다. 전문 → <a href="binkyuri_rulebook.json"><b>binkyuri_rulebook.json</b></a></p>
+      <pre><span class="cm">// 빈규리 펀더멘털 룰북 (13룰 중 핵심 발췌) — binkyuri_rulebook.json</span>
+{
+  <span class="str">"advisor"</span>: <span class="str">"빈규리"</span>, <span class="str">"role"</span>: <span class="str">"CPA · 스몰캡 펀더멘탈"</span>,
+  <span class="str">"frame"</span>: <span class="str">"사업 → 시장/촉매 → 해자 → 재무 → 리스크 → 결론"</span>,
+  <span class="str">"rules"</span>: [
+    { <span class="str">"id"</span>: <span class="str">"BKR-MOAT-01"</span>, <span class="str">"name"</span>: <span class="str">"톱티어 고객사=해자"</span>,
+      <span class="str">"if"</span>: <span class="str">"스페이스X/테슬라/나사/보잉/폭스콘 등 1군 고객 보유"</span>,
+      <span class="str">"then"</span>: <span class="str">"납품 자격 자체가 진입장벽. 고객 명단을 1순위 근거로"</span>, <span class="str">"w"</span>: <span class="str">"high"</span> },
+    { <span class="str">"id"</span>: <span class="str">"BKR-SCREEN-01"</span>, <span class="str">"name"</span>: <span class="str">"직접공급 vs 중간벤더"</span>,
+      <span class="str">"if"</span>: <span class="str">"같은 테마 내 최종고객에 '직접' 납품인지 검증"</span>,
+      <span class="str">"then"</span>: <span class="str">"직접=진짜 수혜주 가중 / 중간벤더(예:스피어)=격하"</span>, <span class="str">"w"</span>: <span class="str">"high"</span> },
+    { <span class="str">"id"</span>: <span class="str">"BKR-SCREEN-02"</span>, <span class="str">"name"</span>: <span class="str">"테마 동반상승 인과규명"</span>,
+      <span class="str">"if"</span>: <span class="str">"테마로 묶여 같이 급등(예: LG로봇주 +19%)"</span>,
+      <span class="str">"then"</span>: <span class="str">"'왜 같이 오르나' 사업 연결고리 규명 → 테마주/실질수혜 판별"</span>, <span class="str">"w"</span>: <span class="str">"high"</span> },
+    { <span class="str">"id"</span>: <span class="str">"BKR-MOAT-02"</span>, <span class="str">"name"</span>: <span class="str">"국내 유일/독점 라이선스"</span>,
+      <span class="str">"if"</span>: <span class="str">"라이선스·공식파트너가 국내 유일/소수독점"</span>,
+      <span class="str">"then"</span>: <span class="str">"최상위 해자(헥토 USDC, 켄코아 아르테미스)"</span>, <span class="str">"w"</span>: <span class="str">"high"</span> },
+    { <span class="str">"id"</span>: <span class="str">"BKR-FIN-01"</span>, <span class="str">"name"</span>: <span class="str">"분기모멘텀+미반영=저평가"</span>,
+      <span class="str">"if"</span>: <span class="str">"직전분기 고성장(영업익+150%/매출2배) + 신사업 가치 주가 미반영"</span>,
+      <span class="str">"then"</span>: <span class="str">"저평가 논리로 결론"</span>, <span class="str">"w"</span>: <span class="str">"high"</span>, <span class="str">"codeable"</span>: <span class="str">"yes(DART)"</span> },
+    { <span class="str">"id"</span>: <span class="str">"BKR-RISK-01"</span>, <span class="str">"name"</span>: <span class="str">"리스크 균형 명시"</span>,
+      <span class="str">"if"</span>: <span class="str">"모든 종목"</span>,
+      <span class="str">"then"</span>: <span class="str">"'강점만 있는 건 아니죠' — 의존도 집중 등 리스크 1개+ 필수"</span>, <span class="str">"w"</span>: <span class="str">"high"</span> }
+    <span class="cm">// + BKR-MOAT-03~05(락인·데이터·입지), BKR-BIZ-01(사업3분류),</span>
+    <span class="cm">//   BKR-GROWTH-01~02(TAM·촉매), BKR-STYLE-01(종목소개 디스클레이머)</span>
+  ]
+}</pre>
+      <div class="callout info" style="margin-bottom:0;">
+        <b>오재승 룰북과의 차이</b> — 오재승은 <b>정량 매매 룰</b>(MA/MACD/CCI → 코딩 가능)이고, 빈규리는 <b>정성 펀더멘탈 룰</b>(해자·진위판별)입니다.
+        13룰 중 <b>BKR-FIN-01·BKR-STYLE-01만 정량 코딩 가능</b>(advisor_data.py의 DART 연동으로 자동),
+        나머지 <b>11개 정성 룰은 Claude(claude-opus-4-8)가 자동 판정</b>(<code>advisor_llm.py</code>) — met/not_met/unknown + 근거·확신도, 프롬프트 캐싱 적용. ✅ 구현 완료.
+        둘을 합치면 <b>"좋은 회사인가(빈규리) × 지금이 자리인가(오재승)"</b>의 완성된 판단 프레임이 됩니다.
+      </div>
+    </div>
+
+    <div class="card card-purple">
+      <h3 class="sub" style="margin-top:0;">★ (B) 개별기업 분석 에이전트 <span class="tag tag-new">메인</span></h3>
+      <p><b>역할</b>: 빈규리 CPA의 분석 <b>프레임워크</b>(사업부문 → 시장규모/성장성 → 해자/독점력 → 재무 건전성 → 결론)를 학습해,
+      <b>사용자가 지정한 임의의 종목</b>에 대해 같은 깊이의 리포트를 자동 생성. v9.3에 없는 완전 신규 기능.</p>
+
+      <h4>두 가지 데이터를 결합해야 함 (시황 에이전트와 동일 구조)</h4>
+      <ul>
+        <li><b>① 분석 프레임·어투 (RAG)</b> — <code>chathistory.txt</code>의 빈규리 분석(헥토파이낸셜 등)에서 "어떤 순서·관점으로 기업을 뜯어보는지"를 추출. <b>방법론을 학습</b>하는 용도.</li>
+        <li><b>② 실시간 재무 데이터 (외부 연동)</b> — 분석 대상 기업의 실제 재무제표·지표. 한국 종목은 <b>DART(전자공시) API</b>, 미국 종목은 <b>yfinance fundamentals</b>. 네이버/인포스탁 보조.</li>
+      </ul>
+      <div class="callout info" style="margin:10px 0;">
+        즉 <b>"빈규리의 분석 방식(RAG) × 대상 기업의 최신 재무(API)"</b> → 빈규리가 직접 분석한 적 없는 종목도 그의 스타일로 리포트 생성. 이게 "에이전트화"의 본질입니다.
+      </div>
+
+      <h4>구조화 산출 — 종목 카드(JSON)</h4>
+      <p style="margin-bottom:6px;">빈규리 분석이 일정 포맷을 따르므로 다음 스키마로 정형화 → 종목 간 비교 테이블·랭킹 가능.</p>
+      <pre><span class="cm">// 종목 카드 예시 스키마</span>
+{
+  <span class="str">"종목명"</span>: <span class="str">"헥토파이낸셜"</span>, <span class="str">"티커"</span>: <span class="str">"234340.KQ"</span>,
+  <span class="str">"사업부문"</span>: [<span class="str">"내통장결제"</span>, <span class="str">"국가간송금"</span>, <span class="str">"스테이블코인"</span>],
+  <span class="str">"시장규모_성장성"</span>: <span class="str">"국가간 송금 2027년까지 +60% 성장 전망"</span>,
+  <span class="str">"해자"</span>: <span class="str">"송금 라이선스 보유 → 기업 대신 규제·증명 대행"</span>,
+  <span class="str">"재무"</span>: { <span class="str">"매출성장"</span>: ..., <span class="str">"영업이익률"</span>: ..., <span class="str">"부채비율"</span>: ... },
+  <span class="str">"리스크"</span>: [...], <span class="str">"결론"</span>: <span class="str">"..."</span>,
+  <span class="str">"근거"</span>: { <span class="str">"빈규리_발언"</span>: <span class="str">"2026-05-26"</span>, <span class="str">"재무출처"</span>: <span class="str">"DART 2025사업보고서"</span> }
+}</pre>
+
+      <p style="margin-bottom:6px;"><b>예시 질문</b></p>
+      <ul style="margin-bottom:0;">
+        <li>"○○전자라는 코스닥 기업을 빈규리 자문역 스타일로 분석해줘." <span class="tag tag-new">신규 분석</span></li>
+        <li>"빈규리가 분석한 헥토파이낸셜의 핵심 논리와 해자를 정리해줘." <span class="tag tag-mid">과거 인용</span></li>
+        <li>"지금까지 분석된 스몰캡들을 재무 건전성·성장성으로 비교해줘."</li>
+      </ul>
+    </div>
+
+    <div class="card card-blue">
+      <h3 class="sub" style="margin-top:0;">(A) 시황·매크로 분석 에이전트 <span class="tag tag-mid">보조</span></h3>
+      <p style="margin-bottom:6px;"><b>역할</b>: 오재승 자문역의 21개월치 시황 발화(RAG) + 실시간 시세를 결합해 "오늘의 아침 시황"을 해설. (<a href="#demo">§데모 참조</a>)</p>
+      <ul style="margin-bottom:0;">
+        <li>"오재승 자문역은 금리 인상/인하 국면에서 어떤 관점을 유지했나?"</li>
+        <li>"반도체/HBM에 대한 자문역 시각 변화를 시간순으로."</li>
+        <li>"오늘 시황을 자문역 어투로 브리핑해줘." (RAG 어투 + 실시간 데이터)</li>
+      </ul>
+    </div>
+
+    <div class="callout">
+      <b>차별화 포인트</b> — 개별기업 에이전트는 단순 재무 조회기가 아니라, <b>"빈규리식 해자·독점력 해석"이라는 정성 프레임</b>을 입혀
+      v9.3의 정량 신호와 같은 종목에서 나란히 보여줍니다(§7). "왜 이 기업인가"를 설명해주는 게 핵심.
+    </div>
+  </div>
+
+  <!-- 5.5 데모 -->
+  <div class="section" id="demo">
+    <h2 class="sec">데모 — 두 에이전트의 출력 예시 <span style="font-size:0.7em; color:var(--muted);">(목업 / 실제 LLM 출력 아님)</span></h2>
+    <p>아래는 두 에이전트가 완성됐을 때 사용자가 보게 될 <b>출력 형태를 미리 그린 목업(mock-up)</b>입니다. 실제 값이 아니라
+      "이런 모양·정보 밀도로 답이 나온다"는 것을 눈으로 확인하기 위한 예시입니다. 본문 §5의 참조는 모두 이 섹션을 가리킵니다.</p>
+    <div class="callout" style="border-color:var(--green); background:rgba(0,208,132,0.08);">
+      <b>✅ 실제 생성 샘플 추가 (2026-06-04)</b> — 아래 (B) JSON은 출력 <b>형식</b> 목업입니다. 이와 별개로,
+      빈규리 자문역의 실제 첫 분석(헥토파이낸셜, <code>chathistory.txt</code> 88,701행~)에서 <b>분석 순서·어투를 직접 추출</b>해
+      <b>삼성전자에 적용한 완성형 리포트</b>를 별도 파일로 생성했습니다 →
+      <a href="sample_report_samsung_binkyuri.html"><b>sample_report_samsung_binkyuri.html</b></a> (바로 아래 카드에 요약).
+    </div>
+
+    <!-- (B) 개별기업 데모 — 메인 -->
+    <div class="card card-purple">
+      <h3 class="sub" style="margin-top:0;">★ (B) 개별기업 분석 에이전트 — 출력 예시 <span class="tag tag-new">메인</span></h3>
+      <p style="margin-bottom:6px;"><b>입력 질의</b>: <code>"헥토파이낸셜을 빈규리 자문역 스타일로 분석해줘."</code></p>
+      <p style="margin-bottom:6px; color:var(--muted); font-size:0.88rem;">→ 빈규리 분석 프레임(RAG) × DART 최신 재무(API)를 결합해 아래 <b>종목 카드</b>로 응답.</p>
+      <pre><span class="cm">// 에이전트 출력 (렌더링 전 JSON)</span>
+{
+  <span class="str">"종목"</span>: <span class="str">"헥토파이낸셜 (234340)"</span>,
+  <span class="str">"한줄결론"</span>: <span class="str">"전자결제 캐시카우 + 데이터 신사업의 옵션 가치. 단기 외형보다 현금흐름·점유율로 봐야 하는 종목."</span>,
+  <span class="str">"투자의견"</span>: <span class="str">"관심 (밸류에이션 부담 시 분할 접근)"</span>,
+  <span class="str">"사업부문"</span>: [
+    { <span class="str">"명"</span>: <span class="str">"전자결제(PG)"</span>, <span class="str">"비중"</span>: <span class="str">"매출 70%대"</span>, <span class="str">"코멘트"</span>: <span class="str">"본업 캐시카우, 결제대금 기반 안정적 수수료"</span> },
+    { <span class="str">"명"</span>: <span class="str">"데이터·인증 신사업"</span>, <span class="str">"비중"</span>: <span class="str">"소규모"</span>, <span class="str">"코멘트"</span>: <span class="str">"성장 옵션, 아직 수익기여 제한적"</span> }
+  ],
+  <span class="str">"시장규모_성장성"</span>: <span class="str">"국내 간편결제 거래액 구조적 성장 — 침투율 상승 수혜"</span>,
+  <span class="str">"해자_독점력"</span>: {
+    <span class="str">"등급"</span>: <span class="str">"중 (Narrow Moat)"</span>,
+    <span class="str">"근거"</span>: <span class="str">"가맹점·PG 라이선스 기반 전환비용, 다만 대형 플랫폼과 경쟁 노출"</span>
+  },
+  <span class="str">"재무_건전성"</span>: {
+    <span class="str">"매출성장"</span>: <span class="str">"YoY +OO% (DART 2025사업보고서)"</span>,
+    <span class="str">"영업이익률"</span>: <span class="str">"OO%"</span>,
+    <span class="str">"부채비율"</span>: <span class="str">"OO%"</span>,
+    <span class="str">"비고"</span>: <span class="str">"PG 특성상 예수금 변동 커 — 순현금/영업현금흐름 별도 확인 필요"</span>
+  },
+  <span class="str">"리스크"</span>: [ <span class="str">"플랫폼 경쟁 심화"</span>, <span class="str">"수수료 규제"</span>, <span class="str">"신사업 수익화 지연"</span> ],
+  <span class="str">"근거"</span>: {
+    <span class="str">"빈규리_발언"</span>: <span class="str">"2026-05-26 — '사업부문 → 시장규모 → 해자 → 결론 순으로 본다'"</span>,
+    <span class="str">"재무출처"</span>: <span class="str">"DART 2025사업보고서"</span>,
+    <span class="str">"실시간"</span>: <span class="str">"yfinance/네이버 — 현재가·PER (조회시점 기재)"</span>
+  }
+}</pre>
+      <div class="callout info" style="margin-bottom:0;">
+        <b>핵심</b> — 빈규리가 직접 분석한 적 없는 종목이라도, 그의 <b>분석 순서·관점(RAG)</b>에 <b>대상 기업의 최신 재무(API)</b>를 끼워
+        같은 포맷의 카드로 찍어냅니다. 숫자는 API로 채우고, <b>"왜 이 해자인가"의 해석</b>만 자문역 프레임에서 가져옵니다.
+      </div>
+    </div>
+
+    <!-- (B') 실제 생성 샘플 — 삼성전자 -->
+    <div class="card card-green">
+      <h3 class="sub" style="margin-top:0;">★ (B') 실제 생성 샘플 — 삼성전자 <span class="tag tag-new">완성형 리포트</span></h3>
+      <p style="margin-bottom:6px;"><b>입력 질의</b>: <code>"삼성전자를 빈규리 자문역 스타일로 분석해줘."</code></p>
+      <p style="margin-bottom:10px; color:var(--muted); font-size:0.88rem;">→ 위 (B)가 "형식 목업"이라면, 이것은 <b>실제로 만들어 본 결과물</b>입니다.
+        빈규리의 헥토파이낸셜 분석 구조(사업부문 역할분류 → 시장규모 → 해자 → 재무 → 총정리)와 어투("~거든요/~죠/^^", CPA 재무관점)를 그대로 적용했습니다.</p>
+
+      <p style="margin-bottom:4px;"><b>① 사업부문 — 역할 분류</b> (빈규리식: 캐시카우/성장/해자 구분)</p>
+      <pre style="white-space:pre-wrap; margin-top:4px;">  메모리(DS)      → <b>캐시카우</b>  · DRAM/NAND 글로벌 1위, 이익 엔진
+  HBM/파운드리     → <b>성장축</b>    · AI 메모리, SK하이닉스 추격 2위
+  디스플레이(SDC)  → <b>해자축</b>    · 중소형 OLED 독점적 1위, 변동성 방어
+  모바일/가전/하만 → <b>현금흐름</b>  · 갤럭시·TV·전장, 매출 볼륨 토대</pre>
+
+      <p style="margin-bottom:4px; margin-top:10px;"><b>② 종목카드 (JSON) — 핵심부 발췌</b></p>
+      <pre><span class="cm">// sample_report_samsung_binkyuri.html 내 구조화 출력</span>
+{
+  <span class="str">"ticker"</span>: <span class="str">"005930"</span>, <span class="str">"name"</span>: <span class="str">"삼성전자"</span>, <span class="str">"analyst_frame"</span>: <span class="str">"빈규리_CPA"</span>,
+  <span class="str">"moat"</span>: [ <span class="str">"메모리 3사 과점"</span>, <span class="str">"수직계열화"</span>, <span class="str">"순현금 재무"</span> ],
+  <span class="str">"risks"</span>: [ <span class="str">"HBM 점유율 SK하이닉스 우위"</span>, <span class="str">"파운드리 TSMC 격차"</span>, <span class="str">"메모리 사이클 이익 변동"</span> ],
+  <span class="str">"financials"</span>: { <span class="str">"revenue_krw"</span>: <span class="str">"~300조"</span>, <span class="str">"net_cash"</span>: true, <span class="str">"source"</span>: <span class="str">"PLACEHOLDER→DART"</span> },
+  <span class="str">"verdict"</span>: <span class="str">"사이클 저점 분할매집 / 트리거=HBM 점유율 회복"</span>,
+  <span class="str">"ojs_rule_match"</span>: [ <span class="str">"OJS-MA-01"</span>, <span class="str">"OJS-CASH-01"</span> ],
+  <span class="str">"quant_link_v93"</span>: { <span class="str">"status"</span>: <span class="str">"TODO"</span>, <span class="str">"fields"</span>: [<span class="str">"regime"</span>,<span class="str">"RSI"</span>,<span class="str">"MA200_dev"</span>] }
+}</pre>
+
+      <div class="callout" style="margin-bottom:8px;">
+        <b>빈규리 한 줄 결론</b> — "재무는 안전, 성장은 HBM에 베팅. <b>메모리 사이클 저점에서 모아가는 종목</b>이지 단기 급등주는 아닙니다."
+      </div>
+      <div class="callout info" style="margin-bottom:0;">
+        <b>오재승 코멘트 자동 결합</b> — 실제 채팅에서 빈규리 분석 뒤 오재승이 "펀더멘탈은 맞고, 타이밍의 문제 / 성장+배당이면 날아간다 / 유니버스에 넣어둬라"로 받던 패턴을 재현.
+        오재승 룰북 <code>OJS-MA-01</code>(200일선 눌림) · <code>OJS-CASH-01</code>(만수르 분할)이 자동 매칭됩니다 → <b>정성(가치)·철학(매매)·정량(타이밍) 3층 결합</b>의 첫 실물 예시.
+      </div>
+    </div>
+
+    <!-- (A) 시황 데모 — 보조 -->
+    <div class="card card-blue">
+      <h3 class="sub" style="margin-top:0;">(A) 시황·매크로 에이전트 — 출력 예시 <span class="tag tag-mid">보조</span></h3>
+      <p style="margin-bottom:6px;"><b>입력 질의</b>: <code>"오늘 시황을 오재승 자문역 어투로 브리핑해줘."</code></p>
+      <p style="margin-bottom:6px; color:var(--muted); font-size:0.88rem;">→ 21개월치 시황 발화(RAG, 어투·논리) × 오늘 실시간 지수·금리(API)를 결합.</p>
+      <pre style="white-space:pre-wrap;"><span class="cm">[ 오재승식 아침 시황 — 2026-06-04 (목업) ]</span>
+
+간밤 미국장은 기술주 중심으로 강했습니다. <b>나스닥 +O.O%</b>, 반도체 SOX <b>+O.O%</b>.
+지난 21개월 내내 강조했던 그림 그대로, "금리 피크아웃 + AI 설비투자" 축은 여전히 살아있습니다.
+오늘 국내장은 외국인 수급이 관건입니다 — <b>달러/원 OOOO원</b>, 환율이 위로 튀면 수급이 막힙니다.
+
+  • <b>반도체/HBM</b>: 자문역 일관 시각 = "조정은 비중확대 기회"
+       (근거: 2025-11-12 "HBM 사이클은 이제 초입", 2026-03-08 동일 논지)
+  • <b>금리</b>: FOMC 전까지 관망 — 과거에도 이벤트 전엔 현금비중 권고
+
+<span class="cm">※ 굵은 수치는 실시간 API로 채워지는 자리. 인용 날짜·원문은 RAG 근거.</span></pre>
+      <div class="callout" style="margin-bottom:0;">
+        <b>두 데이터의 결합</b> — <b>어투·논리·과거 관점</b>은 <code>chathistory.txt</code> RAG에서, <b>오늘의 수치</b>는 실시간 API에서.
+        그래서 "자문역이 오늘 아침에 썼을 법한 브리핑"이 되고, 모든 주장에 <b>인용 날짜</b>가 붙어 검증됩니다.
+      </div>
+    </div>
+
+    <!-- (B'') 코스닥 스몰캡 실데이터 샘플 — 와이제이링크 -->
+    <div class="card card-green">
+      <h3 class="sub" style="margin-top:0;">★ (B'') 코스닥 스몰캡 실데이터 샘플 — 와이제이링크 <span class="tag tag-new">yfinance LIVE</span></h3>
+      <p style="margin-bottom:6px;"><b>입력 질의</b>: <code>"와이제이링크를 빈규리 자문역 스타일로 분석해줘."</code></p>
+      <p style="margin-bottom:10px; color:var(--muted); font-size:0.88rem;">→ 빈규리가 실제로 분석한 종목(<code>chathistory.txt</code> 88,940행, 2026-05-27 스페이스X 수혜주)입니다.
+        정성(사업·해자·결론)은 채팅 원문에서 증류, <b>정량은 신설 모듈 <code>advisor_data.py</code>가 yfinance에서 실시간 수신</b>한 <b>실제 값</b>입니다.</p>
+
+      <p style="margin-bottom:4px;"><b>① 정량 — <code>python advisor_data.py 와이제이링크</code> 실행 결과(발췌)</b></p>
+      <pre><span class="cm">// LIVE · yfinance 실측 (placeholder 아님)</span>
+{ <span class="str">"ticker"</span>: <span class="str">"209640"</span>, <span class="str">"market"</span>: <span class="str">"KOSDAQ"</span>,
+  <span class="str">"price"</span>: 5870, <span class="str">"market_cap"</span>: 166961266688, <span class="cm">// 약 1,670억(스몰캡)</span>
+  <span class="str">"wk52_high"</span>: 10350, <span class="str">"wk52_low"</span>: 2390, <span class="cm">// 고점대비 -43%</span>
+  <span class="str">"revenue_ttm"</span>: 53192040448, <span class="str">"profit_margin"</span>: 0.025,
+  <span class="str">"sector"</span>: <span class="str">"Technology / Semiconductors"</span>,
+  <span class="str">"financials"</span>: { <span class="str">"_status"</span>: <span class="str">"DART_KEY_MISSING"</span> } <span class="cm">// 키 연결 시 자동</span> }</pre>
+
+      <p style="margin-bottom:4px; margin-top:10px;"><b>② 정성 — 빈규리 채팅 원문에서 증류</b></p>
+      <pre style="white-space:pre-wrap;">  사업    : 반도체 PCB SMT 공정장비 / 해외고객 569개(스페이스X·테슬라·폭스콘)
+  해자    : ① SMT 풀라인업  ② 베트남·멕시코·인도 생산기지 선점  ③ 2010년~ 직납 락인
+  촉매    : 스페이스X 테라팹 · 테슬라 옵티머스 라인(멕시코=기가팩토리 인접)
+  리스크  : "강점만 있는 건 아니죠" — 스페이스X·테슬라 의존도 집중
+  결론    : 성공/지연 무관하게 장비 수요 발생 → 고점 -43% 구간 분할 관심</pre>
+
+      <div class="callout info" style="margin-bottom:0;">
+        <b>이 샘플의 의미</b> — 데모가 <b>"placeholder 목업"에서 "실데이터 결합"으로 진화</b>했습니다.
+        정량 슬롯은 코드(<code>advisor_data.py</code>)가 실제로 채우고, 남은 빈칸(영업이익률·부채비율)은 DART 키만 꽂으면 자동 완성됩니다.
+        전체 리포트 → <a href="sample_report_yjlink_binkyuri.html"><b>sample_report_yjlink_binkyuri.html</b></a>
+      </div>
+    </div>
+
+    <div class="callout warn">
+      <b>주의</b> — (B) 헥토파이낸셜 카드의 수치(<code>OO%</code>)는 아직 <b>채워질 자리(placeholder)</b>입니다.
+      반면 (B'') 와이제이링크의 <span class="tag tag-new" style="font-size:0.7em;">LIVE</span> 수치는 <code>advisor_data.py</code>가 받아온 <b>실제 값</b>입니다(DART 재무만 키 대기).
+      실제 적중률·신뢰도는 <a href="#predict">§5★ 검증 레이어</a>에서 사후 측정합니다.
+    </div>
+  </div>
+
+  <!-- 5.5 예측력 -->
+  <div class="section" id="predict">
+    <h2 class="sec">★ 예측력을 실제로 확보하는 법 (이 프로젝트의 핵심)</h2>
+    <div class="callout danger">
+      <b>가장 중요한 메시지</b> — "자문역 말을 검색해 보여주는 봇"은 예측력이 없습니다. 그건 그냥 과거 의견 열람기입니다.
+      예측력은 <b>그 의견이 실제로 맞았는지 데이터로 검증</b>하고, <b>정량 신호와 결합</b>할 때만 생깁니다. 여기에 프로젝트의 80% 가치가 있습니다.
+    </div>
+
+    <h3 class="sub">레버 0 — ★ 6개월 안에 페르소나를 '검증 완료'로 굳히기 <span class="tag tag-new">신규 1순위</span></h3>
+    <div class="card card-purple">
+      <p style="margin-top:0;">자문역이 6개월 뒤 사라지므로, <b>이 6개월이 "정답지가 살아있는" 유일한 기간</b>입니다.
+      에이전트가 신규 종목·시황에 대해 <b>"오재승/빈규리라면 이렇게 볼 것"</b>이라 예측 → <b>실제 두 분의 당일 발언과 대조</b> →
+      룰북·페르소나가 본인을 얼마나 정확히 모사하는지 매일 측정·튜닝합니다.</p>
+      <ul style="margin-bottom:0;">
+        <li><b>1순위 KPI 재정의</b>: "자문역 콜이 시장에서 맞았나"보다 <b>"내 에이전트가 자문역 본인을 얼마나 잘 흉내내나"</b>(모사 정확도)가 먼저.</li>
+        <li><b>방법</b>: 같은 종목·시황에 대해 에이전트 출력 vs 실제 자문역 발언을 룰 단위로 일치/불일치 채점 → 어긋나는 룰을 6개월간 보정.</li>
+        <li><b>마감 효과</b>: 떠난 뒤엔 이 대조가 영영 불가능 → <b>은퇴 전 페르소나에 '검증 도장'을 찍어두는 것이 프로젝트 성공의 정의.</b></li>
+      </ul>
+    </div>
+
+    <h3 class="sub">레버 1 — 자문역 콜의 적중률(Hit-rate) 측정</h3>
+    <div class="card card-green">
+      <p style="margin-top:0;">자문역이 "○○ 매수/긍정" 발언을 한 <b>날짜·종목</b>을 추출 → 그 시점 이후 실제 주가(yfinance)로 <b>N일/N개월 수익률</b>을 자동 계산 → 콜별 적중 여부 기록.</p>
+      <ul style="margin-bottom:0;">
+        <li><b>산출물</b>: "오재승 자문역의 매수 콜 적중률 ○○%, 평균 +○○%(30일)", "반도체 콜은 잘 맞고 스몰캡 콜은 약함" 같은 <b>정량 신뢰도 스코어</b>.</li>
+        <li><b>효과</b>: 어떤 종류의 인사이트를 믿을지 데이터로 결정 → <b>맹신/생존편향 차단</b>이 곧 예측력.</li>
+        <li>이미 v9.3에 yfinance·수익률 계산 인프라가 있으므로 재사용 가능.</li>
+      </ul>
+    </div>
+
+    <h3 class="sub">레버 2 — 정성(자문역) × 정량(v9.3 신호) 결합</h3>
+    <div class="card card-blue">
+      <p style="margin-top:0; margin-bottom:0;">한쪽만 보면 약하지만 <b>두 신호가 같은 방향일 때</b> 베팅하면 승률이 올라갑니다.
+      예: v9.3이 "매수 레짐"이고 + 자문역도 같은 종목을 긍정 → <b>강한 시그널</b>. 엇갈리면 보류.
+      이 <b>합의(consensus) 룰</b>이 단일 신호보다 예측력이 높은 게 일반적입니다.</p>
+    </div>
+
+    <h3 class="sub">레버 3 — 룩어헤드 없는 정직한 검증</h3>
+    <div class="card card-orange">
+      <p style="margin-top:0; margin-bottom:0;">적중률을 측정할 때 <b>발언 시점 이후 데이터로만</b> 수익률을 계산해야 진짜 예측력입니다.
+      발언 타임스탬프를 엄격히 지키고, "사후에 맞아 보이는 발언"을 거르세요. 이게 무너지면 화면상 숫자만 좋고 실전에선 안 맞습니다.</p>
+    </div>
+
+    <div class="callout">
+      <b>요약</b> — 개인용이라 마음껏 "예측·추천"을 붙여도 되지만, 그 예측의 근거는 <b>LLM의 말빨이 아니라 적중률 데이터</b>여야 합니다.
+      이 검증 레이어가 없으면 "그럴듯하지만 안 맞는 봇"이 되고, 있으면 "<b>믿을 만한 콜만 골라주는 봇</b>"이 됩니다.
+    </div>
+  </div>
+
+  <!-- 6 -->
+  <div class="section" id="risk">
+    <h2 class="sec">6. 리스크 · 반드시 짚을 것 <span style="font-size:0.7em; color:var(--muted);">(개인용 기준 재평가)</span></h2>
+    <div class="callout info">
+      <b>개인 내부 사용</b>으로 확정되어 <b>법적·서비스·개인정보 외부유출 리스크는 대부분 해소</b>되었습니다(아래 표에서 회색 처리).
+      대신 <b>예측력을 좌우하는 리스크(신뢰성·룩어헤드·환각)</b>가 오히려 더 중요해집니다.
+    </div>
+    <table>
+      <thead><tr><th>리스크</th><th>내용</th><th>완화책</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><b>원천 신뢰성</b> <span class="tag tag-risk">최우선</span></td>
+          <td>자문역 발화가 <b>항상 맞았는지 미검증</b>. 샘플엔 "내가 다 맞췄다"식 자기서사, 만수르/페어트레이딩 등 마케팅성 표현도 보임. 맞은 예측만 기억되는 <b>생존편향</b>이 곧 예측력 저하.</td>
+          <td><b>§5★ 적중률 측정</b>으로 정면 돌파 — 콜별로 실제 주가 대비 성과를 매겨 <b>믿을 콜/못 믿을 콜을 데이터로 구분</b>.</td>
+        </tr>
+        <tr>
+          <td><b>미래정보 혼입(룩어헤드)</b> <span class="tag tag-risk">최우선</span></td>
+          <td>적중률 측정 시 발언 시점 이후 데이터만 써야 함. 안 그러면 화면 숫자만 좋고 실전에서 안 맞음.</td>
+          <td>발화 <b>타임스탬프 엄격 유지</b>, 수익률은 발언일 이후 구간으로만 계산.</td>
+        </tr>
+        <tr>
+          <td><b>LLM 환각</b> <span class="tag tag-mid">중요</span></td>
+          <td>모델이 자문역이 안 한 말을 지어내면 잘못된 근거로 베팅하게 됨.</td>
+          <td>RAG로 <b>검색된 원문 범위 내 답변 강제</b> + 모든 주장에 <b>날짜 인용</b> 의무화. 근거 없으면 "해당 발화 없음".</td>
+        </tr>
+        <tr style="opacity:0.5;">
+          <td><b>법적/저작권</b> <span class="tag" style="background:#333;color:#999;border:1px solid #555;">개인용→해소</span></td>
+          <td>서비스화 시 투자자문업법·저작권 문제. <b>개인 내부 사용이라 해당 없음.</b></td>
+          <td>외부 공유·배포만 하지 않으면 됨. (현 범위에선 비이슈)</td>
+        </tr>
+        <tr style="opacity:0.5;">
+          <td><b>개인정보</b> <span class="tag" style="background:#333;color:#999;border:1px solid #555;">완화</span></td>
+          <td>채팅에 제3자 실명·사적 대화 포함. 외부 유출 시 문제.</td>
+          <td>외부 미배포로 위험 낮음. 그래도 전처리에서 <b>두 자문역 발화만 추출</b>하면 품질·프라이버시 모두 개선.</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="callout">
+      <b>방향 전환 요약</b> — 개인용 확정으로 "추천·예측 봇"을 자유롭게 만들 수 있습니다.
+      대신 신뢰성·룩어헤드·환각 3가지가 <b>예측력의 진짜 적</b>이며, 모두 <b>§5★ 적중률 검증 레이어</b>로 방어됩니다.
+    </div>
+  </div>
+
+  <!-- 7 -->
+  <div class="section" id="merge">
+    <h2 class="sec">7. YJalgo v9.3 통합 방안</h2>
+    <p>현재 v9.3는 레짐 기반 적립식 백테스트 대시보드(Streamlit)입니다. 자문 에이전트는 <b>정성(텍스트) 레이어</b>로, 기존 정량 엔진과 <b>느슨하게 결합</b>하는 것이 안전합니다.</p>
+
+    <h3 class="sub">단계적 통합 (권장)</h3>
+    <div class="card card-green">
+      <ul style="margin:0;">
+        <li><b>1단계 — 독립 모듈</b>: 자문 에이전트를 별도 Python 모듈/별도 Streamlit 페이지로 먼저 완성. v9.3 코드와 분리해 리스크 격리.</li>
+        <li><b>2단계 — 탭 통합</b>: v9.x 대시보드에 <b>"자문역 인사이트" 탭</b> 추가. 백테스트와 한 앱, 코드는 분리 유지.</li>
+        <li><b>3단계 — 종목 연동</b>: 사용자가 대시보드에서 보고 있는 종목을 자동으로 에이전트 질의에 넘겨, <b>"이 종목에 대한 자문역 코멘트"</b>를 같은 화면에서 표시.</li>
+      </ul>
+    </div>
+
+    <div class="callout info">
+      <b>통합의 시너지</b> — 정량 신호(레짐/RSI/VIX/거래비용 반영 수익률)와 정성 관점(자문역 코멘트)을 한 종목에서 교차 검증.
+      예: 대시보드가 "매수 레짐" 신호를 줄 때, 같은 시점 자문역이 그 종목을 어떻게 봤는지 즉시 대조.
+    </div>
+
+    <h3 class="sub">통합 시 주의</h3>
+    <ul>
+      <li>v9.3는 안정 버전이므로 <b>기존 코드 직접 수정 최소화</b> — 새 파일/탭으로 얹기.</li>
+      <li>LLM API 키 관리(.streamlit/secrets 또는 환경변수). 키 하드코딩 금지.</li>
+      <li>임베딩 인덱스는 <b>사전 빌드 후 파일로 배포</b> — 앱 구동 시 매번 재임베딩하면 느림/비용↑.</li>
+      <li>버전 명명: 통합본은 <b>v9.4</b> 또는 별도 트랙으로. (메모상 v9.4 이후 Plan 7과 충돌 없는지 확인)</li>
+    </ul>
+  </div>
+
+  <!-- 8 -->
+  <div class="section" id="open">
+    <h2 class="sec">8. 열린 질문 (착수 전 결정 필요)</h2>
+    <div class="callout info">
+      <s>사용 범위(개인용)</s> · <s>출력 성격(추천·예측 OK)</s> — 이번 피드백으로 <b>확정</b>되어 목록에서 제외했습니다.
+    </div>
+    <div class="card card-orange">
+      <ol style="margin:0;">
+        <li><b>데이터 소스 비대칭(확정)</b>: 오재승=채팅+유튜브 10개(8개 자막 확보), <b>빈규리=채팅 텍스트 전용(유튜브 없음)</b>. → 빈규리 펀더멘털 룰북은 <code>chathistory.txt</code> 발언에서만 증류. + 오재승 비공개(#3)·IP차단(#5) 영상 재확인.</li>
+        <li><b>분석 대상 범위</b>: 코스닥 스몰캡 위주(빈규리 영역)인가, 미국 종목도 포함인가? → 재무 데이터 소스(DART vs yfinance) 결정.</li>
+        <li><s><b>재무 데이터 소스</b></s> <span class="tag tag-new" style="font-size:0.7em;">해소</span>: <b>DART(한국 재무) + yfinance(시세·미국) 연동 착수 완료</b>(<code>advisor_data.py</code>). 종목코드는 네이버 자동완성으로 해석. <b>남은 결정 1개</b> — DART <b>무료 인증키 발급</b>(opendart.fss.or.kr) 후 환경변수 <code>DART_API_KEY</code> 또는 <code>.dart_api_key</code> 파일에 넣어주시면 영업이익률·부채비율까지 자동 완성됩니다.</li>
+        <li><b>이미지/PDF 처리</b>: 빈규리도 차트·표를 이미지로 올림. OCR로 끌어올릴지, 텍스트만 쓸지?</li>
+        <li><b>LLM/임베딩 선택</b>: API(품질·간편, 비용 발생) vs 로컬(무료·오프라인, 한국어 품질·세팅 부담)?</li>
+        <li><b>통합 시점</b>: 처음부터 v9.3 통합인가, 독립 PoC 먼저인가? (권장: 독립 PoC 먼저)</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- 9 -->
+  <div class="section" id="plan">
+    <h2 class="sec">9. 단계별 로드맵 (제안)</h2>
+    <table>
+      <thead><tr><th>단계</th><th>산출물</th><th>핵심 작업</th></tr></thead>
+      <tbody>
+        <tr><td><b>P0. PoC 검증</b></td><td>전처리 스크립트 + 추출 통계 + <b>유튜브 자막</b></td><td>발화자/날짜 파싱, 노이즈 제거, 유튜브 자막 수집(8/10 완료), "분석 문단" 몇 개나 나오는지 측정 → 데이터·프레임 가치 실측</td></tr>
+        <tr style="background:rgba(0,208,132,0.10);"><td><b>P0.5. 룰북 증류 ★</b> <span class="tag tag-new" style="font-size:0.7em;">완료</span></td><td>오재승·빈규리 룰북(JSON)</td><td>채팅+유튜브에서 판단기준을 if-then 룰로 증류. <b>✅ 오재승 5룰(OJS-*) + 빈규리 13룰(BKR-*, <code>binkyuri_rulebook.json</code>) 증류 완료</b>(§5). <b>두 에이전트의 공통 토대 — 자문역 은퇴 전 최우선</b></td></tr>
+        <tr style="background:rgba(0,208,132,0.10);"><td><b>P1. 개별기업 에이전트 ★</b> <span class="tag tag-new" style="font-size:0.7em;">착수</span></td><td>빈규리식 종목 분석 리포트</td><td>빈규리 룰북 + DART/yfinance 재무 연동 → 임의 종목을 종목카드(JSON)로 분석. <b>이 프로젝트의 메인</b>. <b>✅ 정량 연동 <code>advisor_data.py</code>(yfinance LIVE) + 정성 LLM 평가 <code>advisor_llm.py</code>(Claude로 11룰 자동 판정) 구현 완료</b>. 와이제이링크 실데이터 샘플 §데모(B'').</td></tr>
+        <tr><td><b>P2. 시황 에이전트</b></td><td>오재승식 아침 시황 브리핑</td><td>시황 발언 RAG + 실시간 시세 결합 (§데모와 동일). 보조 기능</td></tr>
+        <tr style="background:rgba(171,71,188,0.10);"><td><b>P2.5. 페르소나 검증 ★</b></td><td>모사 정확도 스코어 + 적중률 꼬리표</td><td><b>은퇴 전 6개월</b> 동안 에이전트 출력 vs 실제 자문역 발언 대조 → 룰북 보정. <b>"검증 도장" = 성공 정의</b>(§5★ 레버0)</td></tr>
+        <tr style="background:rgba(0,208,132,0.10);"><td><b>P3. UI + 결합</b> <span class="tag tag-new" style="font-size:0.7em;">착수</span></td><td>Streamlit 페이지(독립 앱)</td><td>종목 입력→ ①정량(yfinance LIVE) ②간이 레짐/RSI/200일선 ③오재승 룰 힌트 ④빈규리 13룰 평가(코드자동+정성수동 점수) ⑤종목카드 JSON <b>한 화면</b>. <b>✅ <code>advisor_app.py</code> 구현·AppTest 통과</b>(실행 <code>streamlit run advisor_app.py</code> 또는 <code>run_advisor.bat</code>). <b>v9.3과 완전 독립</b>.</td></tr>
+        <tr><td><b>P4. v9.x 통합</b></td><td>통합 대시보드(v9.4 트랙)</td><td>독립 앱 <b>안정성·품질 확보 후</b> v9.3에 탭으로 merge → 보던 종목 자동 분석 → 정량·정성 교차 표시. <span style="color:var(--muted);">(사용자 확정: 우선 독립 개발, 검증 후 합류)</span></td></tr>
+      </tbody>
+    </table>
+    <div class="callout">
+      <b>진행 현황</b> — ✅ 미니 데모(삼성전자 §B', 와이제이링크 §B''), ✅ 정량 연동 <code>advisor_data.py</code>, ✅ 빈규리 룰북 13룰(P0.5),
+      ✅ <b>통합 Streamlit 독립 앱 <code>advisor_app.py</code>(P3)</b> — 한 화면에 정량·신호·룰북 결합 완료(v9.3 미의존).
+      <b>다음 한 걸음</b> → ① <b>DART 무료 인증키</b>(opendart.fss.or.kr) 발급 시 재무 빈칸 자동 완성,
+      ② ✅ 빈규리 정성 11룰 <b>Claude 자동 판정</b> 구현(<code>advisor_llm.py</code>, 앱에 통합 — <code>ANTHROPIC_API_KEY</code> 연결 시 동작), ③ 앱 안정화 후 <b>v9.4 트랙으로 v9.3에 merge</b>.
+    </div>
+  </div>
+
+  <footer>
+    requirements_260604 검토 초안 · 본 문서는 의사결정용 1차 검토이며 구현 명세가 아닙니다 · 2026-06-04
+  </footer>
+</div>
+</body>
+</html>
