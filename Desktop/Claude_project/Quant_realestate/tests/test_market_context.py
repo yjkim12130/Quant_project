@@ -6,8 +6,8 @@ import pandas as pd
 import pytest
 
 from scoring.market_context import (
-    asset_ratio_zscore, load_planned_transit, load_redevelopment, load_supply_by_region_year,
-    own_apt_index,
+    LEADING_REGIONS, asset_ratio_zscore, leading_apt_index, load_planned_transit,
+    load_redevelopment, load_supply_by_region_year, own_apt_index,
 )
 
 
@@ -211,3 +211,25 @@ def test_own_apt_index_empty_when_no_trades(tmp_path):
     idx = own_apt_index(conn)
     assert idx.empty
     assert idx.name == "own_apt_index"
+
+
+def test_leading_apt_index_excludes_non_leading_regions(tmp_path):
+    """LEADING_REGIONS(강남/마포/용산/성동/분당/과천/평촌/용인수지)에 없는 region_code(여기선
+    구로구)는 own_apt_index와 달리 leading_apt_index 계산에서 빠져야 한다."""
+    leading_code = LEADING_REGIONS[0][0]
+    rows = [
+        (leading_code, 100.0, "2021-01-05", 10000, 0),
+        ("11530", 100.0, "2021-01-05", 90000, 0),  # 구로구 — 주도 지역 아님, 극단값이라 섞이면 바로 티가 남
+    ]
+    conn = _trades_sale_conn(tmp_path, rows)
+    idx = leading_apt_index(conn)
+    assert idx.name == "leading_apt_index"
+    assert idx.loc[pd.Period("2021-01", freq="M")] == pytest.approx(100.0)
+
+
+def test_leading_apt_index_empty_when_no_leading_region_trades(tmp_path):
+    rows = [("11530", 100.0, "2021-01-05", 10000, 0)]  # 구로구만 — 주도 지역 아님
+    conn = _trades_sale_conn(tmp_path, rows)
+    idx = leading_apt_index(conn)
+    assert idx.empty
+    assert idx.name == "leading_apt_index"

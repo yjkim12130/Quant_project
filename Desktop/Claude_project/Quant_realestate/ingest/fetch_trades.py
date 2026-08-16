@@ -9,7 +9,7 @@ data/realestate.db 에 적재한다. (지역, 연월) 단위로 ingest_checkpoin
     # 스모크테스트 (강남구 1개월만)
     python ingest/fetch_trades.py --regions 11680 --start 202607 --end 202607 --trade sale
 
-    # 본 적재 (서울 남부 + 경기 남부 핵심, 최근 5년, 매매+전세)
+    # 본 적재 (서울 전역 + 경기 전역, 최근 5년, 매매+전세)
     python ingest/fetch_trades.py --regions all --start 202108 --end 202607 --trade sale,jeonse
 
     # 실패한 항목만 재시도
@@ -210,7 +210,7 @@ def fetch_one(reader, region_code, region_name, year_month, trade_key, conn):
 
 def main():
     ap = argparse.ArgumentParser(description="아파트 실거래가 배치 적재")
-    ap.add_argument("--regions", default="all", help="regions.yaml 그룹명(all/seoul_south/gyeonggi_south_core) 또는 5자리 코드")
+    ap.add_argument("--regions", default="all", help="regions.yaml 그룹명(all/seoul/gyeonggi) 또는 5자리 코드")
     ap.add_argument("--start", required=True, help="시작 연월 YYYYMM")
     ap.add_argument("--end", required=True, help="종료 연월 YYYYMM")
     ap.add_argument("--trade", default="sale,jeonse", help="sale,jeonse 중 콤마로 선택")
@@ -225,11 +225,15 @@ def main():
     reader = pdr.TransactionPrice(service_key=service_key)
     conn = get_connection()
 
-    # 배치 시작 전 키 유효성 1회 선검증 — 키가 죽어있으면 전체를 failed로 도배하지 않고 즉시 중단
+    # 배치 시작 전 키 유효성 1회 선검증 - 키가 죽어있으면 전체를 failed로 도배하지 않고 즉시 중단
     err = verify_api_response(reader, trade_keys[0], regions[0]["code"], months[0])
     if err:
-        print(f"[중단] API 키 검증 실패: {err}")
-        print("활용신청 승인/반영 상태를 data.go.kr 마이페이지에서 확인하세요. (신청 직후라면 최대 1시간 반영 지연 가능)")
+        if "LIMITED_NUMBER_OF_SERVICE_REQUESTS" in err or "code 22" in err:
+            print(f"[중단] 오늘 일일 한도가 이미 소진된 상태입니다: {err}")
+            print("키 자체는 정상입니다 - 내일(한도 리셋 후) 같은 명령을 다시 실행하면 체크포인트에서 이어서 진행됩니다.")
+        else:
+            print(f"[중단] API 키 검증 실패: {err}")
+            print("활용신청 승인/반영 상태를 data.go.kr 마이페이지에서 확인하세요. (신청 직후라면 최대 1시간 반영 지연 가능)")
         sys.exit(1)
 
     total = len(regions) * len(months) * len(trade_keys)
@@ -259,7 +263,7 @@ def main():
                     ok = fetch_one(reader, code, name, ym, tk, conn)
                 except QuotaExceeded as e:
                     exhausted.add(tk)
-                    print(f"\n[한도 도달] {TRADE_TYPE_MAP[tk]} API 일일 한도 소진 — 해당 유형 중단: {e}", flush=True)
+                    print(f"\n[한도 도달] {TRADE_TYPE_MAP[tk]} API 일일 한도 소진 - 해당 유형 중단: {e}", flush=True)
                     continue
                 done += 1 if ok else 0
                 failed += 0 if ok else 1
@@ -267,7 +271,7 @@ def main():
                     print(f"  진행: 성공 {done} / 스킵 {skipped} / 실패 {failed}", flush=True)
                 time.sleep(CALL_INTERVAL_SEC)
         if exhausted == set(trade_keys):
-            print("모든 거래유형 한도 소진 — 내일 같은 명령 재실행 시 체크포인트에서 이어서 진행됩니다.")
+            print("모든 거래유형 한도 소진 - 내일 같은 명령 재실행 시 체크포인트에서 이어서 진행됩니다.")
             break
 
     print(f"완료: 성공 {done} / 스킵(이미적재) {skipped} / 실패 {failed}")

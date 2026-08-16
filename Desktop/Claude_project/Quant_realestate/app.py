@@ -112,7 +112,7 @@ with tab0:
 ## 이 도구는 무엇인가
 
 YJalgo(주식 백테스팅)의 **동일자산군 상대평가** 사고방식을 부동산에 옮긴 개인용 저평가 아파트 검색기입니다.
-서울 남부 11개구 + 경기 남부 핵심 11개시의 5년치 국토부 실거래가(매매+전세)를 기반으로 합니다.
+서울 전역 25개구 + 경기 전역 31개 시군의 5년치 국토부 실거래가(매매+전세)를 기반으로 합니다.
 
 ## 핵심 아이디어 — "평소 위상 대비 이탈"
 
@@ -260,6 +260,7 @@ with tabT:
 
 ASSET_LABELS = {
     "reb_apt_index": "🏠 수도권 아파트(공식지수)", "own_apt_index": "📍 관심지역 실거래(자체계산)",
+    "leading_apt_index": "⭐ 수도권 주도지역 실거래(자체계산)",
     "asset_kospi": "🇰🇷 코스피", "asset_nasdaq": "🇺🇸 나스닥",
     "asset_gold": "🥇 금", "asset_btc": "₿ 비트코인", "ecos_m2": "💧 M2 통화량",
 }
@@ -269,16 +270,19 @@ ASSET_LABELS = {
 def load_assets():
     import sqlite3
     from scoring.engine import DB_PATH
-    from scoring.market_context import own_apt_index
+    from scoring.market_context import leading_apt_index, own_apt_index
     conn = sqlite3.connect(DB_PATH)
     m = pd.read_sql_query("SELECT series, ym, value FROM macro_series", conn)
     wide = m.pivot(index="ym", columns="series", values="value")
     wide.index = pd.PeriodIndex(pd.to_datetime(wide.index, format="%Y%m"), freq="M")
     wide = wide.sort_index()
     own = own_apt_index(conn)
+    leading = leading_apt_index(conn)
     conn.close()
     if not own.empty:
         wide = wide.join(own, how="outer")
+    if not leading.empty:
+        wide = wide.join(leading, how="outer")
     return wide.sort_index()
 
 
@@ -346,15 +350,17 @@ with tabA:
                 rebased[c] = sub[c] / s.iloc[0] * 100
 
         fig = go.Figure()
-        palette = {"reb_apt_index": ACCENT, "own_apt_index": "#2dd4bf", "asset_kospi": "#4c9aff",
-                   "asset_nasdaq": "#b37feb", "asset_gold": "#f0b429", "asset_btc": "#ff9f43",
-                   "ecos_m2": "#8899aa"}
+        palette = {"reb_apt_index": ACCENT, "own_apt_index": "#2dd4bf", "leading_apt_index": "#e63950",
+                   "asset_kospi": "#4c9aff", "asset_nasdaq": "#b37feb", "asset_gold": "#f0b429",
+                   "asset_btc": "#ff9f43", "ecos_m2": "#8899aa"}
+        emphasis_cols = ("reb_apt_index", "own_apt_index", "leading_apt_index")
         for c in rebased.columns:
             fig.add_trace(go.Scatter(x=rebased.index.to_timestamp(), y=rebased[c],
                                      name=ASSET_LABELS[c],
                                      line=dict(color=palette.get(c),
-                                               width=2.5 if c in ("reb_apt_index", "own_apt_index") else 1.5,
-                                               dash={"ecos_m2": "dot", "own_apt_index": "dash"}.get(c))))
+                                               width=2.5 if c in emphasis_cols else 1.5,
+                                               dash={"ecos_m2": "dot", "own_apt_index": "dash",
+                                                     "leading_apt_index": "dashdot"}.get(c))))
         if "ecos_base_rate" in assets.columns:
             br = assets["ecos_base_rate"].iloc[-n_months:].dropna()
             fig.add_trace(go.Scatter(x=br.index.to_timestamp(), y=br, name="기준금리(%, 우축)",
@@ -380,7 +386,7 @@ with tabA:
         table = pd.DataFrame(rows)[["자산", "1년", "3년", "3년(연)", "5년", "5년(연)", "10년", "10년(연)"]]
         st.dataframe(table, hide_index=True, use_container_width=True)
         st.caption("연 = 연평균 복리(CAGR). 수도권 아파트지수는 최근월 공표분(약 1~2개월 지연)까지 반영. "
-                  "관심지역 실거래 지수는 이 프로젝트가 추적하는 30개 지역만 대상이라 2021-08~만 "
+                  "관심지역·주도지역 실거래 지수는 이 프로젝트가 추적하는 자체 DB 기반이라 2021-08~만 "
                   "존재(공식지수만큼 긴 추세 비교는 불가).")
 
         # 해석
@@ -408,10 +414,14 @@ with tabA:
 - **수도권 아파트(공식지수)**: 한국부동산원 표본조사 기반, 서울+인천+경기 전체 평균이라 특정
   인기지역 체감 상승률과 크게 다를 수 있음(예: 최근5년 공식지수 +1.0% vs 강남구 자체실거래
   중위 +65.3%). 월간·평활·후행(공표 1~2개월 지연), 2003~ 장기 데이터
-- **관심지역 실거래(자체계산, 점선)**: 이 프로젝트가 추적하는 30개 지역(서울 남부+경기 남부)
+- **관심지역 실거래(자체계산, 점선)**: 이 프로젝트가 추적하는 전 지역(서울+경기 69개 시군구)
   실거래 중위 ㎡당가 기반. 공식지수의 "전체 평균이라 덜 오른 외곽까지 섞임" 문제는 없지만, 월별
   거래 구성 노이즈가 있고 2021-08~만 존재(공식지수만큼 긴 추세는 못 봄) — 장기추세는 공식지수,
   최근 체감비교는 이 지수를 참고
+- **수도권 주도지역 실거래(자체계산, 1점쇄선)**: 강남·마포·용산·성동·분당(판교 포함)·과천·평촌·
+  용인수지 8개 지역만 한정해 계산 — "전체 평균이라 낮아 보인다"는 위 두 지수의 한계를 보완하는
+  인기지역 체감 지표. 판교는 법정동코드가 분당구와 같아 별도 분리는 안 됨. 계산 방식은 관심지역
+  실거래와 동일(3개월 롤링 중위, 2021-08~)
 - **M2(점선)**: 통화량 — "모든 자산의 분모". M2보다 덜 오른 자산은 실질 구매력 기준 제자리
 - **기준금리(우축 점선)**: 할인율 — 금리 인하기에 자산 전반이 우호적이었는지 확인
 - 데이터: 부동산원(수도권 아파트), 이 프로젝트 자체 실거래 DB(관심지역 실거래), yfinance(코스피·

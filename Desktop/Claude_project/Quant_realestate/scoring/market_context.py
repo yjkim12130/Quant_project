@@ -71,32 +71,64 @@ def load_supply_by_region_year(conn):
     return out.sort_values(["region_code", "year"]).reset_index(drop=True)
 
 
-def own_apt_index(conn):
-    """이 프로젝트가 추적하는 30개 지역(서울 남부 11개구+경기 남부 11개시)의 자체 실거래
-    기반 아파트가격지수. reb_apt_index(부동산원 수도권 지수)는 서울+인천+경기 전체(외곽 포함)
-    평균이라 관심 지역 실제 상승률과 크게 다를 수 있음(2026-08-16 확인: 같은 5년 구간에
-    reb_apt_index +1.0% vs 강남구 단독 자체실거래 중위 +65.3%) — 자산비교 탭에 공식지수와
-    병기해서 보여주기 위한 보조 지수다.
-
-    월별 중위 ㎡당가(cancelled=0만)에 scoring/engine.py와 동일한 3개월 롤링 중위(Params.
-    roll_window 기본값)를 적용한 뒤 첫 관측월=100으로 정규화. 롤링 없이 raw 월중위만 쓰면
-    그 달 어떤 지역·단지가 몇 건 거래됐는지에 따라 구성 노이즈가 커서(실측: 무보정 시 전월대비
-    ±10%p대로 출렁임) 30개 지역을 한 숫자로 풀링하는 이 지수의 취지(추세 비교)에 안 맞았음.
-    trades_sale 적재 범위(2021-08~)만 존재해 reb_apt_index(2003~)만큼 긴 추세는 못 보여준다
-    — 반드시 라벨로 구분해서 표시할 것(장기추세는 공식지수, 최근 체감비교는 이 지수).
-
-    Returns: pd.Series, index=PeriodIndex(freq='M'), name='own_apt_index'. 데이터 없으면 빈 Series.
-    """
-    df = pd.read_sql_query(
-        "SELECT contract_date, deal_amount, exclusive_area FROM trades_sale WHERE cancelled=0", conn)
+def _sqm_price_index(conn, series_name, region_codes=None):
+    """월별 중위 ㎡당가(cancelled=0만)에 scoring/engine.py와 동일한 3개월 롤링 중위를 적용한 뒤
+    첫 관측월=100으로 정규화. region_codes를 주면 해당 지역만으로 한정한다."""
+    query = "SELECT contract_date, deal_amount, exclusive_area FROM trades_sale WHERE cancelled=0"
+    params = []
+    if region_codes:
+        query += f" AND region_code IN ({','.join('?' for _ in region_codes)})"
+        params = list(region_codes)
+    df = pd.read_sql_query(query, conn, params=params)
     if df.empty:
-        return pd.Series(name="own_apt_index", dtype=float)
+        return pd.Series(name=series_name, dtype=float)
     df["ym"] = df["contract_date"].str[:7]
     df["sqm_price"] = df["deal_amount"] / df["exclusive_area"]
     monthly = df.groupby("ym")["sqm_price"].median().sort_index()
     monthly.index = pd.PeriodIndex(pd.to_datetime(monthly.index, format="%Y-%m"), freq="M")
     rolled = monthly.rolling(3, min_periods=1).median()
-    return (rolled / rolled.iloc[0] * 100).rename("own_apt_index")
+    return (rolled / rolled.iloc[0] * 100).rename(series_name)
+
+
+def own_apt_index(conn):
+    """이 프로젝트가 추적하는 전체 지역(서울+경기, config/regions.yaml 참고)의 자체 실거래
+    기반 아파트가격지수. reb_apt_index(부동산원 수도권 지수)는 서울+인천+경기 전체(외곽 포함)
+    평균이라 관심 지역 실제 상승률과 크게 다를 수 있음(2026-08-16 확인: 같은 5년 구간에
+    reb_apt_index +1.0% vs 강남구 단독 자체실거래 중위 +65.3%) — 자산비교 탭에 공식지수와
+    병기해서 보여주기 위한 보조 지수다.
+
+    롤링 없이 raw 월중위만 쓰면 그 달 어떤 지역·단지가 몇 건 거래됐는지에 따라 구성 노이즈가
+    커서(실측: 무보정 시 전월대비 ±10%p대로 출렁임) 여러 지역을 한 숫자로 풀링하는 이 지수의
+    취지(추세 비교)에 안 맞았음. trades_sale 적재 범위(2021-08~)만 존재해 reb_apt_index(2003~)
+    만큼 긴 추세는 못 보여준다 — 반드시 라벨로 구분해서 표시할 것(장기추세는 공식지수, 최근
+    체감비교는 이 지수).
+
+    Returns: pd.Series, index=PeriodIndex(freq='M'), name='own_apt_index'. 데이터 없으면 빈 Series.
+    """
+    return _sqm_price_index(conn, "own_apt_index")
+
+
+LEADING_REGIONS = [
+    ("11680", "강남구"),
+    ("11440", "마포구"),
+    ("11170", "용산구"),
+    ("11200", "성동구"),
+    ("41135", "성남시 분당구"),  # 판교 포함 — 법정동코드가 시군구(5자리) 단위라 판교(분당구 내 동)만 따로 분리 불가
+    ("41290", "과천시"),
+    ("41173", "안양시 동안구"),  # 평촌
+    ("41465", "용인시 수지구"),
+]
+
+
+def leading_apt_index(conn):
+    """수도권 '주도 지역'(강남/마포/용산/성동/분당·판교/과천/평촌/용인수지, LEADING_REGIONS) 한정
+    자체 실거래 지수. own_apt_index와 동일 계산이지만 region_code를 LEADING_REGIONS로 한정해
+    외곽 지역이 섞여 평균이 낮아지는 own_apt_index/reb_apt_index의 한계를 보완한다.
+
+    Returns: pd.Series, index=PeriodIndex(freq='M'), name='leading_apt_index'. 데이터 없으면 빈 Series.
+    """
+    codes = [code for code, _ in LEADING_REGIONS]
+    return _sqm_price_index(conn, "leading_apt_index", region_codes=codes)
 
 
 ASSET_COMPARE_COLS = ["asset_kospi", "asset_nasdaq", "asset_gold", "asset_btc"]
