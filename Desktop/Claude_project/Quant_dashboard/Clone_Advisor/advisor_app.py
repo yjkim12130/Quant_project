@@ -230,7 +230,6 @@ with tab2:
         else:
             for item in hl["top"]:
                 st.markdown(f"**[{item['source']}]** [{item['title']}]({item['link']})")
-                st.caption(item["why"])
 
         st.markdown("### ③ 🔵 오재승 해설 — 매크로·타이밍")
         ojs_brief = briefing["ojs"]
