@@ -51,14 +51,14 @@ with tab1:
 
             category_df = portfolio.aggregate_by_category(valid_df)
 
-            today = datetime.date.today().isoformat()
-            snapshot_values = dict(zip(category_df["category"], category_df["value_krw"]))
-            snapshot_values["TOTAL"] = totals["total_value_krw"]
-            data_io.append_snapshot(today, snapshot_values)
-
             if category_df.empty:
                 st.warning("시세를 조회할 수 있는 종목이 없어 차트를 표시할 수 없습니다.")
             else:
+                today = datetime.date.today().isoformat()
+                snapshot_values = dict(zip(category_df["category"], category_df["value_krw"]))
+                snapshot_values["TOTAL"] = totals["total_value_krw"]
+                data_io.append_snapshot(today, snapshot_values)
+
                 color_map = categories.get_category_color_map(category_df["category"].tolist())
 
                 pie = px.pie(
