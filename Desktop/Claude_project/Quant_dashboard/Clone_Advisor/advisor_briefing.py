@@ -204,14 +204,14 @@ def _pick_bkr_focus(top_headlines: list[dict]) -> Optional[str]:
 
 def generate_bkr_commentary(dashboard: dict, top_headlines: list[dict]) -> dict:
     """빈규리 페르소나: 해자·재무 서술만. 매수가/타이밍 필드 자체가 스키마에 없음."""
+    ok, why = al.llm_available()
+    if not ok:
+        return {"_status": "UNAVAILABLE", "_msg": why}
+
     focus = _pick_bkr_focus(top_headlines)
     if not focus:
         return {"_status": "NO_FOCUS_STOCK",
                 "_msg": "오늘 헤드라인에 코스닥승강제 후보군 종목이 없습니다."}
-
-    ok, why = al.llm_available()
-    if not ok:
-        return {"_status": "UNAVAILABLE", "_msg": why}
 
     bkr_rb = ad.load_rulebook()
     philosophy = " ".join(bkr_rb.get("philosophy", [])) if bkr_rb else ""
