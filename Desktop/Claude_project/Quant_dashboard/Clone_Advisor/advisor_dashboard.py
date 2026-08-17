@@ -75,11 +75,14 @@ _IMPACT_RULES_PATH = os.path.join(_HERE, "impact_rules.json")
 
 
 def load_impact_rules() -> Optional[dict]:
-    """impact_rules.json 로드. 없으면 None."""
+    """impact_rules.json 로드. 없거나 손상됐으면 None."""
     if not os.path.exists(_IMPACT_RULES_PATH):
         return None
-    with open(_IMPACT_RULES_PATH, encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(_IMPACT_RULES_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
 
 
 def apply_impact_rules(dashboard: dict, rules: list[dict]) -> dict:
@@ -91,16 +94,21 @@ def apply_impact_rules(dashboard: dict, rules: list[dict]) -> dict:
     """
     candidates = []
     for r in rules:
-        entry = dashboard.get(r["driver"])
+        driver = r.get("driver")
+        direction_rule = r.get("direction")
+        threshold_pct = r.get("threshold_pct")
+        if driver is None or direction_rule is None or threshold_pct is None:
+            continue  # 필수 키 누락 — 매칭 불가, 건너뜀
+        entry = dashboard.get(driver)
         if not isinstance(entry, dict):
             continue
         chg = entry.get("chg_pct")
         if chg is None:
             continue
         direction = "up" if chg >= 0 else "down"
-        if direction != r["direction"]:
+        if direction != direction_rule:
             continue
-        if abs(chg) < abs(r["threshold_pct"]):
+        if abs(chg) < abs(threshold_pct):
             continue
         candidates.append((abs(chg), r, chg))
 
@@ -109,18 +117,19 @@ def apply_impact_rules(dashboard: dict, rules: list[dict]) -> dict:
 
     candidates.sort(key=lambda t: t[0], reverse=True)
     _, top_rule, top_chg = candidates[0]
+    top_driver = top_rule.get("driver", "")
 
     flow = [
-        {"step": "글로벌 요인", "label": top_rule["category"]},
-        {"step": "미국 시장 반응", "label": f"{top_rule['driver'].upper()} {top_chg:+.2f}%"},
-        {"step": "한국 전달 경로", "label": top_rule["korea_impact"]},
+        {"step": "글로벌 요인", "label": top_rule.get("category", "")},
+        {"step": "미국 시장 반응", "label": f"{top_driver.upper()} {top_chg:+.2f}%"},
+        {"step": "한국 전달 경로", "label": top_rule.get("korea_impact", "")},
         {"step": "핵심 확인", "label": "USD/KRW · 외국인 수급"},
     ]
     fact_impact = [
-        {"fact": f"{r['driver'].upper()} {chg:+.2f}%", "impact": r["korea_impact"]}
+        {"fact": f"{r.get('driver', '').upper()} {chg:+.2f}%", "impact": r.get("korea_impact", "")}
         for _, r, chg in candidates[:4]
     ]
-    return {"_status": "ok", "driver": top_rule["driver"], "chg_pct": top_chg,
+    return {"_status": "ok", "driver": top_driver, "chg_pct": top_chg,
             "flow": flow, "fact_impact": fact_impact}
 
 
@@ -132,8 +141,8 @@ def generate_scenarios(ojs_signals: dict, vix_price: Optional[float]) -> list[di
 
     ojs_signals가 비어 있거나(_status 있음) 판단 근거가 부족하면 BASE로 수렴한다.
     """
-    arrangement = ojs_signals.get("net_arrangement", "") if ojs_signals else ""
-    macd_state = ojs_signals.get("macd_state", "") if ojs_signals else ""
+    arrangement = ojs_signals.get("net_arrangement", "")
+    macd_state = ojs_signals.get("macd_state", "")
     bullish = arrangement.startswith("정배열") or "무릎" in macd_state
     bearish = arrangement.startswith("역배열") or "어깨" in macd_state
     calm = isinstance(vix_price, (int, float)) and vix_price < _VIX_CALM
@@ -167,8 +176,11 @@ def load_econ_calendar(as_of: Optional[date] = None, days_ahead: int = 7) -> lis
     as_of = as_of or date.today()
     if not os.path.exists(_CALENDAR_PATH):
         return []
-    with open(_CALENDAR_PATH, encoding="utf-8") as f:
-        data = json.load(f)
+    try:
+        with open(_CALENDAR_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return []
     end = as_of + timedelta(days=days_ahead)
     out = []
     for e in data.get("events", []):
@@ -189,11 +201,14 @@ _WATCHLIST_PATH = os.path.join(_HERE, "theme_watchlist.json")
 
 
 def load_theme_watchlist() -> Optional[dict]:
-    """theme_watchlist.json 로드. 없으면 None."""
+    """theme_watchlist.json 로드. 없거나 손상됐으면 None."""
     if not os.path.exists(_WATCHLIST_PATH):
         return None
-    with open(_WATCHLIST_PATH, encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(_WATCHLIST_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
 
 
 def _count_matches(keywords: list[str], headlines: list[dict]) -> int:
@@ -244,15 +259,16 @@ def build_dashboard() -> dict:
 
     watchlist = load_theme_watchlist()
     kr_headlines = briefing.get("kr_headlines", [])
-    top10 = (rank_theme_watchlist(watchlist, briefing["headlines"].get("top", []), kr_headlines)
+    top_headlines = briefing["headlines"].get("top", [])
+    top10 = (rank_theme_watchlist(watchlist, top_headlines, kr_headlines)
              if watchlist else {"us_top5": [], "kr_top5": []})
 
     return {
         "summary": movers,
-        "must_know": movers,
+        "must_know": list(movers),
         "tech_dashboard": dashboard,
         "todays_action": ojs,
-        "top_news": briefing["headlines"].get("top", []),
+        "top_news": top_headlines,
         "impact_flow": impact.get("flow", []),
         "fact_impact": impact.get("fact_impact", []),
         "scenarios": scenarios,
