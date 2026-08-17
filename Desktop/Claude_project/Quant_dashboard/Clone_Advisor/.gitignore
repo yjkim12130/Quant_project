@@ -10,6 +10,9 @@ __pycache__/
 *.pyc
 .streamlit/secrets.toml
 
+# ── subagent-driven-development 워크트리 ─────────────────────
+.worktrees/
+
 # ── 대용량 원천 데이터 ──────────────────────────────────────
 chathistory.txt
 chathistory_*.txt
