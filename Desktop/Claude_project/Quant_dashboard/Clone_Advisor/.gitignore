@@ -9,6 +9,7 @@ corpcode.xml
 __pycache__/
 *.pyc
 .streamlit/secrets.toml
+reports/
 
 # ── subagent-driven-development 워크트리 ─────────────────────
 .worktrees/
