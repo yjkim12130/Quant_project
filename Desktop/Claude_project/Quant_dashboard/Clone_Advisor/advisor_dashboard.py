@@ -276,4 +276,9 @@ def build_dashboard() -> dict:
         "top10": top10,
         "bkr": briefing["bkr"],
         "generated_at": briefing["generated_at"],
+        # RSS 완전 장애 시그널 — 캐시 무효화 게이트(advisor_app.py)와 TOP NEWS
+        # 섹션이 "헤드라인 0건"과 "RSS 응답 없음"을 구분할 수 있도록 전달한다
+        # (select_top_headlines()가 성공 시 "ok", 실패 시 "NO_HEADLINES"를 반환).
+        "news_status": briefing["headlines"].get("_status"),
+        "news_msg": briefing["headlines"].get("_msg"),
     }
