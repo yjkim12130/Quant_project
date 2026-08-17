@@ -1,0 +1,26 @@
+{
+  "us_top5": [
+    {"rank_seed": 1, "category": "AI 가속기", "company": "NVIDIA",
+     "keywords": ["NVIDIA", "Nvidia", "AI accelerator", "GPU"]},
+    {"rank_seed": 2, "category": "AI 데이터센터 네트워크", "company": "Arista Networks",
+     "keywords": ["Arista"]},
+    {"rank_seed": 3, "category": "전력·냉각 인프라", "company": "Vertiv",
+     "keywords": ["Vertiv"]},
+    {"rank_seed": 4, "category": "HBM·AI 메모리", "company": "Micron",
+     "keywords": ["Micron"]},
+    {"rank_seed": 5, "category": "비기술주 실적 방어", "company": "Disney",
+     "keywords": ["Disney"]}
+  ],
+  "kr_top5": [
+    {"rank_seed": 1, "category": "HBM·메모리 대형주", "company": "SK하이닉스",
+     "keywords": ["SK하이닉스", "하이닉스"]},
+    {"rank_seed": 2, "category": "메모리·파운드리", "company": "삼성전자",
+     "keywords": ["삼성전자"]},
+    {"rank_seed": 3, "category": "HBM 패키징 장비", "company": "한미반도체",
+     "keywords": ["한미반도체"]},
+    {"rank_seed": 4, "category": "AI 서버용 고다층 기판", "company": "이수페타시스",
+     "keywords": ["이수페타시스"]},
+    {"rank_seed": 5, "category": "데이터센터 전력 인프라", "company": "HD현대일렉트릭",
+     "keywords": ["HD현대일렉트릭", "현대일렉트릭"]}
+  ]
+}

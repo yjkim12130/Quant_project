@@ -1,0 +1,33 @@
+{
+  "version": "0.1",
+  "rules": [
+    {"id": "IMPACT-SP500-UP", "driver": "sp500", "direction": "up", "threshold_pct": 0.5,
+     "category": "지수", "korea_impact": "위험자산 선호 유지"},
+    {"id": "IMPACT-SP500-DOWN", "driver": "sp500", "direction": "down", "threshold_pct": -0.5,
+     "category": "지수", "korea_impact": "위험자산 회피 가능성"},
+    {"id": "IMPACT-NASDAQ-UP", "driver": "nasdaq", "direction": "up", "threshold_pct": 0.5,
+     "category": "기술주", "korea_impact": "국내 기술주 투자심리 개선"},
+    {"id": "IMPACT-NASDAQ-DOWN", "driver": "nasdaq", "direction": "down", "threshold_pct": -0.5,
+     "category": "기술주", "korea_impact": "국내 기술주 투자심리 위축"},
+    {"id": "IMPACT-DOW-UP", "driver": "dow", "direction": "up", "threshold_pct": 0.5,
+     "category": "지수", "korea_impact": "경기민감주 투자심리 우호"},
+    {"id": "IMPACT-DOW-DOWN", "driver": "dow", "direction": "down", "threshold_pct": -0.5,
+     "category": "지수", "korea_impact": "경기민감주 투자심리 위축"},
+    {"id": "IMPACT-SOX-UP", "driver": "sox", "direction": "up", "threshold_pct": 1.0,
+     "category": "반도체", "korea_impact": "국내 반도체 대형주 동반 강세 기대"},
+    {"id": "IMPACT-SOX-DOWN", "driver": "sox", "direction": "down", "threshold_pct": -1.0,
+     "category": "반도체", "korea_impact": "국내 반도체 대형주 차익실현 우려"},
+    {"id": "IMPACT-VIX-UP", "driver": "vix", "direction": "up", "threshold_pct": 5.0,
+     "category": "변동성", "korea_impact": "원화 변동성 확대 우려"},
+    {"id": "IMPACT-VIX-DOWN", "driver": "vix", "direction": "down", "threshold_pct": -5.0,
+     "category": "변동성", "korea_impact": "위험자산 선호 심리 개선"},
+    {"id": "IMPACT-US10Y-UP", "driver": "us10y", "direction": "up", "threshold_pct": 1.0,
+     "category": "금리", "korea_impact": "성장주 할인율 부담 확대"},
+    {"id": "IMPACT-US10Y-DOWN", "driver": "us10y", "direction": "down", "threshold_pct": -1.0,
+     "category": "금리", "korea_impact": "금리 부담 완화, 성장주 우호"},
+    {"id": "IMPACT-DXY-UP", "driver": "dxy", "direction": "up", "threshold_pct": 0.3,
+     "category": "환율", "korea_impact": "원화 약세 압력"},
+    {"id": "IMPACT-DXY-DOWN", "driver": "dxy", "direction": "down", "threshold_pct": -0.3,
+     "category": "환율", "korea_impact": "원화 강세·외국인 수급 우호"}
+  ]
+}

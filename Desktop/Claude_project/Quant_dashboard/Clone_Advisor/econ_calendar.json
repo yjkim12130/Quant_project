@@ -1,0 +1,11 @@
+{
+  "_note": "무료 실시간 캘린더 API가 없어 수기 관리한다. 지난 이벤트는 주기적으로 정리하고 새 발표일이 확정되면 추가할 것 (스펙 §3⑧).",
+  "events": [
+    {"date": "2026-08-18", "time_kst": "21:30", "event": "미국 7월 수출입물가", "importance": 2, "source": "BLS"},
+    {"date": "2026-08-19", "time_kst": "21:30", "event": "미국 신규 실업수당청구건수", "importance": 2, "source": "DOL"},
+    {"date": "2026-08-21", "time_kst": "23:00", "event": "S&P Global 8월 PMI 예비치", "importance": 2, "source": "S&P Global"},
+    {"date": "2026-08-22", "time_kst": "09:00", "event": "잭슨홀 심포지엄 개막", "importance": 3, "source": "Federal Reserve"},
+    {"date": "2026-09-03", "time_kst": "21:30", "event": "미국 8월 ISM 제조업 PMI", "importance": 2, "source": "ISM"},
+    {"date": "2026-09-05", "time_kst": "21:30", "event": "미국 8월 고용보고서(NFP)", "importance": 3, "source": "BLS"}
+  ]
+}
