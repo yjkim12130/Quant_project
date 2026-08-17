@@ -24,6 +24,7 @@ _DASHBOARD_TICKERS = {
     "dow": "^DJI",
     "sox": "^SOX",
     "vix": "^VIX",
+    "us10y": "^TNX",
     "dxy": "DX-Y.NYB",
     "usdkrw": "KRW=X",
 }
