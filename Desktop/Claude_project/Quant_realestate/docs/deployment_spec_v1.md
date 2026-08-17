@@ -82,6 +82,15 @@ data/realestate.db (3GB, gitignored)     data/realestate.db 없음
 
 기존 확정 원칙 유지: 사이드바 예산 입력은 세션 한정, 어디에도 저장하지 않음. 배포 여부와 무관하게 이 원칙은 그대로 적용된다.
 
+## 알려진 함정 (ManageStock 배포 선례, 2026-08-18)
+
+동일 모노레포에서 먼저 배포된 ManageStock이 겪은 문제 중 이 프로젝트에도 적용되는 것:
+
+- **`.streamlit/config.toml`의 `port = 8502` 하드코딩이 Cloud 배포를 깨뜨림**: Streamlit Cloud는 항상 `localhost:8501`로 헬스체크하는데, 커밋된 config.toml이 8502를 강제해서 "Error running app"이 뜬다. 수정: config.toml에서 `port` 줄 제거(→ Cloud 기본값 8501 사용), 로컬 포트 고정은 `run_app.bat`의 실행 커맨드에 `--server.port 8502`로 이동. `address = "0.0.0.0"`은 로컬 Tailscale/터널 접속에 필요하므로 config.toml에 유지(포트만 문제였음, address는 무관).
+- `run_app.bat`은 이미 Cloudflare 터널(`cloudflared.exe`)로 임시 외부 공유 URL을 여는 로직을 포함하고 있음(재시작마다 URL 변경) — 이번 Streamlit Cloud 배포는 이를 대체하는 "고정 URL" 목적이며, 로컬 실행 스크립트 자체는 그대로 유지(터널 로직 제거 안 함, 로컬에서 임시 공유가 필요할 수도 있으므로).
+- 이 프로젝트는 비밀번호 게이트를 쓰지 않기로 결정했으므로(완전 공개 링크) ManageStock이 겪은 `st.secrets` lazy-load `FileNotFoundError` 버그는 해당 사항 없음.
+- Cloud 파일시스템은 ephemeral(재배포/reboot 시 초기화)이지만, 이 앱은 런타임에 아무것도 쓰지 않는 읽기 전용 구조(예산 입력도 세션 한정, 저장 안 함)라 ManageStock처럼 별도 백업/복원 기능이 필요 없음 — 구현 시 앱이 실제로 디스크에 쓰는 부분이 없는지만 확인.
+
 ## 검증 기준
 
 - `export_snapshot.py` 실행 성공 + 결과 Parquet 파일들이 100MB 이하
