@@ -35,6 +35,7 @@ import xml.etree.ElementTree as ET
 from datetime import date
 from typing import Optional
 
+import pandas as pd
 import requests
 
 try:
@@ -274,6 +275,69 @@ def get_price_history(ticker: str, period: str = "2y"):
         return hist["Close"].dropna()
     except Exception:
         return None
+
+
+def get_price_history_ohlc(ticker: str, period: str = "2y"):
+    """yfinance 일봉 OHLC(High/Low/Close). ATR 계산용. 실패 시 None."""
+    if yf is None:
+        return None
+    try:
+        hist = yf.Ticker(ticker).history(period=period)
+        if hist is None or hist.empty:
+            return None
+        return hist[["High", "Low", "Close"]].dropna()
+    except Exception:
+        return None
+
+
+def benchmark_ticker_for(market: str) -> str:
+    """종목의 market 필드 → 베타 계산용 벤치마크 지수 티커."""
+    m = (market or "").upper()
+    if m == "US":
+        return "^GSPC"
+    if m == "KOSDAQ":
+        return "^KQ11"
+    return "^KS11"  # KOSPI 기본값
+
+
+def compute_adr(advancers: int, decliners: int) -> Optional[float]:
+    """등락비율(ADR) = 상승종목수/하락종목수 * 100. 하락 0이면 계산 불가(None)."""
+    if not advancers or not decliners:
+        return None
+    return round(advancers / decliners * 100, 1)
+
+
+def compute_atr(close, high, low, period: int = 14) -> Optional[float]:
+    """True Range 평균(ATR). close/high/low는 같은 인덱스의 pandas Series."""
+    if close is None or high is None or low is None or len(close) < period + 1:
+        return None
+    prev_close = close.shift(1)
+    tr = pd.concat([
+        high - low,
+        (high - prev_close).abs(),
+        (low - prev_close).abs(),
+    ], axis=1).max(axis=1)
+    atr = tr.rolling(period).mean().iloc[-1]
+    return round(float(atr), 2) if not pd.isna(atr) else None
+
+
+def compute_beta(stock_close, benchmark_close) -> Optional[float]:
+    """수익률 공분산/벤치마크 분산 기반 베타 계수. 날짜 인덱스 기준 정렬 후 계산."""
+    if stock_close is None or benchmark_close is None:
+        return None
+    df = pd.concat([stock_close.rename("stock"), benchmark_close.rename("bench")], axis=1).dropna()
+    if len(df) < 30:
+        return None
+    stock_ret = df["stock"].pct_change()
+    bench_ret = df["bench"].pct_change()
+    aligned = pd.concat([stock_ret.rename("s"), bench_ret.rename("b")], axis=1).dropna()
+    if len(aligned) < 30:
+        return None
+    cov = aligned["s"].cov(aligned["b"])
+    var = aligned["b"].var()
+    if not var or pd.isna(var):
+        return None
+    return round(float(cov / var), 2)
 
 
 def _rsi(close, window: int = 14):
