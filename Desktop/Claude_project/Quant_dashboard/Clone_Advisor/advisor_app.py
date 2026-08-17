@@ -108,8 +108,22 @@ def load_history(ticker: str):
 
 
 @st.cache_data(ttl=600, show_spinner=False)
+def load_ohlc(ticker: str):
+    return ad.get_price_history_ohlc(ticker)
+
+
+@st.cache_data(ttl=600, show_spinner=False)
 def load_signals(ticker: str) -> dict:
-    return ad.compute_quant_signals(load_history(ticker))
+    ohlc = load_ohlc(ticker)
+    high = ohlc["High"] if ohlc is not None else None
+    low = ohlc["Low"] if ohlc is not None else None
+    return ad.compute_quant_signals(load_history(ticker), high=high, low=low)
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def load_beta(ticker: str, market: str):
+    bench = ad.benchmark_ticker_for(market)
+    return ad.compute_beta(load_history(ticker), load_history(bench))
 
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -433,12 +447,18 @@ with tab1:
     if sig.get("_status"):
         st.warning(f"신호 계산 불가: {sig['_status']}")
     else:
-        s = st.columns(5)
+        s = st.columns(7)
         s[0].metric("200일선 이격", f"{sig.get('ma200_dev_pct','—')}%")
         s[1].metric("RSI(14)", sig.get("rsi14", "—"))
         s[2].metric("52주 위치", f"{sig.get('wk52_pos_pct','—')}%")
         s[3].metric("1개월 수익", f"{sig.get('ret_1m_pct','—')}%")
         s[4].metric("3개월 수익", f"{sig.get('ret_3m_pct','—')}%")
+        atr = sig.get("atr")
+        s[5].metric("ATR(14)", f"{atr:,.2f}" if isinstance(atr, (int, float)) else "—",
+                    help="절대 변동폭 — 이 종목이 하루 평균 얼마나 움직이는지(시장과 무관)")
+        beta = load_beta(tkr_full, card.get("market", "")) if tkr_full else None
+        s[6].metric("베타", f"{beta:.2f}" if isinstance(beta, (int, float)) else "—",
+                    help="시장(코스피/코스닥/S&P500) 대비 상대적 민감도")
 
         st.markdown("#### 🔵 오재승 타이밍 — 7룰 자동 매칭 "
                     "<span class='badge b-reg'>가격 데이터 정량</span>",

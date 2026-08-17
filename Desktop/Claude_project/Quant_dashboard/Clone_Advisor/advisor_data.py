@@ -348,8 +348,8 @@ def _rsi(close, window: int = 14):
     return 100 - (100 / (1 + rs))
 
 
-def compute_quant_signals(close) -> dict:
-    """개별종목 간이 정량 신호: 200일선 이격·RSI·52주 위치·간이 레짐."""
+def compute_quant_signals(close, high=None, low=None) -> dict:
+    """개별종목 간이 정량 신호: 200일선 이격·RSI·52주 위치·간이 레짐·ATR(옵션)."""
     if close is None or len(close) < 30:
         return {"_status": "INSUFFICIENT_HISTORY"}
     price = float(close.iloc[-1])
@@ -388,6 +388,7 @@ def compute_quant_signals(close) -> dict:
         "wk52_pos_pct": round(wk52_pos, 1) if wk52_pos is not None else None,
         "ret_1m_pct": round(_ret(21), 1) if _ret(21) is not None else None,
         "ret_3m_pct": round(_ret(63), 1) if _ret(63) is not None else None,
+        "atr": compute_atr(close, high, low) if high is not None and low is not None else None,
         "regime": regime,
     }
 
