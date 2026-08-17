@@ -187,5 +187,6 @@ def build_briefing() -> dict:
         "headlines": headlines,
         "ojs": ojs,
         "bkr": bkr,
+        "kr_headlines": kr_raw,
         "generated_at": datetime.now().isoformat(timespec="seconds"),
     }
