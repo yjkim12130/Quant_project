@@ -27,6 +27,7 @@ import advisor_data as ad
 import advisor_llm as al
 import advisor_dashboard as adb
 import advisor_report as ar
+import advisor_dashboard_kr as adk
 
 st.set_page_config(page_title="자문역 인사이트 · 종목 분석 · 시황 브리핑",
                    page_icon="🧮", layout="wide")
@@ -137,6 +138,11 @@ def load_dashboard() -> dict:
     return adb.build_dashboard()
 
 
+@st.cache_data(ttl=1800, show_spinner=False)
+def load_briefing_kr() -> dict:
+    return adk.build_briefing_kr()
+
+
 def price_chart(close, ojs: dict):
     """종가 + 200일선 + 오재승 그물망 12 MA 리본(정/역배열 색)."""
     fig = go.Figure()
@@ -226,12 +232,12 @@ st.sidebar.caption("와이제이링크 · 헥토파이낸셜 · 켄코아에어�
 # ════════════════════════════════════════════════════════════════════
 # 메인
 # ════════════════════════════════════════════════════════════════════
-# ⚠️ `with tab2:` 블록은 반드시 `with tab1:` 보다 먼저 실행되어야 한다.
+# ⚠️ `with tab2:`/`with tab3:` 블록은 반드시 `with tab1:` 보다 먼저 실행되어야 한다.
 # tab1 블록은 입력이 없으면 st.stop()으로 스크립트 실행을 완전히 중단시키므로
-# (d4a28c7), tab1이 먼저 오면 "브리핑 생성" 버튼 클릭이 tab2 렌더링에 도달하지
+# (d4a28c7), tab1이 먼저 오면 "브리핑 생성" 버튼 클릭이 tab2/tab3 렌더링에 도달하지
 # 못하고 조용히 삼켜진다. 이 순서를 다시 뒤집지 말 것 — 필요하면 st.stop() 의존을
 # 먼저 제거해야 한다.
-tab1, tab2 = st.tabs(["🧮 종목 분석", "📰 시황 브리핑"])
+tab1, tab2, tab3 = st.tabs(["🧮 종목 분석", "📰 시황 브리핑", "🏦 증시·정책 브리핑"])
 
 with tab2:
     st.caption("일간 시황 대시보드 · 오재승(매크로·타이밍) × 빈규리(펀더멘탈) · 온디맨드 생성")
@@ -369,6 +375,133 @@ with tab2:
             st.info(bkr.get("_msg", "오늘은 해당되는 종목이 없습니다."))
         else:
             st.warning(f"빈규리 해설 생성 실패 [{bkr.get('_status')}]: {bkr.get('_msg','')}")
+
+with tab3:
+    st.caption("한국 증시 마감 기준 · PAGE1 시장 뉴스보드 + PAGE2 정책 뉴스보드 · 온디맨드 생성")
+    if st.button("🏦 브리핑 생성", type="primary"):
+        with st.spinner("키움 REST API 데이터 수집 + 정책카드 반영 중…"):
+            st.session_state["briefing_kr"] = load_briefing_kr()
+
+    briefing_kr = st.session_state.get("briefing_kr")
+    if not briefing_kr:
+        st.info("위 버튼을 눌러 오늘의 증시·정책 브리핑을 생성하세요.")
+    else:
+        st.caption(f"생성 시각: {briefing_kr['generated_at']}")
+        p1 = briefing_kr["page1"]
+        p2 = briefing_kr["page2"]
+
+        try:
+            report_html_kr = ar.render_html_kr(briefing_kr)
+            ar.save_report(report_html_kr, as_of=date.fromisoformat(briefing_kr["generated_at"][:10]))
+            st.download_button(
+                "📥 리포트 다운로드 (HTML)",
+                data=report_html_kr,
+                file_name=f"{briefing_kr['generated_at'][:10]}_briefing_kr.html",
+                mime="text/html",
+                key="download_kr",
+            )
+        except Exception as e:
+            st.warning(f"HTML 리포트 생성 실패: {e}")
+
+        st.markdown("### KEY THEMES")
+        st.write(", ".join(p1.get("key_themes", [])) or "—")
+
+        st.markdown("### ① 오늘의 결론")
+        for line in p1.get("conclusion", []):
+            st.markdown(f"- {line}")
+
+        st.markdown("### ② 마감 KPI 6개")
+        kpi = p1.get("kpi", [])
+        if kpi:
+            k_cols = st.columns(len(kpi))
+            for i, item in enumerate(kpi):
+                value = item.get("value")
+                chg = item.get("chg_pct")
+                k_cols[i].metric(
+                    item.get("label", ""),
+                    f"{value:,.2f}" if isinstance(value, (int, float)) else "—",
+                    delta=f"{chg:+.2f}%" if isinstance(chg, (int, float)) else None,
+                )
+
+        st.markdown("### ③ 시장 변동성 지표")
+        vol = p1.get("volatility", {})
+        vc1, vc2, vc3 = st.columns(3)
+        adr = vol.get("adr", {})
+        atr = vol.get("atr", {})
+        vc1.metric("ADR KOSPI", f"{adr.get('kospi','—')}")
+        vc1.metric("ADR KOSDAQ", f"{adr.get('kosdaq','—')}")
+        vc2.metric("ATR(14) KOSPI", f"{atr.get('kospi','—')}")
+        vc2.metric("ATR(14) KOSDAQ", f"{atr.get('kosdaq','—')}")
+        with vc3:
+            st.caption("수급 해부(외국인/개인/기관)")
+            st.json(vol.get("investor_flow", {}))
+
+        st.markdown("### ④ 업종·종목 리더십")
+        lead = p1.get("leadership", {})
+        l1, l2 = st.columns(2)
+        with l1:
+            st.markdown("**업종 상승 TOP3**")
+            for s in lead.get("sectors_up", []):
+                st.markdown(f"- {s.get('sector','')} {s.get('chg_pct','—')}%")
+            st.markdown("**종목 상승 TOP3**")
+            for s in lead.get("stocks_up", []):
+                st.markdown(f"- {s.get('name','')} {s.get('chg_pct','—')}%")
+        with l2:
+            st.markdown("**업종 하락 TOP3**")
+            for s in lead.get("sectors_down", []):
+                st.markdown(f"- {s.get('sector','')} {s.get('chg_pct','—')}%")
+            st.markdown("**종목 하락 TOP3**")
+            for s in lead.get("stocks_down", []):
+                st.markdown(f"- {s.get('name','')} {s.get('chg_pct','—')}%")
+
+        st.markdown("### ⑤ 가격→수급→촉발요인→지속성")
+        st.table(p1.get("flow_table", []))
+
+        st.markdown("### ⑥ 오늘 시나리오")
+        sc_cols = st.columns(3)
+        for i, sc in enumerate(p1.get("scenarios", [])):
+            with sc_cols[i]:
+                st.markdown(f"**{sc['label']}**" + (" ⭐ 가장 유력" if sc["likely"] else ""))
+                st.caption(sc["text"])
+
+        st.markdown("### ⑦ 오늘 하루 코멘트")
+        st.markdown(p1.get("daily_comment", ""))
+
+        st.markdown("---")
+        st.markdown("## PAGE2 · 정책 뉴스보드")
+        if p2.get("_status") == "NO_POLICY_CARDS":
+            st.warning("policy_cards.json을 찾을 수 없습니다 — 정책 카드 데이터가 없습니다.")
+        else:
+            st.markdown("### 핵심요약 3개")
+            for s in p2.get("summary", []):
+                st.markdown(f"**{s.get('title','')}** — {s.get('fact_state','')}")
+
+            st.markdown("### 정책카드 비교")
+            pc1, pc2 = st.columns(2)
+            with pc1:
+                st.markdown("**🇺🇸 미국**")
+                for c in p2.get("policy_cards", {}).get("us", []):
+                    with st.expander(c.get("title", "")):
+                        st.markdown(f"**사실상태**: {c.get('fact_state','')}")
+                        st.markdown(f"**향후방향**: {c.get('outlook','')}")
+                        st.markdown(f"**한국시장영향**: {c.get('korea_impact','')} "
+                                   f"({c.get('polarity','')} · 정확도 {c.get('accuracy','')})")
+            with pc2:
+                st.markdown("**🇰🇷 한국**")
+                for c in p2.get("policy_cards", {}).get("kr", []):
+                    with st.expander(c.get("title", "")):
+                        st.markdown(f"**사실상태**: {c.get('fact_state','')}")
+                        st.markdown(f"**향후방향**: {c.get('outlook','')}")
+                        st.markdown(f"**한국시장영향**: {c.get('korea_impact','')} "
+                                   f"({c.get('polarity','')} · 정확도 {c.get('accuracy','')})")
+
+            st.markdown("### 미·한 연결경로")
+            for l in p2.get("korea_links", []):
+                st.markdown(f"- {l}")
+
+            st.markdown("### 체크포인트")
+            for c in p2.get("checkpoints", []):
+                st.markdown(f"- {c}")
 
 with tab1:
     if not (run_clicked or name):
