@@ -251,3 +251,148 @@ def save_report(doc: str, as_of: Optional[date] = None) -> Path:
     out_path = out_dir / f"{as_of.isoformat()}_briefing.html"
     out_path.write_text(doc, encoding="utf-8")
     return out_path
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Family B — 미국·한국 증시·정책 브리핑(PAGE1+PAGE2) HTML 렌더러
+# ─────────────────────────────────────────────────────────────────────
+def _kpi_html_kr(kpi: list[dict]) -> str:
+    cards = []
+    for item in kpi:
+        label = html.escape(str(item.get("label", "")))
+        value = item.get("value")
+        chg = item.get("chg_pct")
+        cls = "up" if isinstance(chg, (int, float)) and chg >= 0 else "down"
+        value_txt = f"{value:,.2f}" if isinstance(value, (int, float)) else "—"
+        chg_txt = _fmt_pct(chg) if chg is not None else ""
+        cards.append(
+            f'<div class="card"><h3>{label}</h3>'
+            f'<div class="val">{value_txt}</div>'
+            f'<div class="{cls}">{chg_txt}</div></div>'
+        )
+    return f'<div class="grid">{"".join(cards)}</div>' if cards else "<p>데이터 없음</p>"
+
+
+def _volatility_html_kr(vol: dict) -> str:
+    def _fmt(v):
+        return f"{v:,.1f}" if isinstance(v, (int, float)) else "—"
+    adr = vol.get("adr", {})
+    atr = vol.get("atr", {})
+    flow = vol.get("investor_flow", {})
+    rows = (
+        f'<div class="card"><h3>ADR</h3><div class="val">KOSPI {_fmt(adr.get("kospi"))} / '
+        f'KOSDAQ {_fmt(adr.get("kosdaq"))}</div></div>'
+        f'<div class="card"><h3>ATR(14)</h3><div class="val">KOSPI {_fmt(atr.get("kospi"))} / '
+        f'KOSDAQ {_fmt(atr.get("kosdaq"))}</div></div>'
+    )
+    for market_key, market_label in (("kospi", "KOSPI"), ("kosdaq", "KOSDAQ")):
+        f_ = flow.get(market_key, {})
+        rows += (
+            f'<div class="card"><h3>{market_label} 수급</h3>'
+            f'<div class="val">외국인 {_fmt(f_.get("foreign_net"))} · '
+            f'개인 {_fmt(f_.get("individual_net"))} · '
+            f'기관 {_fmt(f_.get("institution_net"))}</div></div>'
+        )
+    return f'<div class="grid">{rows}</div>'
+
+
+def _leadership_html_kr(lead: dict) -> str:
+    def _list(items: list[dict], name_key: str = "sector") -> str:
+        if not items:
+            return "<p>—</p>"
+        rows = "".join(
+            f"<li>{html.escape(str(it.get(name_key) or it.get('name', '')))} "
+            f"{_fmt_pct(it.get('chg_pct'))}</li>"
+            for it in items
+        )
+        return f"<ul>{rows}</ul>"
+
+    return (
+        '<div class="grid" style="grid-template-columns:1fr 1fr;">'
+        f'<div class="card"><h3>업종 상승 TOP3</h3>{_list(lead.get("sectors_up", []))}</div>'
+        f'<div class="card"><h3>업종 하락 TOP3</h3>{_list(lead.get("sectors_down", []))}</div>'
+        f'<div class="card"><h3>종목 상승 TOP3</h3>{_list(lead.get("stocks_up", []), "name")}</div>'
+        f'<div class="card"><h3>종목 하락 TOP3</h3>{_list(lead.get("stocks_down", []), "name")}</div>'
+        "</div>"
+    )
+
+
+def _flow_table_html_kr(rows: list[dict]) -> str:
+    if not rows:
+        return "<p>데이터 없음</p>"
+    body = "".join(
+        f'<tr><td>{html.escape(str(r.get("price_driver","")))}</td>'
+        f'<td>{html.escape(str(r.get("supply_driver","")))}</td>'
+        f'<td>{html.escape(str(r.get("trigger","")))}</td>'
+        f'<td>{html.escape(str(r.get("durability","")))}</td></tr>'
+        for r in rows
+    )
+    return ("<table><tr><th>가격</th><th>수급</th><th>촉발요인</th><th>지속성</th></tr>"
+            f"{body}</table>")
+
+
+def _policy_cards_html(cards: list[dict]) -> str:
+    if not cards:
+        return "<p>—</p>"
+    blocks = []
+    for c in cards:
+        blocks.append(
+            '<div class="card">'
+            f'<h3>{html.escape(str(c.get("title","")))}</h3>'
+            f'<p><b>사실상태</b>: {html.escape(str(c.get("fact_state","")))}</p>'
+            f'<p><b>향후방향</b>: {html.escape(str(c.get("outlook","")))}</p>'
+            f'<p><b>한국시장영향</b>: {html.escape(str(c.get("korea_impact","")))} '
+            f'({html.escape(str(c.get("polarity","")))} · 정확도 {html.escape(str(c.get("accuracy","")))})</p>'
+            "</div>"
+        )
+    return f'<div class="grid">{"".join(blocks)}</div>'
+
+
+def render_html_kr(briefing: dict) -> str:
+    """advisor_dashboard_kr.build_briefing_kr() 출력 → PAGE1+PAGE2 HTML 문자열."""
+    p1 = briefing.get("page1", {})
+    p2 = briefing.get("page2", {})
+
+    key_themes = ", ".join(html.escape(str(t)) for t in p1.get("key_themes", [])) or "—"
+    conclusion = "".join(f"<li>{html.escape(str(c))}</li>" for c in p1.get("conclusion", []))
+    scenarios_html = _scenarios_html(p1.get("scenarios", []))  # Family A 헬퍼 재사용
+    daily_comment = html.escape(str(p1.get("daily_comment", "")))
+
+    us_cards_html = _policy_cards_html(p2.get("policy_cards", {}).get("us", []))
+    kr_cards_html = _policy_cards_html(p2.get("policy_cards", {}).get("kr", []))
+    korea_links = "".join(f"<li>{html.escape(str(l))}</li>" for l in p2.get("korea_links", [])) or "<li>—</li>"
+    checkpoints = "".join(f"<li>{html.escape(str(c))}</li>" for c in p2.get("checkpoints", [])) or "<li>—</li>"
+    summary_html = "".join(
+        f'<div class="card"><h3>{html.escape(str(s.get("title","")))}</h3>'
+        f'<p>{html.escape(str(s.get("fact_state","")))}</p></div>'
+        for s in p2.get("summary", [])
+    ) or "<p>—</p>"
+
+    page1_body = (
+        f'<div class="section-title">KEY THEMES</div><p>{key_themes}</p>'
+        f'<div class="section-title">① 오늘의 결론</div><ul>{conclusion}</ul>'
+        f'<div class="section-title">② 마감 KPI</div>{_kpi_html_kr(p1.get("kpi", []))}'
+        f'<div class="section-title">③ 시장 변동성 지표</div>{_volatility_html_kr(p1.get("volatility", {}))}'
+        f'<div class="section-title">④ 업종·종목 리더십</div>{_leadership_html_kr(p1.get("leadership", {}))}'
+        f'<div class="section-title">⑤ 가격→수급→촉발요인→지속성</div>{_flow_table_html_kr(p1.get("flow_table", []))}'
+        f'<div class="section-title">⑥ 오늘 시나리오</div>{scenarios_html}'
+        f'<div class="section-title">⑦ 오늘 하루 코멘트</div><p>{daily_comment}</p>'
+    )
+    page2_body = (
+        f'<div class="section-title">PAGE2 · 핵심요약</div>{summary_html}'
+        f'<div class="section-title">정책카드 비교 · 미국</div>{us_cards_html}'
+        f'<div class="section-title">정책카드 비교 · 한국</div>{kr_cards_html}'
+        f'<div class="section-title">미·한 연결경로</div><ul>{korea_links}</ul>'
+        f'<div class="section-title">체크포인트</div><ul>{checkpoints}</ul>'
+    )
+
+    return (
+        "<!DOCTYPE html><html lang='ko'><head><meta charset='utf-8'>"
+        f"<title>증시·정책 브리핑 {html.escape(str(briefing.get('generated_at',''))[:10])}</title>"
+        f"<style>{_CSS}</style></head><body>"
+        '<div class="header"><h1>미국·한국 증시·정책 브리핑</h1>'
+        f'<div>생성 시각: {html.escape(str(briefing.get("generated_at","")))}</div></div>'
+        f"{page1_body}{page2_body}"
+        '<div class="footer">본 자료는 정보 제공 목적이며 투자 권유가 아닙니다.</div>'
+        "</body></html>"
+    )
