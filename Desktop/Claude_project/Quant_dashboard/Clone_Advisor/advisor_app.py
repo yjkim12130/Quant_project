@@ -22,7 +22,8 @@ import plotly.graph_objects as go
 
 import advisor_data as ad
 import advisor_llm as al
-import advisor_briefing as ab
+import advisor_dashboard as adb
+import advisor_report as ar
 
 st.set_page_config(page_title="자문역 인사이트 · 종목 분석 · 시황 브리핑",
                    page_icon="🧮", layout="wide")
@@ -78,8 +79,8 @@ def load_ojs(ticker: str, market_cap, revenue_ttm, per) -> dict:
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
-def load_briefing() -> dict:
-    return ab.build_briefing()
+def load_dashboard() -> dict:
+    return adb.build_dashboard()
 
 
 def price_chart(close, ojs: dict):
@@ -179,40 +180,57 @@ st.sidebar.caption("와이제이링크 · 헥토파이낸셜 · 켄코아에어�
 tab1, tab2 = st.tabs(["🧮 종목 분석", "📰 시황 브리핑"])
 
 with tab2:
-    st.caption("오재승(매크로·타이밍) × 빈규리(펀더멘탈) 페르소나 해설 결합 · 온디맨드 생성")
+    st.caption("일간 시황 대시보드 · 오재승(매크로·타이밍) × 빈규리(펀더멘탈) · 온디맨드 생성")
     if st.button("📰 브리핑 생성", type="primary"):
-        with st.spinner("시황 데이터 수집 + 페르소나 해설 생성 중…"):
-            result = load_briefing()
-            st.session_state["briefing"] = result
+        with st.spinner("시황 데이터 수집 + 대시보드 조립 중…"):
+            result = load_dashboard()
+            st.session_state["dashboard"] = result
 
             # 실패 상태가 30분 TTL 캐시에 그대로 굳어버리면 재클릭해도 같은
-            # 실패가 반복 반환된다 — RSS 장애/LLM rate-limit/키 미설정 등
-            # "깨끗하지 않은" 결과일 때만 캐시를 비워 다음 클릭이 재시도되게 한다.
+            # 실패가 반복 반환된다 — RSS 장애/yfinance rate-limit 등 "깨끗하지
+            # 않은" 결과일 때만 캐시를 비워 다음 클릭이 재시도되게 한다.
             # NO_FOCUS_STOCK(빈규리 후보군이 오늘 뉴스에 없음)은 정상적인
             # 결정론적 결과이지 실패가 아니므로 캐시를 비우지 않는다.
-            hl_clean = result.get("headlines", {}).get("_status") == "ok"
-            ojs_clean = result.get("ojs", {}).get("_status") == "ok"
+            ojs_clean = result.get("todays_action", {}).get("_status") == "ok"
             bkr_clean = result.get("bkr", {}).get("_status") in ("ok", "NO_FOCUS_STOCK")
-            dash_clean = result.get("dashboard", {}).get("_status") != "NO_YFINANCE"
-            if not (hl_clean and ojs_clean and bkr_clean and dash_clean):
-                load_briefing.clear()
+            dash_clean = result.get("tech_dashboard", {}).get("_status") != "NO_YFINANCE"
+            if not (ojs_clean and bkr_clean and dash_clean):
+                load_dashboard.clear()
 
-    briefing = st.session_state.get("briefing")
-    if not briefing:
-        st.info("위 버튼을 눌러 오늘의 시황 브리핑을 생성하세요.")
+    dboard = st.session_state.get("dashboard")
+    if not dboard:
+        st.info("위 버튼을 눌러 오늘의 시황 대시보드를 생성하세요.")
     else:
-        st.caption(f"생성 시각: {briefing['generated_at']}")
+        st.caption(f"생성 시각: {dboard['generated_at']}")
 
-        st.markdown("### ① Tech Dashboard")
-        dash = briefing["dashboard"]
+        report_html = ar.render_html(dboard)
+        ar.save_report(report_html)
+        st.download_button(
+            "📥 리포트 다운로드 (HTML)",
+            data=report_html,
+            file_name=f"{dboard['generated_at'][:10]}_briefing.html",
+            mime="text/html",
+        )
+
+        st.markdown("### ① Today's Summary")
+        for m in dboard["summary"]:
+            st.markdown(f"- {m['text']}")
+
+        st.markdown("### ② 오늘 반드시 알아야 할 3가지")
+        must_know = dboard["must_know"]
+        if must_know:
+            mk_cols = st.columns(len(must_know))
+            for i, m in enumerate(must_know):
+                mk_cols[i].metric(f"0{i+1}. {m['label']}", f"{m['chg_pct']:+.2f}%")
+
+        st.markdown("### ③ Tech Dashboard")
+        dash = dboard["tech_dashboard"]
         if dash.get("_status") == "NO_YFINANCE":
             st.warning("yfinance 미설치로 시황 데이터를 가져올 수 없습니다.")
         else:
-            _labels = {"sp500": "S&P500", "nasdaq": "Nasdaq", "dow": "Dow",
-                      "sox": "SOX(반도체)", "vix": "VIX", "dxy": "DXY", "usdkrw": "USD/KRW"}
-            _cols = st.columns(len(_labels))
-            for i, (k, label) in enumerate(_labels.items()):
-                v = dash.get(k, {})
+            _cols = st.columns(len(adb.TECH_LABELS))
+            for i, (k, label) in enumerate(adb.TECH_LABELS.items()):
+                v = dash.get(k, {}) if isinstance(dash.get(k), dict) else {}
                 price = v.get("price")
                 chg = v.get("chg_pct")
                 _cols[i].metric(
@@ -221,28 +239,64 @@ with tab2:
                     delta=f"{chg}%" if chg is not None else None,
                 )
 
-        st.markdown("### ② TOP News")
-        hl = briefing["headlines"]
-        if hl.get("_status") not in ("ok",):
-            st.warning(f"뉴스 선별 실패 [{hl.get('_status')}]: {hl.get('_msg','')}")
-        elif not hl.get("top"):
+        st.markdown("### ④ Today's Action")
+        action = dboard["todays_action"]
+        if action.get("_status") == "ok":
+            st.markdown(action["commentary"])
+            st.success(f"💡 {action['action']}")
+            with st.expander("근거 신호"):
+                st.json(action.get("signals", {}))
+        else:
+            st.warning(f"Today's Action 생성 실패 [{action.get('_status')}]: {action.get('_msg','')}")
+
+        st.markdown("### ⑤ TOP NEWS")
+        if not dboard["top_news"]:
             st.info("오늘 선별된 헤드라인이 없습니다.")
         else:
-            for item in hl["top"]:
+            for item in dboard["top_news"]:
                 st.markdown(f"**[{item['source']}]** [{item['title']}]({item['link']})")
 
-        st.markdown("### ③ 🔵 오재승 해설 — 매크로·타이밍")
-        ojs_brief = briefing["ojs"]
-        if ojs_brief.get("_status") == "ok":
-            st.markdown(ojs_brief["commentary"])
-            st.success(f"💡 {ojs_brief['action']}")
-            with st.expander("근거 신호"):
-                st.json(ojs_brief.get("signals", {}))
+        st.markdown("### ⑥ Global → Korea Impact Flow")
+        flow = dboard["impact_flow"]
+        if not flow:
+            st.info("오늘은 뚜렷한 드라이버가 없습니다(임계값 미달).")
         else:
-            st.warning(f"오재승 해설 생성 실패 [{ojs_brief.get('_status')}]: {ojs_brief.get('_msg','')}")
+            flow_cols = st.columns(len(flow))
+            for i, step in enumerate(flow):
+                flow_cols[i].markdown(f"**{step['step']}**\n\n{step['label']}")
 
-        st.markdown("### ④ 🟣 빈규리 해설 — 펀더멘탈")
-        bkr = briefing["bkr"]
+        st.markdown("### ⑦ 오늘 시나리오")
+        sc_cols = st.columns(3)
+        for i, sc in enumerate(dboard["scenarios"]):
+            with sc_cols[i]:
+                st.markdown(f"**{sc['label']}**" + (" ⭐ 가장 유력" if sc["likely"] else ""))
+                st.caption(sc["text"])
+
+        st.markdown("### ⑧ 오늘·이번주 일정")
+        if not dboard["calendar"]:
+            st.info("등록된 일정이 없습니다.")
+        else:
+            st.table(dboard["calendar"])
+
+        st.markdown("### ⑨ Fact / Impact")
+        if not dboard["fact_impact"]:
+            st.info("오늘은 뚜렷한 팩트/임팩트가 없습니다.")
+        else:
+            st.table(dboard["fact_impact"])
+
+        st.markdown("### ⑩ 수혜 가능 카테고리 · 관찰기업 TOP10")
+        t1, t2 = st.columns(2)
+        with t1:
+            st.markdown("**🇺🇸 미국 TOP5**")
+            for i, item in enumerate(dboard["top10"].get("us_top5", [])):
+                st.markdown(f"{i+1}. **{item['category']}** — {item['company']}")
+        with t2:
+            st.markdown("**🇰🇷 한국 TOP5**")
+            for i, item in enumerate(dboard["top10"].get("kr_top5", [])):
+                st.markdown(f"{i+1}. **{item['category']}** — {item['company']}")
+
+        st.markdown("### 🟣 빈규리 해설 — 펀더멘탈")
+        bkr = dboard["bkr"]
         if bkr.get("_status") == "ok":
             st.markdown(f"**{bkr['focus_stock']}**")
             st.markdown(bkr["commentary"])
