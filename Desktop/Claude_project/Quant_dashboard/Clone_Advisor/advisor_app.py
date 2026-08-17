@@ -8,14 +8,15 @@ advisor_app.py — 자문역 인사이트 통합 분석 (P3, 독립 앱)
   ④ 빈규리 룰북 평가   — 13개 BKR-* 룰 (코드 자동 + 정성 수동 체크) → 점수
   ⑤ 종목카드 JSON      — advisor_data.py 원본 출력
 
-📰 시황 브리핑 탭 — 온디맨드로 오늘의 시장 대시보드·핵심 뉴스·오재승/빈규리
-페르소나 해설을 생성한다(advisor_briefing.py 오케스트레이션, P2).
+📰 시황 브리핑 탭 — 온디맨드로 10-section daily dashboard(advisor_dashboard.py
+오케스트레이션) + downloadable HTML report를 생성한다.
 
 ★ v9.3(app.py)과 완전 독립. 안정화·품질 확보 후 v9.4 트랙으로 merge 예정.
 실행:  streamlit run advisor_app.py
 """
 from __future__ import annotations
 import json
+from datetime import date
 
 import streamlit as st
 import plotly.graph_objects as go
@@ -194,7 +195,8 @@ with tab2:
             ojs_clean = result.get("todays_action", {}).get("_status") == "ok"
             bkr_clean = result.get("bkr", {}).get("_status") in ("ok", "NO_FOCUS_STOCK")
             dash_clean = result.get("tech_dashboard", {}).get("_status") != "NO_YFINANCE"
-            if not (ojs_clean and bkr_clean and dash_clean):
+            hl_clean = result.get("news_status") == "ok"
+            if not (ojs_clean and bkr_clean and dash_clean and hl_clean):
                 load_dashboard.clear()
 
     dboard = st.session_state.get("dashboard")
@@ -203,14 +205,20 @@ with tab2:
     else:
         st.caption(f"생성 시각: {dboard['generated_at']}")
 
-        report_html = ar.render_html(dboard)
-        ar.save_report(report_html)
-        st.download_button(
-            "📥 리포트 다운로드 (HTML)",
-            data=report_html,
-            file_name=f"{dboard['generated_at'][:10]}_briefing.html",
-            mime="text/html",
-        )
+        try:
+            report_html = ar.render_html(dboard)
+            ar.save_report(report_html, as_of=date.fromisoformat(dboard["generated_at"][:10]))
+            st.download_button(
+                "📥 리포트 다운로드 (HTML)",
+                data=report_html,
+                file_name=f"{dboard['generated_at'][:10]}_briefing.html",
+                mime="text/html",
+            )
+        except Exception as e:
+            # HTML 리포트 생성/저장 실패가 탭 전체를 무너뜨리지 않도록 격리
+            # (advisor_data.py/advisor_news.py와 동일한 컨벤션) — 아래 10개
+            # 섹션은 report_html 성공 여부와 무관하게 그대로 렌더링된다.
+            st.warning(f"HTML 리포트 생성 실패: {e}")
 
         st.markdown("### ① Today's Summary")
         for m in dboard["summary"]:
@@ -251,7 +259,10 @@ with tab2:
 
         st.markdown("### ⑤ TOP NEWS")
         if not dboard["top_news"]:
-            st.info("오늘 선별된 헤드라인이 없습니다.")
+            if dboard.get("news_status") not in (None, "ok"):
+                st.warning(dboard.get("news_msg") or "뉴스 소스 조회에 실패했습니다.")
+            else:
+                st.info("오늘 선별된 헤드라인이 없습니다.")
         else:
             for item in dboard["top_news"]:
                 st.markdown(f"**[{item['source']}]** [{item['title']}]({item['link']})")
@@ -289,11 +300,11 @@ with tab2:
         with t1:
             st.markdown("**🇺🇸 미국 TOP5**")
             for i, item in enumerate(dboard["top10"].get("us_top5", [])):
-                st.markdown(f"{i+1}. **{item['category']}** — {item['company']}")
+                st.markdown(f"{i+1}. **{item.get('category', '')}** — {item.get('company', '')}")
         with t2:
             st.markdown("**🇰🇷 한국 TOP5**")
             for i, item in enumerate(dboard["top10"].get("kr_top5", [])):
-                st.markdown(f"{i+1}. **{item['category']}** — {item['company']}")
+                st.markdown(f"{i+1}. **{item.get('category', '')}** — {item.get('company', '')}")
 
         st.markdown("### 🟣 빈규리 해설 — 펀더멘탈")
         bkr = dboard["bkr"]
