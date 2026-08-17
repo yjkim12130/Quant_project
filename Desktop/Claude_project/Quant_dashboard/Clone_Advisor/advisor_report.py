@@ -95,14 +95,24 @@ def _action_html(action: dict) -> str:
 
 
 def _news_html(items: list[dict]) -> str:
+    """이 리포트는 디스크에 저장되어 file:// 오리진으로 열릴 수 있으므로,
+    RSS가 준 link 값이 http(s) 스킴이 아니면(javascript:/data: 등) 클릭
+    가능한 <a>로 만들지 않고 제목만 평문으로 보여준다."""
     if not items:
         return "<p>오늘 선별된 헤드라인이 없습니다.</p>"
-    rows = "".join(
-        f'<li><b>[{html.escape(it["source"])}]</b> '
-        f'<a href="{html.escape(it["link"], quote=True)}">{html.escape(it["title"])}</a></li>'
-        for it in items
-    )
-    return f"<ul>{rows}</ul>"
+    rows = []
+    for it in items:
+        source_html = html.escape(it["source"])
+        title_html = html.escape(it["title"])
+        link = it["link"]
+        if isinstance(link, str) and link.strip().lower().startswith(("http://", "https://")):
+            rows.append(
+                f'<li><b>[{source_html}]</b> '
+                f'<a href="{html.escape(link, quote=True)}">{title_html}</a></li>'
+            )
+        else:
+            rows.append(f'<li><b>[{source_html}]</b> {title_html}</li>')
+    return f"<ul>{''.join(rows)}</ul>"
 
 
 def _flow_html(flow: list[dict]) -> str:
@@ -126,17 +136,29 @@ def _scenarios_html(scenarios: list[dict]) -> str:
 
 
 def _calendar_html(events: list[dict]) -> str:
+    """econ_calendar.json은 사용자가 주기적으로 수기 편집하는 파일이므로
+    (파일 자체의 _note 필드, 설계 스펙 §3⑧ 참조) 필드 누락/오타에도 절대
+    KeyError/ValueError를 내지 않는다 — 모든 필드를 .get()으로 읽고
+    importance 정수 변환은 실패 시 1로 폴백, 결과는 0~5로 클램프한다."""
     if not events:
         return "<p>등록된 일정이 없습니다.</p>"
-    rows = "".join(
-        f'<tr><td>{html.escape(str(e["date"]))}</td><td>{html.escape(str(e["time_kst"]))}</td>'
-        f'<td>{html.escape(str(e["event"]))}</td>'
-        f'<td>{"★" * int(e.get("importance", 1))}</td><td>{html.escape(str(e["source"]))}</td></tr>'
-        for e in events
-    )
+    rows = []
+    for e in events:
+        try:
+            importance = int(e.get("importance", 1))
+        except (TypeError, ValueError):
+            importance = 1
+        importance = max(0, min(5, importance))
+        rows.append(
+            f'<tr><td>{html.escape(str(e.get("date", "")))}</td>'
+            f'<td>{html.escape(str(e.get("time_kst", "")))}</td>'
+            f'<td>{html.escape(str(e.get("event", "")))}</td>'
+            f'<td>{"★" * importance}</td>'
+            f'<td>{html.escape(str(e.get("source", "")))}</td></tr>'
+        )
     return (
         "<table><tr><th>날짜</th><th>시각(KST)</th><th>이벤트</th><th>중요도</th><th>발표처</th></tr>"
-        f"{rows}</table>"
+        f"{''.join(rows)}</table>"
     )
 
 
@@ -155,7 +177,7 @@ def _top10_html(top10: dict) -> str:
         if not items:
             return "<p>—</p>"
         rows = "".join(
-            f"<li>{i+1}. <b>{html.escape(it['category'])}</b> — {html.escape(it['company'])}</li>"
+            f"<li>{i+1}. <b>{html.escape(it.get('category', ''))}</b> — {html.escape(it.get('company', ''))}</li>"
             for i, it in enumerate(items)
         )
         return f"<ol style='list-style:none;padding-left:0;'>{rows}</ol>"
@@ -166,6 +188,27 @@ def _top10_html(top10: dict) -> str:
         f'<div class="card"><h3>🇰🇷 한국 TOP5</h3>{_col(top10.get("kr_top5", []))}</div>'
         "</div>"
     )
+
+
+def _bkr_html(bkr: dict) -> str:
+    """Streamlit 탭(advisor_app.py 🟣 빈규리 해설 섹션)과 동일한 3분기 처리를
+    HTML 리포트에도 반영한다 — _status == "ok"/"NO_FOCUS_STOCK"/그 외 실패,
+    _action_html()과 동일한 실패 표기 패턴을 따른다."""
+    status = bkr.get("_status")
+    if status == "ok":
+        focus = html.escape(str(bkr.get("focus_stock", "")))
+        commentary = html.escape(str(bkr.get("commentary", "")))
+        disclaimer = html.escape(str(bkr.get("disclaimer", "")))
+        return (
+            f'<p><b>{focus}</b></p><p>{commentary}</p>'
+            f'<p style="color:#8899aa;font-size:12px;">{disclaimer}</p>'
+        )
+    if status == "NO_FOCUS_STOCK":
+        msg = html.escape(str(bkr.get("_msg", "오늘은 해당되는 종목이 없습니다.")))
+        return f"<p>{msg}</p>"
+    status_txt = html.escape(str(status))
+    msg = html.escape(str(bkr.get("_msg", "")))
+    return f"<p>빈규리 해설 생성 실패 [{status_txt}]: {msg}</p>"
 
 
 def render_html(dashboard: dict) -> str:
@@ -181,6 +224,7 @@ def render_html(dashboard: dict) -> str:
         ("⑧ 오늘·이번주 일정", _calendar_html(dashboard["calendar"])),
         ("⑨ Fact / Impact", _fact_impact_html(dashboard["fact_impact"])),
         ("⑩ 수혜 가능 카테고리 · 관찰기업 TOP10", _top10_html(dashboard["top10"])),
+        ("🟣 빈규리 해설 — 펀더멘탈", _bkr_html(dashboard["bkr"])),
     ]
     body = "".join(
         f'<div class="section-title">{title}</div>{section_html}'
@@ -199,11 +243,11 @@ def render_html(dashboard: dict) -> str:
     )
 
 
-def save_report(html: str, as_of: Optional[date] = None) -> Path:
+def save_report(doc: str, as_of: Optional[date] = None) -> Path:
     """reports/YYYY-MM-DD_briefing.html로 저장, 저장된 Path 반환."""
     as_of = as_of or date.today()
     out_dir = Path(_HERE) / "reports"
     out_dir.mkdir(exist_ok=True)
     out_path = out_dir / f"{as_of.isoformat()}_briefing.html"
-    out_path.write_text(html, encoding="utf-8")
+    out_path.write_text(doc, encoding="utf-8")
     return out_path
