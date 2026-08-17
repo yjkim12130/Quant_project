@@ -6,12 +6,14 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
+import auth
 import categories
 import data_io
 import market_data
 import portfolio
 
 st.set_page_config(page_title="ManageStock", layout="wide")
+auth.require_password()
 st.title("ManageStock — 포트폴리오 대시보드")
 
 tab1, tab2 = st.tabs(["포트폴리오 대시보드", "종목 관리"])
@@ -107,6 +109,31 @@ with tab1:
                 st.plotly_chart(trend, use_container_width=True)
 
 with tab2:
+    st.subheader("데이터 백업 / 복원")
+    st.caption("클라우드 배포 환경은 재배포 시 저장된 데이터가 초기화될 수 있습니다. 주기적으로 다운로드해두고, 초기화됐을 때 복원하세요.")
+    backup_col, restore_col = st.columns(2)
+    with backup_col:
+        st.download_button(
+            "보유 종목 CSV 다운로드",
+            data=data_io.load_holdings().to_csv(index=False),
+            file_name="holdings_backup.csv",
+            mime="text/csv",
+        )
+    with restore_col:
+        uploaded_holdings = st.file_uploader("보유 종목 CSV 복원", type="csv", key="holdings_restore")
+        if uploaded_holdings is not None:
+            restored_df = pd.read_csv(
+                uploaded_holdings,
+                dtype={"ticker": str, "name": str, "category": str, "currency": str},
+            )
+            missing_cols = set(data_io.HOLDINGS_COLUMNS) - set(restored_df.columns)
+            if missing_cols:
+                st.error(f"CSV 형식이 올바르지 않습니다 (누락된 열: {', '.join(sorted(missing_cols))})")
+            else:
+                data_io.save_holdings(restored_df[data_io.HOLDINGS_COLUMNS])
+                st.success("복원 완료")
+                st.rerun()
+
     st.subheader("종목 추가")
     preset_names = ["직접 입력"] + sorted(categories.TICKER_PRESETS.keys())
     preset_choice = st.selectbox("종목 (프리셋)", preset_names)
