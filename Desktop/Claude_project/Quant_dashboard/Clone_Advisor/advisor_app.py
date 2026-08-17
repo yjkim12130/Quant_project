@@ -16,7 +16,9 @@ advisor_app.py — 자문역 인사이트 통합 분석 (P3, 독립 앱)
 """
 from __future__ import annotations
 import json
+import os
 from datetime import date
+from typing import Optional
 
 import streamlit as st
 import plotly.graph_objects as go
@@ -28,6 +30,43 @@ import advisor_report as ar
 
 st.set_page_config(page_title="자문역 인사이트 · 종목 분석 · 시황 브리핑",
                    page_icon="🧮", layout="wide")
+
+
+# ── 접근 게이트 (배포 환경 전용) ──────────────────────────────────────
+# 개인 재무자문 데이터를 다루는 앱이라 공개 링크로 배포 시(Streamlit Cloud
+# 등) 최소한의 접근 제한이 필요하다. APP_PASSWORD가 설정된 경우에만 게이트가
+# 동작하고, 로컬 개발(`streamlit run advisor_app.py`)처럼 미설정 상태면 그냥
+# 통과한다 — DART_API_KEY/ANTHROPIC_API_KEY와 동일한 "환경변수 우선, 파일
+# 폴백" 패턴.
+def _get_app_password() -> Optional[str]:
+    key = os.environ.get("APP_PASSWORD")
+    if key:
+        return key.strip()
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".app_password")
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            return f.read().strip()
+    return None
+
+
+def _require_password() -> None:
+    required = _get_app_password()
+    if not required:
+        return
+    if st.session_state.get("_authed"):
+        return
+    st.title("🔒 접근 확인")
+    pw = st.text_input("비밀번호", type="password", key="_pw_input")
+    if st.button("입장", type="primary"):
+        if pw == required:
+            st.session_state["_authed"] = True
+            st.rerun()
+        else:
+            st.error("비밀번호가 올바르지 않습니다.")
+    st.stop()
+
+
+_require_password()
 
 # ── 테마 (샘플 리포트와 동일 팔레트) ──────────────────────────────────
 st.markdown("""
