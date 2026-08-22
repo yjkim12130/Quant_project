@@ -11,25 +11,60 @@ import categories
 import data_io
 import market_data
 import portfolio
+import volatility
 
 st.set_page_config(page_title="ManageStock", layout="wide")
 auth.require_password()
 st.title("ManageStock — 포트폴리오 대시보드")
 
-tab1, tab2 = st.tabs(["포트폴리오 대시보드", "종목 관리"])
+NO_HOLDINGS_MESSAGE = "종목 관리 탭에서 보유 종목을 먼저 등록해주세요."
 
-with tab1:
+MERGED_COLUMN_CONFIG = {
+    "ticker": st.column_config.TextColumn("티커"),
+    "name": st.column_config.TextColumn("종목명"),
+    "owners": st.column_config.TextColumn("보유자"),
+    "category": st.column_config.TextColumn("카테고리"),
+    "currency": st.column_config.TextColumn("통화"),
+    "quantity": st.column_config.NumberColumn("총수량"),
+    "avg_price": st.column_config.NumberColumn("합산 평단가", format="%.2f"),
+    "current_price": st.column_config.NumberColumn("현재가", format="%.2f"),
+    "value_krw": st.column_config.NumberColumn("평가금액(원)", format="%.0f"),
+    "cost_krw": st.column_config.NumberColumn("매입금액(원)", format="%.0f"),
+    "pnl_krw": st.column_config.NumberColumn("손익(원)", format="%.0f"),
+    "return_pct": st.column_config.NumberColumn("수익률(%)", format="%.2f"),
+    "beta": st.column_config.NumberColumn("베타(수동)"),
+    "atr_beta": st.column_config.NumberColumn("변동성 베타", format="%.2f"),
+}
+
+
+def load_dashboard_context():
+    """대시보드 탭과 합산 보기 탭이 함께 쓰는 보유종목·시세·환율.
+    시세/환율 조회는 캐시(TTL 600초)를 타므로 탭이 늘어도 추가 API 호출은 없다.
+    보유 종목이 하나도 없으면 None을 돌려준다."""
     holdings_df, _ = data_io.drop_incomplete_holdings(data_io.load_holdings())
     if holdings_df.empty:
-        st.info("종목 관리 탭에서 보유 종목을 먼저 등록해주세요.")
+        return None
+    prices, failed_tickers = market_data.fetch_prices(holdings_df["ticker"].tolist())
+    fetched_fx = market_data.fetch_fx_rate()
+    last_fx = st.session_state.get("last_fx_rate")
+    fx_rate, fx_is_stale = market_data.resolve_fx_rate(fetched_fx, last_fx)
+    if fx_rate is not None:
+        st.session_state["last_fx_rate"] = fx_rate
+    with st.spinner(f"변동성 베타 계산 중 — 일봉 {volatility.ATR_HISTORY_PERIOD} 조회"):
+        histories = market_data.fetch_ohlc_history(volatility.tickers_needed(holdings_df["ticker"].tolist()))
+    atr_info = volatility.compute_atr_betas(histories)
+    return holdings_df, prices, failed_tickers, fx_rate, fx_is_stale, atr_info
+
+
+context = load_dashboard_context()
+
+tab1, tab2, tab3 = st.tabs(["포트폴리오 대시보드", "합산 보기", "종목 관리"])
+
+with tab1:
+    if context is None:
+        st.info(NO_HOLDINGS_MESSAGE)
     else:
-        tickers = holdings_df["ticker"].tolist()
-        prices, failed_tickers = market_data.fetch_prices(tickers)
-        fetched_fx = market_data.fetch_fx_rate()
-        last_fx = st.session_state.get("last_fx_rate")
-        fx_rate, fx_is_stale = market_data.resolve_fx_rate(fetched_fx, last_fx)
-        if fx_rate is not None:
-            st.session_state["last_fx_rate"] = fx_rate
+        holdings_df, prices, failed_tickers, fx_rate, fx_is_stale, atr_info = context
 
         if failed_tickers:
             st.warning("시세 조회 실패: " + ", ".join(failed_tickers))
@@ -42,7 +77,9 @@ with tab1:
             else:
                 st.metric("현재 환율 (USD/KRW)", f"{fx_rate:,.2f}")
 
-            metrics_df = portfolio.compute_holding_metrics(holdings_df, prices, fx_rate)
+            metrics_df = portfolio.compute_holding_metrics(
+                holdings_df, prices, fx_rate, volatility.beta_map(atr_info)
+            )
             valid_df = metrics_df.dropna(subset=["value_krw"])
 
             totals = portfolio.compute_totals(valid_df)
@@ -89,8 +126,8 @@ with tab1:
             display_df["시세조회"] = display_df["current_price"].apply(lambda v: "실패" if pd.isna(v) else "정상")
             st.dataframe(
                 display_df[[
-                    "category", "name", "ticker", "currency", "quantity", "avg_price",
-                    "current_price", "value_krw", "pnl_krw", "return_pct", "beta", "시세조회",
+                    "category", "name", "ticker", "owner", "currency", "quantity", "avg_price",
+                    "current_price", "value_krw", "pnl_krw", "return_pct", "beta", "atr_beta", "시세조회",
                 ]],
                 use_container_width=True,
             )
@@ -109,6 +146,72 @@ with tab1:
                 st.plotly_chart(trend, use_container_width=True)
 
 with tab2:
+    if context is None:
+        st.info(NO_HOLDINGS_MESSAGE)
+    else:
+        st.caption(
+            "계좌·소유자가 달라 여러 행으로 기록된 같은 종목을 하나로 합쳐 보여줍니다. "
+            "합산 평단가는 수량가중평균이며, 같은 티커라도 통화가 다르면 평단가를 합칠 수 없어 행을 나눕니다."
+        )
+        holdings_df, prices, failed_tickers, fx_rate, fx_is_stale, atr_info = context
+
+        if failed_tickers:
+            st.warning("시세 조회 실패: " + ", ".join(failed_tickers))
+
+        if fx_rate is None:
+            st.error("환율 조회 실패 — USD 종목 금액을 계산할 수 없습니다.")
+        else:
+            metrics_df = portfolio.compute_holding_metrics(
+                holdings_df, prices, fx_rate, volatility.beta_map(atr_info)
+            )
+            valid_df = metrics_df.dropna(subset=["value_krw"])
+            merged_df = portfolio.merge_by_ticker(valid_df)
+
+            if merged_df.empty:
+                st.warning("시세를 조회할 수 있는 종목이 없어 합산 표를 표시할 수 없습니다.")
+            else:
+                totals = portfolio.compute_totals(valid_df)
+                col1, col2, col3 = st.columns(3)
+                col1.metric("합산 종목 수", f"{len(merged_df)} 종목")
+                col2.metric("총평가금액", f"{totals['total_value_krw']:,.0f} 원")
+                col3.metric("총손익금", f"{totals['total_pnl_krw']:,.0f} 원")
+
+                if not atr_info:
+                    st.warning(
+                        f"변동성 베타를 계산할 수 없습니다 — 기준 종목 {volatility.ATR_BENCHMARK}의 "
+                        "일봉을 가져오지 못했습니다."
+                    )
+                else:
+                    st.caption(
+                        f"변동성 베타: {volatility.ATR_BENCHMARK}의 ATR({volatility.ATR_TARGET_WINDOW}거래일, "
+                        f"약 6개월)을 1.0으로 둔 상대 변동성입니다. 수익률 상관을 보는 통계적 베타가 아니라 "
+                        "변동폭의 크기 비율이므로, 기준과 무상관인 자산도 변동폭만 비슷하면 1.0 근처가 나옵니다."
+                    )
+                    provisional = volatility.provisional_tickers(atr_info)
+                    if provisional:
+                        st.caption(
+                            "⚠️ 상장 기간이 짧아 창을 줄여 계산한 잠정치(기준 종목도 같은 창으로 재계산): "
+                            + ", ".join(provisional)
+                        )
+
+                st.dataframe(merged_df, use_container_width=True, column_config=MERGED_COLUMN_CONFIG)
+
+                st.subheader("종목별 소유자 내역")
+                ticker_labels = {
+                    f"{row['name']} ({row['ticker']})": row["ticker"]
+                    for _, row in merged_df.iterrows()
+                }
+                picked_label = st.selectbox("종목 선택", list(ticker_labels))
+                breakdown_df = valid_df[valid_df["ticker"] == ticker_labels[picked_label]]
+                st.dataframe(
+                    breakdown_df[[
+                        "owner", "category", "currency", "quantity", "avg_price",
+                        "current_price", "value_krw", "pnl_krw", "return_pct",
+                    ]],
+                    use_container_width=True,
+                )
+
+with tab3:
     st.subheader("데이터 백업 / 복원")
     st.caption("클라우드 배포 환경은 재배포 시 저장된 데이터가 초기화될 수 있습니다. 주기적으로 다운로드해두고, 초기화됐을 때 복원하세요.")
     backup_col, restore_col = st.columns(2)
@@ -124,19 +227,21 @@ with tab2:
         if uploaded_holdings is not None:
             restored_df = pd.read_csv(
                 uploaded_holdings,
-                dtype={"ticker": str, "name": str, "category": str, "currency": str},
+                dtype={"ticker": str, "name": str, "category": str, "currency": str, "owner": str},
             )
-            missing_cols = set(data_io.HOLDINGS_COLUMNS) - set(restored_df.columns)
+            missing_cols = data_io.missing_required_columns(restored_df)
             if missing_cols:
-                st.error(f"CSV 형식이 올바르지 않습니다 (누락된 열: {', '.join(sorted(missing_cols))})")
+                st.error(f"CSV 형식이 올바르지 않습니다 (누락된 열: {', '.join(missing_cols)})")
             else:
-                data_io.save_holdings(restored_df[data_io.HOLDINGS_COLUMNS])
+                data_io.save_holdings(restored_df)
                 st.success("복원 완료")
                 st.rerun()
 
     st.subheader("종목 추가")
     preset_names = ["직접 입력"] + sorted(categories.TICKER_PRESETS.keys())
     preset_choice = st.selectbox("종목 (프리셋)", preset_names)
+    owner_choice = st.selectbox("소유자", categories.DEFAULT_OWNERS + ["직접 입력"])
+    owner = st.text_input("새 소유자명") if owner_choice == "직접 입력" else owner_choice
     with st.form("add_holding_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
@@ -159,14 +264,14 @@ with tab2:
 
         submitted = st.form_submit_button("추가")
         if submitted:
-            if not ticker or not name or not category:
-                st.error("종목명, 티커, 카테고리는 필수입니다.")
+            if not ticker or not name or not category or not owner:
+                st.error("종목명, 티커, 카테고리, 소유자는 필수입니다.")
             else:
                 holdings = data_io.load_holdings()
                 new_row = pd.DataFrame([{
                     "ticker": ticker, "name": name, "category": category,
                     "currency": currency, "quantity": quantity,
-                    "avg_price": avg_price, "beta": beta,
+                    "avg_price": avg_price, "beta": beta, "owner": owner,
                 }], columns=data_io.HOLDINGS_COLUMNS)
                 holdings = pd.concat([holdings, new_row], ignore_index=True)
                 data_io.save_holdings(holdings)
@@ -176,12 +281,14 @@ with tab2:
     st.caption("그리드에 없는 새 카테고리는 위 '종목 추가' 폼에서 등록해주세요.")
     holdings_df = data_io.load_holdings()
     known_categories = sorted(set(categories.DEFAULT_CATEGORIES) | set(holdings_df["category"].dropna()))
+    known_owners = sorted(set(categories.DEFAULT_OWNERS) | set(holdings_df["owner"].dropna()))
     edited_df = st.data_editor(
         holdings_df,
         num_rows="dynamic",
         column_config={
             "currency": st.column_config.SelectboxColumn("통화", options=["KRW", "USD"]),
             "category": st.column_config.SelectboxColumn("카테고리", options=known_categories),
+            "owner": st.column_config.SelectboxColumn("소유자", options=known_owners),
         },
         key="holdings_editor",
         use_container_width=True,

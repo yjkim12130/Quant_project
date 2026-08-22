@@ -125,3 +125,77 @@ def test_drop_incomplete_holdings_keeps_all_valid_rows():
     cleaned, dropped = data_io.drop_incomplete_holdings(df)
     assert len(cleaned) == 2
     assert dropped == 0
+
+
+# --- owner 컬럼 (부부/계좌 분리 기록 → 합산 보기) ---
+
+def _legacy_holdings_csv(tmp_path):
+    """owner 컬럼이 없던 시절의 CSV. 기존 사용자 파일 및 예전 백업본과 동일한 형태."""
+    path = str(tmp_path / "holdings.csv")
+    legacy_columns = ["ticker", "name", "category", "currency", "quantity", "avg_price", "beta"]
+    pd.DataFrame([
+        {"ticker": "TSLA", "name": "테슬라", "category": "미국 개별주",
+         "currency": "USD", "quantity": 3, "avg_price": 200.0, "beta": 1.0},
+    ], columns=legacy_columns).to_csv(path, index=False)
+    return path
+
+
+def test_holdings_columns_includes_owner():
+    assert "owner" in data_io.HOLDINGS_COLUMNS
+
+
+def test_load_holdings_backfills_owner_for_legacy_csv(tmp_path):
+    df = data_io.load_holdings(path=_legacy_holdings_csv(tmp_path))
+    assert list(df.columns) == data_io.HOLDINGS_COLUMNS
+    assert df.iloc[0]["owner"] == data_io.DEFAULT_OWNER
+
+
+def test_load_holdings_preserves_existing_owner(tmp_path):
+    path = str(tmp_path / "holdings.csv")
+    pd.DataFrame([
+        {"ticker": "TSLA", "name": "테슬라", "category": "미국 개별주", "currency": "USD",
+         "quantity": 3, "avg_price": 200.0, "beta": 1.0, "owner": "남편"},
+    ], columns=data_io.HOLDINGS_COLUMNS).to_csv(path, index=False)
+    df = data_io.load_holdings(path=path)
+    assert df.iloc[0]["owner"] == "남편"
+
+
+def test_load_holdings_fills_blank_owner_with_default(tmp_path):
+    """owner 컬럼은 있지만 값이 비어있는 행(에디터에서 새 행 추가 후 미입력)도 기본값으로 채운다."""
+    path = str(tmp_path / "holdings.csv")
+    pd.DataFrame([
+        {"ticker": "TSLA", "name": "테슬라", "category": "미국 개별주", "currency": "USD",
+         "quantity": 3, "avg_price": 200.0, "beta": 1.0, "owner": ""},
+    ], columns=data_io.HOLDINGS_COLUMNS).to_csv(path, index=False)
+    df = data_io.load_holdings(path=path)
+    assert df.iloc[0]["owner"] == data_io.DEFAULT_OWNER
+
+
+def test_save_holdings_accepts_dataframe_without_owner(tmp_path):
+    """예전 백업 CSV를 복원할 때 owner가 없어도 KeyError 없이 저장돼야 한다."""
+    path = str(tmp_path / "holdings.csv")
+    legacy_columns = ["ticker", "name", "category", "currency", "quantity", "avg_price", "beta"]
+    df = pd.DataFrame([
+        {"ticker": "TSLA", "name": "테슬라", "category": "미국 개별주",
+         "currency": "USD", "quantity": 3, "avg_price": 200.0, "beta": 1.0},
+    ], columns=legacy_columns)
+    data_io.save_holdings(df, path=path)
+    reloaded = data_io.load_holdings(path=path)
+    assert reloaded.iloc[0]["owner"] == data_io.DEFAULT_OWNER
+
+
+def test_missing_required_columns_accepts_legacy_backup_without_owner():
+    """owner 도입 전에 받아둔 백업 CSV도 복원 가능해야 한다."""
+    legacy_columns = ["ticker", "name", "category", "currency", "quantity", "avg_price", "beta"]
+    df = pd.DataFrame(columns=legacy_columns)
+    assert data_io.missing_required_columns(df) == []
+
+
+def test_missing_required_columns_accepts_current_schema():
+    df = pd.DataFrame(columns=data_io.HOLDINGS_COLUMNS)
+    assert data_io.missing_required_columns(df) == []
+
+
+def test_missing_required_columns_reports_genuinely_missing_ones():
+    df = pd.DataFrame(columns=["ticker", "name"])
+    assert data_io.missing_required_columns(df) == ["avg_price", "beta", "category", "currency", "quantity"]

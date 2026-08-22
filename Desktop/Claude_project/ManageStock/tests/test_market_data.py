@@ -1,3 +1,5 @@
+import pandas as pd
+
 import market_data
 
 
@@ -50,3 +52,45 @@ def test_resolve_fx_rate_returns_none_when_never_fetched():
     rate, is_stale = market_data.resolve_fx_rate(None, None)
     assert rate is None
     assert is_stale is True
+
+
+class FakeHistoryTicker:
+    """history()를 가진 가짜 Ticker. history_map에 없으면 예외, None이면 빈 프레임."""
+
+    def __init__(self, ticker, history_map):
+        self._ticker = ticker
+        self._history_map = history_map
+
+    def history(self, period=None, auto_adjust=None):
+        if self._ticker not in self._history_map:
+            raise RuntimeError("network error")
+        frame = self._history_map[self._ticker]
+        return pd.DataFrame(columns=["High", "Low", "Close"]) if frame is None else frame
+
+
+def _bars(n):
+    return pd.DataFrame(
+        [(101.0, 99.0, 100.0)] * n, columns=["High", "Low", "Close"]
+    )
+
+
+def test_fetch_ohlc_history_uncached_returns_frame_per_ticker(monkeypatch):
+    history_map = {"QQQM": _bars(200), "TSLA": _bars(150)}
+    monkeypatch.setattr(market_data.yf, "Ticker", lambda t: FakeHistoryTicker(t, history_map))
+    result = market_data.fetch_ohlc_history_uncached(["QQQM", "TSLA"])
+    assert set(result) == {"QQQM", "TSLA"}
+    assert len(result["TSLA"]) == 150
+
+
+def test_fetch_ohlc_history_uncached_omits_ticker_that_raises(monkeypatch):
+    history_map = {"QQQM": _bars(200)}
+    monkeypatch.setattr(market_data.yf, "Ticker", lambda t: FakeHistoryTicker(t, history_map))
+    result = market_data.fetch_ohlc_history_uncached(["QQQM", "BADTICKER"])
+    assert set(result) == {"QQQM"}
+
+
+def test_fetch_ohlc_history_uncached_omits_empty_history(monkeypatch):
+    history_map = {"QQQM": _bars(200), "0190M0.KS": None}
+    monkeypatch.setattr(market_data.yf, "Ticker", lambda t: FakeHistoryTicker(t, history_map))
+    result = market_data.fetch_ohlc_history_uncached(["QQQM", "0190M0.KS"])
+    assert set(result) == {"QQQM"}

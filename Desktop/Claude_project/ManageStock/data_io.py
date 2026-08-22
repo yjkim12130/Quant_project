@@ -1,24 +1,48 @@
 import os
 import pandas as pd
 
-HOLDINGS_COLUMNS = ["ticker", "name", "category", "currency", "quantity", "avg_price", "beta"]
+HOLDINGS_COLUMNS = ["ticker", "name", "category", "currency", "quantity", "avg_price", "beta", "owner"]
 HOLDINGS_PATH = os.path.join("data", "holdings.csv")
+DEFAULT_OWNER = "공용"
+
+
+def ensure_owner_column(df):
+    """owner 컬럼이 없거나 값이 비어있는 행을 DEFAULT_OWNER로 채운다.
+    owner 도입 이전에 저장된 holdings.csv 및 예전 백업 CSV와의 호환용."""
+    df = df.copy()
+    if "owner" not in df.columns:
+        df["owner"] = DEFAULT_OWNER
+        return df
+    owner = df["owner"].fillna("").astype(str).str.strip()
+    df["owner"] = owner.where(owner != "", DEFAULT_OWNER)
+    return df
 
 
 def load_holdings(path=HOLDINGS_PATH):
     if not os.path.exists(path):
         return pd.DataFrame(columns=HOLDINGS_COLUMNS)
-    return pd.read_csv(
+    df = pd.read_csv(
         path,
-        dtype={"ticker": str, "name": str, "category": str, "currency": str},
+        dtype={"ticker": str, "name": str, "category": str, "currency": str, "owner": str},
     )
+    return ensure_owner_column(df)[HOLDINGS_COLUMNS]
 
 
 def save_holdings(df, path=HOLDINGS_PATH):
     parent = os.path.dirname(path)
     if parent:
         os.makedirs(parent, exist_ok=True)
-    df.to_csv(path, index=False, columns=HOLDINGS_COLUMNS)
+    ensure_owner_column(df).to_csv(path, index=False, columns=HOLDINGS_COLUMNS)
+
+
+OPTIONAL_HOLDINGS_COLUMNS = ["owner"]
+
+
+def missing_required_columns(df):
+    """복원용 CSV에 반드시 있어야 하는 컬럼 중 빠진 것을 정렬해 돌려준다.
+    owner는 나중에 도입됐으므로 없어도 통과시킨다(load/save가 기본값으로 채운다)."""
+    required = set(HOLDINGS_COLUMNS) - set(OPTIONAL_HOLDINGS_COLUMNS)
+    return sorted(required - set(df.columns))
 
 
 def infer_currency(ticker):

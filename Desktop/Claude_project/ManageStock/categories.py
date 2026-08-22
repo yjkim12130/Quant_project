@@ -7,6 +7,9 @@ DEFAULT_CATEGORIES = [
     "한국 산업 ETF",
 ]
 
+# 계좌·부부 분리 보유를 구분하기 위한 소유자 기본 옵션. 자유 입력도 허용된다.
+DEFAULT_OWNERS = ["공용", "남편", "아내"]
+
 TICKER_PRESETS = {
     "QQQ": "QQQ",
     "QLD": "QLD",
