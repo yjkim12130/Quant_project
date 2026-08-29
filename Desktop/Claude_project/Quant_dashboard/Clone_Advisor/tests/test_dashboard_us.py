@@ -69,6 +69,12 @@ def test_build_indicator_defaults_missing_status_to_no_data():
     assert out["_status"] == "NO_DATA"
 
 
+def test_build_indicator_forces_no_data_when_ok_but_series_empty():
+    out = adu.build_indicator({"_status": "ok", "observations": []}, _META_HY)
+    assert out["_status"] == "NO_DATA"
+    assert out["latest"] is None
+
+
 def test_build_indicator_computes_latest_and_rank():
     obs = [{"date": f"2026-0{i}-01", "value": float(i)} for i in range(1, 9)]
     out = adu.build_indicator({"_status": "ok", "observations": obs}, _META_HY)

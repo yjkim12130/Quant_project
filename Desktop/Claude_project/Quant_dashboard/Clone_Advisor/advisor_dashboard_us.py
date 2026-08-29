@@ -115,7 +115,7 @@ def build_indicator(raw: dict, meta: dict) -> dict:
     status = raw.get("_status")
     obs = raw.get("observations", [])
     if status != "ok" or not obs:
-        base["_status"] = status or "NO_DATA"
+        base["_status"] = status if (status and status != "ok") else "NO_DATA"
         base["_msg"] = raw.get("_msg", "")
         return base
 
