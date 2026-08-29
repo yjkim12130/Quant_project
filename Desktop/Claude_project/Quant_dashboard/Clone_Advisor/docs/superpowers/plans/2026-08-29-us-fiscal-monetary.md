@@ -368,7 +368,8 @@ raw = am.collect_macro(json.load(open('macro_series.json', encoding='utf-8')))
 from collections import Counter
 print(Counter(r['_status'] for g in raw.values() for r in g.values()))
 print('부채:', raw['fiscal']['debt_total']['_status'])
-"; mv .fred_api_key.bak .fred_api_key```
+"; mv .fred_api_key.bak .fred_api_key
+```
 Expected: `Counter({'NO_FRED_KEY': 13, 'ok': 1})`, `부채: ok`. **명령 끝의 `mv`로 키 파일이 반드시 복구되는지 확인할 것.**
 
 - [ ] **Step 6: 커밋**
