@@ -76,3 +76,56 @@ def test_dong_key_separates_same_name_in_different_sgg():
 def test_level_validation():
     with pytest.raises(ValueError):
         R._check_level("gu")
+
+
+import sqlite3
+
+
+def _memory_db(df, table="trades_sale"):
+    conn = sqlite3.connect(":memory:")
+    out = df.copy()
+    out["contract_date"] = out["month"].dt.to_timestamp().dt.strftime("%Y-%m-15")
+    cols = ["region_code", "region_name", "dong_name", "exclusive_area",
+            "build_year", "contract_date"]
+    if table == "trades_sale":
+        out["cancelled"] = 0
+        cols += ["deal_amount", "cancelled"]
+    else:
+        out["deposit"] = out["deal_amount"] * 0.6
+        out["monthly_rent"] = 0
+        cols += ["deposit", "monthly_rent"]
+    out[cols].to_sql(table, conn, index=False)
+    return conn
+
+
+def test_region_price_index_reads_db_and_labels():
+    months = pd.period_range("2020-01", "2021-12", freq="M")
+    df = make_trades([(a, b, p, 10) for a, b, p in NINE], months, "11470", "양천구", "목동")
+    conn = _memory_db(df)
+    idx = R.region_price_index(conn, "sgg")
+    assert set(idx["region_key"]) == {"11470"}
+    assert idx["region_label"].iloc[0] == "양천구"
+    assert len(idx) == len(months)
+
+    idx_dong = R.region_price_index(conn, "dong")
+    assert idx_dong["region_key"].iloc[0] == "11470|목동"
+    assert idx_dong["region_label"].iloc[0] == "양천구 목동"
+    conn.close()
+
+
+def test_region_price_index_excludes_cancelled():
+    months = pd.period_range("2020-01", "2020-12", freq="M")
+    df = make_trades([(a, b, p, 10) for a, b, p in NINE], months, "11470", "양천구", "목동")
+    conn = _memory_db(df)
+    conn.execute("UPDATE trades_sale SET cancelled = 1")
+    conn.commit()
+    assert R.region_price_index(conn, "sgg").empty
+    conn.close()
+
+
+def test_region_price_index_rejects_bad_level():
+    months = pd.period_range("2020-01", "2020-12", freq="M")
+    conn = _memory_db(make_trades([(a, b, p, 10) for a, b, p in NINE], months))
+    with pytest.raises(ValueError):
+        R.region_price_index(conn, "gu")
+    conn.close()

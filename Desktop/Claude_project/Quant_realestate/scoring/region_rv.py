@@ -94,3 +94,29 @@ def _basket_index(trades, amount_col, params, min_weight=0.5):
                      n_trades.stack(future_stack=True).rename("n_trades")], axis=1)
     return (out.reset_index(names=["month", "region_key"])
                .dropna(subset=["price"]).reset_index(drop=True))
+
+
+def _load_trades(conn, table, amount_col, extra_where=""):
+    """실거래 로드 + month(Period) 부여. 결측 build_year/면적 0 이하 행을 제거한다."""
+    q = (f"SELECT region_code, region_name, dong_name, exclusive_area, build_year, "
+         f"contract_date, {amount_col} FROM {table} WHERE 1=1 {extra_where}")
+    df = pd.read_sql_query(q, conn)
+    df["month"] = pd.PeriodIndex(pd.to_datetime(df["contract_date"], errors="coerce"), freq="M")
+    df = df.dropna(subset=["month", "exclusive_area", "build_year", amount_col])
+    return df[df["exclusive_area"] > 0]
+
+
+def region_price_index(conn, level="sgg", params=None, min_weight=0.5):
+    """지역 고정 바스켓 가격지수 (스펙 §2). level은 'sgg'(시군구) 또는 'dong'(법정동).
+
+    반환: month, region_key, price, w_valid, n_trades, region_label
+    """
+    _check_level(level)
+    params = params or Params()
+    trades = _load_trades(conn, "trades_sale", "deal_amount", "AND cancelled = 0")
+    if trades.empty:
+        return pd.DataFrame(columns=["month", "region_key", "price", "w_valid",
+                                     "n_trades", "region_label"])
+    trades["region_key"] = _region_key(trades, level)
+    idx = _basket_index(trades, "deal_amount", params, min_weight)
+    return idx.merge(_region_labels(trades, level), on="region_key", how="left")
