@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+from .recipe import Recipe
+
 ROOT = Path(__file__).resolve().parent.parent
 PROFILE_PATH = ROOT / "channel_profile.json"
 PROMPT_DIR = ROOT / "prompts"
@@ -40,3 +42,49 @@ def load_profile(path: Path = PROFILE_PATH) -> tuple[dict, list[str]]:
         return json.loads(path.read_text(encoding="utf-8")), []
     except json.JSONDecodeError as exc:
         return DEFAULT_PROFILE, [f"{path.name} 파싱 실패({exc}) — 기본 프로필로 진행합니다."]
+
+
+def _render(template: str, values: dict[str, str]) -> str:
+    """{{KEY}} 토큰만 치환한다. str.format을 쓰면 템플릿의 JSON 중괄호가 깨진다."""
+    out = template
+    for key, value in values.items():
+        out = out.replace("{{" + key + "}}", value)
+    return out
+
+
+def _as_json_block(data: dict) -> str:
+    return json.dumps(data, ensure_ascii=False, indent=2)
+
+
+def build_shooting_prompt(
+    profile: dict,
+    recipe: Recipe,
+    duration_sec: int = 60,
+    template_dir: Path = PROMPT_DIR,
+) -> str:
+    template = (template_dir / "shooting_guide.md").read_text(encoding="utf-8")
+    return _render(
+        template,
+        {
+            "CHANNEL_PROFILE": _as_json_block(profile),
+            "DISH_NAME": recipe.dish_name,
+            "RECIPE_BODY": recipe.body,
+            "EPISODE": recipe.episode or "(없음)",
+            "DURATION_SEC": str(duration_sec),
+        },
+    )
+
+
+def build_publish_prompt(
+    profile: dict,
+    recipe_card: dict,
+    template_dir: Path = PROMPT_DIR,
+) -> str:
+    template = (template_dir / "publish_pack.md").read_text(encoding="utf-8")
+    return _render(
+        template,
+        {
+            "CHANNEL_PROFILE": _as_json_block(profile),
+            "RECIPE_CARD": _as_json_block(recipe_card),
+        },
+    )
