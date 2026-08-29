@@ -277,3 +277,29 @@ def build_assessment(groups: dict, derived: dict) -> list[dict]:
     rows.append({"id": "fiscal", "label": "재정", "verdict": verdict, "text": text})
 
     return rows
+
+
+# ─────────────────────────────────────────────────────────────────────
+# 오케스트레이션
+# ─────────────────────────────────────────────────────────────────────
+def build_briefing_us() -> dict:
+    """레지스트리 → 수집 → 조립 → 파생 → 판정 전체 파이프라인."""
+    registry = load_macro_series()
+    if not registry:
+        return {"_status": "NO_REGISTRY", "groups": {}, "derived": {},
+                "assessment": [],
+                "generated_at": datetime.now().isoformat(timespec="seconds")}
+
+    raw = am.collect_macro(registry)
+    groups = {
+        g["id"]: build_group(raw.get(g["id"], {}), g)
+        for g in registry.get("groups", []) if g.get("id")
+    }
+    derived = build_derived(groups)
+    return {
+        "_status": "ok",
+        "groups": groups,
+        "derived": derived,
+        "assessment": build_assessment(groups, derived),
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+    }
