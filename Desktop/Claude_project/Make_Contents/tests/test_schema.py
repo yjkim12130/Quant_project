@@ -1,6 +1,6 @@
 import copy
 
-from yunjin_studio.schema import validate_publish_pack, validate_shooting_guide
+from yunjin_studio.schema import SHOOTING_KEYS, validate_publish_pack, validate_shooting_guide
 
 VALID_SHOOTING = {
     "recipe_card": {
@@ -121,13 +121,16 @@ def test_non_dict_recipe_card_is_reported():
 def test_non_dict_top_level_argument_shooting_guide_is_reported():
     errors = validate_shooting_guide("not a dict at all")
     assert isinstance(errors, list)
-    assert errors  # every required key is reported missing, nothing raised
+    # 잘못된 타입은 빈 dict 로 취급되어 모든 필수 키가 누락으로 보고되어야 한다.
+    for key in SHOOTING_KEYS:
+        assert any(f"필수 키 누락: {key}" in e for e in errors)
 
 
 def test_non_dict_top_level_argument_publish_pack_is_reported():
     errors = validate_publish_pack(["not", "a", "dict"])
     assert isinstance(errors, list)
-    assert errors  # every required key is reported missing, nothing raised
+    assert any("필수 키 누락: b2_instagram" in e for e in errors)
+    assert any("필수 키 누락: b3_blog" in e for e in errors)
 
 
 def test_non_dict_b2_instagram_is_reported():
@@ -136,3 +139,44 @@ def test_non_dict_b2_instagram_is_reported():
     errors = validate_publish_pack(data)
     assert isinstance(errors, list)
     assert any("carousel" in e for e in errors)
+
+
+def test_tips_as_string_is_reported_as_wrong_type():
+    """존재하지만 list 가 아닌 tips 는 진위값 검사를 통과해 버리고 이후 _as_list 로
+    조용히 사라질 수 있었다 (라운드 2 회귀) — 타입 오류로 이름이 남아야 한다."""
+    data = copy.deepcopy(VALID_SHOOTING)
+    data["recipe_card"]["tips"] = "salt helps tenderize"
+    errors = validate_shooting_guide(data)
+    assert any("recipe_card.tips 는 list 여야 함" in e for e in errors)
+
+
+def test_tips_as_dict_is_reported_as_wrong_type():
+    data = copy.deepcopy(VALID_SHOOTING)
+    data["recipe_card"]["tips"] = {"what": "x", "why": "y"}
+    errors = validate_shooting_guide(data)
+    assert any("recipe_card.tips 는 list 여야 함" in e for e in errors)
+
+
+def test_body_markdown_as_dict_is_reported_as_wrong_type():
+    """dict 값이 str() 로 변환되면 비어 있지 않은 문자열이 되어 blank 검사를
+    조용히 통과할 수 있었다 (라운드 2 회귀) — 타입 오류로 이름이 남아야 한다."""
+    data = copy.deepcopy(VALID_PUBLISH)
+    data["b3_blog"]["body_markdown"] = {"oops": "not a string"}
+    errors = validate_publish_pack(data)
+    assert any("b3_blog.body_markdown 는 문자열이어야 함" in e for e in errors)
+
+
+def test_carousel_wrong_type_is_reported():
+    """carousel 은 검사 지점이 하나뿐이라 잘못된 타입도 길이 0 으로 걸러진다 —
+    이 동작이 우연이 아니라 설계임을 회귀로 고정한다."""
+    data = copy.deepcopy(VALID_PUBLISH)
+    data["b2_instagram"]["carousel"] = "not a list"
+    errors = validate_publish_pack(data)
+    assert any("carousel" in e for e in errors)
+
+
+def test_seo_title_candidates_wrong_type_is_reported():
+    data = copy.deepcopy(VALID_PUBLISH)
+    data["b3_blog"]["seo_title_candidates"] = "not a list"
+    errors = validate_publish_pack(data)
+    assert any("seo_title_candidates" in e for e in errors)

@@ -49,7 +49,15 @@ def validate_shooting_guide(data: dict) -> list[str]:
         if not card.get(key):
             errors.append(f"recipe_card.{key} 누락 또는 비어 있음")
 
-    for index, tip in enumerate(_as_list(card.get("tips"))):
+    raw_tips = card.get("tips")
+    # 존재하지만 list 가 아닌 값(문자열, dict 등)은 위의 진위값 검사를 통과해 버리고
+    # 아래에서 _as_list 로 조용히 빈 리스트가 되어 사라질 수 있다 — 타입 자체를 먼저 짚는다.
+    if raw_tips and not isinstance(raw_tips, list):
+        errors.append(
+            f"recipe_card.tips 는 list 여야 함 (실제 타입: {type(raw_tips).__name__})"
+        )
+
+    for index, tip in enumerate(_as_list(raw_tips)):
         tip = _as_dict(tip)
         if _blank(tip.get("what")):
             errors.append(f"recipe_card.tips[{index}].what 비어 있음")
@@ -85,6 +93,8 @@ def validate_publish_pack(data: dict, measure_note: str = "") -> list[str]:
             errors.append(f"필수 키 누락: {key}")
 
     instagram = _as_dict(data.get("b2_instagram"))
+    # carousel/hashtags 는 길이·진위 검사 단 한 곳에서만 값을 사용하므로, 잘못된 타입도
+    # _as_list 로 빈 리스트가 되는 순간 그 자리에서 바로 걸린다 (놓칠 틈이 없음 — 설계상 안전).
     carousel = _as_list(instagram.get("carousel"))
     if not CAROUSEL_MIN <= len(carousel) <= CAROUSEL_MAX:
         errors.append(
@@ -96,9 +106,18 @@ def validate_publish_pack(data: dict, measure_note: str = "") -> list[str]:
         errors.append("b2_instagram.hashtags 비어 있음")
 
     blog = _as_dict(data.get("b3_blog"))
-    body = _as_str(blog.get("body_markdown"))
+    raw_body = blog.get("body_markdown")
+    # dict/list 같은 값도 _as_str 로 str() 변환하면 비어 있지 않은 문자열이 되어 버려
+    # 아래 blank 검사를 조용히 통과한다 — 타입 자체를 먼저 짚는다.
+    if raw_body is not None and not isinstance(raw_body, str):
+        errors.append(
+            f"b3_blog.body_markdown 는 문자열이어야 함 (실제 타입: {type(raw_body).__name__})"
+        )
+    body = _as_str(raw_body)
     if _blank(body):
         errors.append("b3_blog.body_markdown 비어 있음")
+    # seo_title_candidates 도 carousel 과 같은 이유로 단일 검사 지점이라 잘못된 타입을
+    # 놓치지 않는다 (길이 0 이 되어 3개 요구조건에 항상 걸림).
     if len(_as_list(blog.get("seo_title_candidates"))) != 3:
         errors.append("b3_blog.seo_title_candidates 는 후보 3개여야 함")
     if measure_note and measure_note not in body:
