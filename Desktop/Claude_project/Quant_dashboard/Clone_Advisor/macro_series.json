@@ -1,0 +1,71 @@
+{
+  "version": "0.1",
+  "groups": [
+    {
+      "id": "credit",
+      "label": "기업 신용 스프레드",
+      "indicators": [
+        {"id": "hy_oas", "label": "하이일드 OAS", "source": "fred",
+         "series_id": "BAMLH0A0HYM2", "unit": "%", "unit_label": "%",
+         "freq": "일간", "higher_is": "worse"},
+        {"id": "ig_oas", "label": "투자등급 OAS", "source": "fred",
+         "series_id": "BAMLC0A0CM", "unit": "%", "unit_label": "%",
+         "freq": "일간", "higher_is": "worse"}
+      ]
+    },
+    {
+      "id": "liquidity",
+      "label": "통화량·유동성",
+      "indicators": [
+        {"id": "m2", "label": "M2 통화량", "source": "fred",
+         "series_id": "M2SL", "unit": "Bil. of $", "unit_label": "십억$",
+         "freq": "월간", "higher_is": "neutral"},
+        {"id": "fed_assets", "label": "연준 총자산", "source": "fred",
+         "series_id": "WALCL", "unit": "Mil. of U.S. $", "unit_label": "백만$",
+         "freq": "주간", "higher_is": "neutral"},
+        {"id": "rrp", "label": "역레포 잔액", "source": "fred",
+         "series_id": "RRPONTSYD", "unit": "Bil. of US $", "unit_label": "십억$",
+         "freq": "일간", "higher_is": "worse"},
+        {"id": "reserves", "label": "지급준비금", "source": "fred",
+         "series_id": "WRESBAL", "unit": "Mil. of U.S. $", "unit_label": "백만$",
+         "freq": "주간", "higher_is": "better"},
+        {"id": "tga", "label": "재무부 일반계정", "source": "fred",
+         "series_id": "WTREGEN", "unit": "Mil. of U.S. $", "unit_label": "백만$",
+         "freq": "주간", "higher_is": "worse"}
+      ]
+    },
+    {
+      "id": "fiscal",
+      "label": "연방 재정",
+      "indicators": [
+        {"id": "debt_total", "label": "연방 총부채", "source": "treasury",
+         "series_id": "debt_to_penny", "unit": "$", "unit_label": "달러",
+         "freq": "일간", "higher_is": "worse"},
+        {"id": "debt_gdp", "label": "부채/GDP", "source": "fred",
+         "series_id": "GFDEGDQ188S", "unit": "% of GDP", "unit_label": "% of GDP",
+         "freq": "분기", "higher_is": "worse"},
+        {"id": "deficit", "label": "월간 재정수지", "source": "fred",
+         "series_id": "MTSDS133FMS", "unit": "Mil. of $", "unit_label": "백만$",
+         "freq": "월간", "higher_is": "better"},
+        {"id": "interest", "label": "연방 이자지급", "source": "fred",
+         "series_id": "A091RC1Q027SBEA", "unit": "Bil. of $", "unit_label": "십억$",
+         "freq": "분기", "higher_is": "worse"}
+      ]
+    },
+    {
+      "id": "rates",
+      "label": "정책금리·실질금리",
+      "indicators": [
+        {"id": "effr", "label": "실효 연방기금금리", "source": "fred",
+         "series_id": "DFF", "unit": "%", "unit_label": "%",
+         "freq": "일간", "higher_is": "neutral"},
+        {"id": "bei5y", "label": "5년 기대인플레이션", "source": "fred",
+         "series_id": "T5YIE", "unit": "%", "unit_label": "%",
+         "freq": "일간", "higher_is": "neutral"},
+        {"id": "real10y", "label": "10년 실질금리", "source": "fred",
+         "series_id": "DFII10", "unit": "%", "unit_label": "%",
+         "freq": "일간", "higher_is": "neutral"}
+      ]
+    }
+  ]
+}

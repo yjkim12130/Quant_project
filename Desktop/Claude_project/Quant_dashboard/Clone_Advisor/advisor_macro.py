@@ -69,3 +69,70 @@ def fetch_fred_series(series_id: str, api_key: str, years: int = 3) -> dict:
         # 키가 예외 메시지에 섞여 나가지 않도록 타입명만 남긴다.
         return {"_status": "NO_DATA", "series_id": series_id,
                 "observations": [], "_msg": type(e).__name__}
+
+
+def fetch_debt_to_penny(years: int = 3) -> dict:
+    """미 재무부 일간 총부채(debt to the penny). API 키 불필요.
+
+    FRED의 분기 부채 시리즈보다 주기가 촘촘해 이쪽을 쓴다(스펙 §4).
+    금액이 문자열로 오므로 float 변환하고, 실패한 행은 건너뛴다.
+    """
+    start = (date.today() - timedelta(days=365 * years)).isoformat()
+    try:
+        r = requests.get(
+            f"{_TREASURY_BASE}/v2/accounting/od/debt_to_penny",
+            params={"filter": f"record_date:gte:{start}",
+                    "sort": "record_date",
+                    "page[size]": "10000",
+                    "fields": "record_date,tot_pub_debt_out_amt,"
+                              "debt_held_public_amt,intragov_hold_amt"},
+            headers=_HEADERS, timeout=20)
+        if r.status_code != 200:
+            return {"_status": "NO_DATA", "series_id": "debt_to_penny",
+                    "observations": [], "_msg": f"HTTP {r.status_code}"}
+        obs = []
+        for row in r.json().get("data", []):
+            try:
+                obs.append({
+                    "date": row["record_date"],
+                    "value": float(row["tot_pub_debt_out_amt"]),
+                    "public": float(row["debt_held_public_amt"]),
+                    "intragov": float(row["intragov_hold_amt"]),
+                })
+            except (ValueError, KeyError, TypeError):
+                continue
+        if not obs:
+            return {"_status": "NO_DATA", "series_id": "debt_to_penny",
+                    "observations": [], "_msg": "관측치 0건"}
+        return {"_status": "ok", "series_id": "debt_to_penny",
+                "observations": obs, "_msg": ""}
+    except Exception as e:
+        return {"_status": "NO_DATA", "series_id": "debt_to_penny",
+                "observations": [], "_msg": type(e).__name__}
+
+
+def collect_macro(registry: dict, years: int = 3) -> dict:
+    """레지스트리를 순회하며 그룹별·지표별 원본을 모은다.
+
+    FRED 키가 없으면 source=="fred" 지표는 전부 NO_FRED_KEY로 표시하고
+    재무부 지표만 수집한다 — 키 발급 전에도 탭이 뜨게 하기 위함(스펙 §8).
+    """
+    api_key = get_fred_key()
+    out: dict = {}
+    for group in registry.get("groups", []):
+        gid = group.get("id", "")
+        out[gid] = {}
+        for meta in group.get("indicators", []):
+            iid = meta.get("id", "")
+            source = meta.get("source")
+            if source == "treasury":
+                out[gid][iid] = fetch_debt_to_penny(years=years)
+            elif not api_key:
+                out[gid][iid] = {"_status": "NO_FRED_KEY",
+                                 "series_id": meta.get("series_id", ""),
+                                 "observations": [],
+                                 "_msg": "FRED API 키 미설정"}
+            else:
+                out[gid][iid] = fetch_fred_series(
+                    meta.get("series_id", ""), api_key, years=years)
+    return out
