@@ -41,6 +41,8 @@ def write_outputs(out_dir: Path, shooting: dict, publish: dict | None = None) ->
 
 
 def main(argv: list[str] | None = None) -> int:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
     args = sys.argv[1:] if argv is None else argv
     if len(args) != 1:
         print(USAGE)
@@ -54,11 +56,19 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{shooting_path} 없음")
         return 1
 
-    shooting = json.loads(shooting_path.read_text(encoding="utf-8"))
+    try:
+        shooting = json.loads(shooting_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        print(f"{shooting_path.name} 파싱 실패: {exc}")
+        return 1
 
     publish = None
     if publish_path.exists():
-        publish = json.loads(publish_path.read_text(encoding="utf-8"))
+        try:
+            publish = json.loads(publish_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            print(f"{publish_path.name} 파싱 실패: {exc}")
+            return 1
     else:
         print(f"경고: {publish_path.name} 없음 — 인스타/블로그는 건너뜁니다.")
 
