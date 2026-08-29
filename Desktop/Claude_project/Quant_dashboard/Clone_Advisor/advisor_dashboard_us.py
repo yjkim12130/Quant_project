@@ -22,6 +22,7 @@ _REGISTRY_PATH = os.path.join(_HERE, "macro_series.json")
 _UNIT_TO_MUSD = {
     "Mil. of $": 1.0, "Mil. of U.S. $": 1.0,
     "Bil. of $": 1000.0, "Bil. of US $": 1000.0,
+    "$": 0.000001,
 }
 
 _RANK_LOW = 33.0
@@ -114,7 +115,7 @@ def build_indicator(raw: dict, meta: dict) -> dict:
     status = raw.get("_status")
     obs = raw.get("observations", [])
     if status != "ok" or not obs:
-        base["_status"] = status if status != "ok" else "NO_DATA"
+        base["_status"] = status or "NO_DATA"
         base["_msg"] = raw.get("_msg", "")
         return base
 

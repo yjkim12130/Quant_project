@@ -16,6 +16,12 @@ def test_to_musd_returns_none_for_unknown_unit():
     assert adu.to_musd(None, "Mil. of $") is None
 
 
+def test_to_musd_scales_raw_dollars_to_millions():
+    # debt_total은 재무부 API에서 원 단위 달러($)로 온다 — $40T -> $40M단위
+    # 40e12 * 1e-6 = 4e7은 float로도 정확히 떨어져 == 비교가 안전하다
+    assert adu.to_musd(40_000_000_000_000.0, "$") == 40_000_000.0
+
+
 # ── 백분위 ───────────────────────────────────────────────────
 def test_pct_rank_at_maximum_is_100():
     assert adu.pct_rank([1.0, 2.0, 3.0, 4.0], 4.0) == 100.0
@@ -54,6 +60,13 @@ def test_build_indicator_propagates_failure_status():
     assert out["_status"] == "NO_FRED_KEY"
     assert out["latest"] is None
     assert out["label"] == "하이일드 OAS"
+
+
+def test_build_indicator_defaults_missing_status_to_no_data():
+    # _status 키 자체가 없는 raw(dict())가 들어와도 허용된 상태값 집합
+    # {"ok","NO_FRED_KEY","NO_DATA","NO_REGISTRY"} 밖으로 새지 않아야 한다
+    out = adu.build_indicator({}, _META_HY)
+    assert out["_status"] == "NO_DATA"
 
 
 def test_build_indicator_computes_latest_and_rank():
