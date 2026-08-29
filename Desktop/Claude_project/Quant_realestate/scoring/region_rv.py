@@ -53,7 +53,7 @@ def _cell_labels(trades: pd.DataFrame, params: Params) -> pd.Series:
     return ab + CELL_SEP + gb
 
 
-def _basket_index(trades, amount_col, params, min_weight):
+def _basket_index(trades, amount_col, params, min_weight=0.5):
     """고정 바스켓 지역 대표가 (스펙 §2.2).
 
     연산 순서가 중요하다: 셀 집계 -> 셀 단위 롤링/이월 -> 게이트 -> 가중합.
