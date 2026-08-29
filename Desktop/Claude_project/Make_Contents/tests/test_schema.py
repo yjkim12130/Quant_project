@@ -99,3 +99,40 @@ def test_seo_title_candidates_must_be_three():
     data["b3_blog"]["seo_title_candidates"] = ["하나"]
     errors = validate_publish_pack(data)
     assert any("seo_title_candidates" in e for e in errors)
+
+
+def test_non_dict_tip_entry_is_reported():
+    data = copy.deepcopy(VALID_SHOOTING)
+    data["recipe_card"]["tips"] = ["just a string tip"]
+    errors = validate_shooting_guide(data)
+    assert isinstance(errors, list)
+    assert any("tips[0].what" in e for e in errors)
+    assert any("tips[0].why" in e for e in errors)
+
+
+def test_non_dict_recipe_card_is_reported():
+    data = copy.deepcopy(VALID_SHOOTING)
+    data["recipe_card"] = "oops, this is a string"
+    errors = validate_shooting_guide(data)
+    assert isinstance(errors, list)
+    assert any("recipe_card" in e for e in errors)
+
+
+def test_non_dict_top_level_argument_shooting_guide_is_reported():
+    errors = validate_shooting_guide("not a dict at all")
+    assert isinstance(errors, list)
+    assert errors  # every required key is reported missing, nothing raised
+
+
+def test_non_dict_top_level_argument_publish_pack_is_reported():
+    errors = validate_publish_pack(["not", "a", "dict"])
+    assert isinstance(errors, list)
+    assert errors  # every required key is reported missing, nothing raised
+
+
+def test_non_dict_b2_instagram_is_reported():
+    data = copy.deepcopy(VALID_PUBLISH)
+    data["b2_instagram"] = 12345
+    errors = validate_publish_pack(data)
+    assert isinstance(errors, list)
+    assert any("carousel" in e for e in errors)

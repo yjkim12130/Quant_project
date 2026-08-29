@@ -18,19 +18,39 @@ def _blank(value) -> bool:
     return not str(value or "").strip()
 
 
+def _as_dict(value) -> dict:
+    """value 가 dict 가 아니면 빈 dict 로 취급 — 잘못된 타입도 예외 대신 오류 목록으로."""
+    return value if isinstance(value, dict) else {}
+
+
+def _as_list(value) -> list:
+    """value 가 list 가 아니면 빈 list 로 취급 — 잘못된 타입도 예외 대신 오류 목록으로."""
+    return value if isinstance(value, list) else []
+
+
+def _as_str(value) -> str:
+    """value 를 문자열로 강제 — None 은 빈 문자열, 그 외 타입은 str() 변환."""
+    if isinstance(value, str):
+        return value
+    return "" if value is None else str(value)
+
+
 def validate_shooting_guide(data: dict) -> list[str]:
     errors: list[str] = []
+
+    data = _as_dict(data)
 
     for key in SHOOTING_KEYS:
         if key not in data:
             errors.append(f"필수 키 누락: {key}")
 
-    card = data.get("recipe_card") or {}
+    card = _as_dict(data.get("recipe_card"))
     for key in CARD_KEYS:
         if not card.get(key):
             errors.append(f"recipe_card.{key} 누락 또는 비어 있음")
 
-    for index, tip in enumerate(card.get("tips") or []):
+    for index, tip in enumerate(_as_list(card.get("tips"))):
+        tip = _as_dict(tip)
         if _blank(tip.get("what")):
             errors.append(f"recipe_card.tips[{index}].what 비어 있음")
         if _blank(tip.get("why")):
@@ -38,18 +58,18 @@ def validate_shooting_guide(data: dict) -> list[str]:
                 f"recipe_card.tips[{index}].why 비어 있음 — 원리 설명은 채널 정체성 규칙"
             )
 
-    scenario = data.get("a1_scenario") or {}
-    if len(scenario.get("hook_lines") or []) != 3:
+    scenario = _as_dict(data.get("a1_scenario"))
+    if len(_as_list(scenario.get("hook_lines"))) != 3:
         errors.append("a1_scenario.hook_lines 는 후보 3개여야 함")
 
-    if not (data.get("a2_script") or []):
+    if not _as_list(data.get("a2_script")):
         errors.append("a2_script 비어 있음")
 
-    camera = data.get("a3_camera") or {}
-    if len(camera.get("must_shots") or []) != 5:
+    camera = _as_dict(data.get("a3_camera"))
+    if len(_as_list(camera.get("must_shots"))) != 5:
         errors.append("a3_camera.must_shots 는 5개여야 함")
 
-    if not ((data.get("a4_differentiator") or {}).get("channel_edge") or []):
+    if not _as_list(_as_dict(data.get("a4_differentiator")).get("channel_edge")):
         errors.append("a4_differentiator.channel_edge 비어 있음")
 
     return errors
@@ -58,26 +78,28 @@ def validate_shooting_guide(data: dict) -> list[str]:
 def validate_publish_pack(data: dict, measure_note: str = "") -> list[str]:
     errors: list[str] = []
 
+    data = _as_dict(data)
+
     for key in ("b2_instagram", "b3_blog"):
         if key not in data:
             errors.append(f"필수 키 누락: {key}")
 
-    instagram = data.get("b2_instagram") or {}
-    carousel = instagram.get("carousel") or []
+    instagram = _as_dict(data.get("b2_instagram"))
+    carousel = _as_list(instagram.get("carousel"))
     if not CAROUSEL_MIN <= len(carousel) <= CAROUSEL_MAX:
         errors.append(
             f"b2_instagram.carousel 장수 {len(carousel)} — {CAROUSEL_MIN}~{CAROUSEL_MAX}장이어야 함"
         )
     if _blank(instagram.get("reels_caption")):
         errors.append("b2_instagram.reels_caption 비어 있음")
-    if not (instagram.get("hashtags") or []):
+    if not _as_list(instagram.get("hashtags")):
         errors.append("b2_instagram.hashtags 비어 있음")
 
-    blog = data.get("b3_blog") or {}
-    body = blog.get("body_markdown") or ""
+    blog = _as_dict(data.get("b3_blog"))
+    body = _as_str(blog.get("body_markdown"))
     if _blank(body):
         errors.append("b3_blog.body_markdown 비어 있음")
-    if len(blog.get("seo_title_candidates") or []) != 3:
+    if len(_as_list(blog.get("seo_title_candidates"))) != 3:
         errors.append("b3_blog.seo_title_candidates 는 후보 3개여야 함")
     if measure_note and measure_note not in body:
         errors.append(
