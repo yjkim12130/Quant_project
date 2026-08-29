@@ -145,3 +145,135 @@ def build_group(raw_group: dict, meta_group: dict) -> dict:
         "indicators": indicators,
         "_status": "ok" if ok else (indicators[0]["_status"] if indicators else "NO_DATA"),
     }
+
+
+# ─────────────────────────────────────────────────────────────────────
+# 파생 계산 — 원시값만으로는 크기를 가늠할 수 없어 해석 근거를 만든다
+# ─────────────────────────────────────────────────────────────────────
+def _find(groups: dict, gid: str, iid: str) -> dict:
+    """조립된 그룹에서 지표 1개를 꺼낸다. 없으면 빈 dict."""
+    for ind in groups.get(gid, {}).get("indicators", []):
+        if ind.get("id") == iid:
+            return ind
+    return {}
+
+
+def compute_m2_yoy(obs: list[dict]) -> Optional[float]:
+    """M2 전년동월 대비 증가율(%). 잔액보다 증감이 의미 있다."""
+    if len(obs) < 2:
+        return None
+    diff = change_over(obs, 365)
+    if diff is None:
+        return None
+    base = obs[-1]["value"] - diff       # 1년 전 값
+    if not base:
+        return None
+    return round(diff / base * 100, 2)
+
+
+def compute_qt_progress(obs: list[dict]) -> dict:
+    """연준 총자산 피크 대비 감축액·감축률 — 양적긴축 진행도."""
+    empty = {"peak": None, "peak_date": None, "current": None,
+             "drawdown": None, "drawdown_pct": None}
+    if not obs:
+        return empty
+    peak_obs = max(obs, key=lambda o: o["value"])
+    current = obs[-1]["value"]
+    drawdown = peak_obs["value"] - current
+    return {
+        "peak": peak_obs["value"], "peak_date": peak_obs["date"],
+        "current": current, "drawdown": round(drawdown, 2),
+        "drawdown_pct": (round(drawdown / peak_obs["value"] * 100, 2)
+                         if peak_obs["value"] else None),
+    }
+
+
+def compute_hy_ig_gap(hy: dict, ig: dict) -> Optional[float]:
+    """하이일드 − 투자등급 OAS(bp). 신용 차별화 정도."""
+    if hy.get("_status") != "ok" or ig.get("_status") != "ok":
+        return None
+    a, b = hy.get("latest"), ig.get("latest")
+    if not isinstance(a, (int, float)) or not isinstance(b, (int, float)):
+        return None
+    return round((a - b) * 100, 1)
+
+
+def compute_net_liquidity(groups: dict) -> Optional[float]:
+    """순유동성($M) = 연준 총자산 − 역레포 − 재무부 일반계정.
+
+    RRPONTSYD만 $B라 to_musd()로 맞춘 뒤 뺀다(스펙 §5 단위 정규화).
+    """
+    parts = []
+    for iid in ("fed_assets", "rrp", "tga"):
+        ind = _find(groups, "liquidity", iid)
+        if ind.get("_status") != "ok":
+            return None
+        v = to_musd(ind.get("latest"), ind.get("unit", ""))
+        if v is None:
+            return None
+        parts.append(v)
+    return round(parts[0] - parts[1] - parts[2], 2)
+
+
+def build_derived(groups: dict) -> dict:
+    """파생 지표 묶음."""
+    m2 = _find(groups, "liquidity", "m2")
+    fed = _find(groups, "liquidity", "fed_assets")
+    return {
+        "m2_yoy": compute_m2_yoy(m2.get("series", [])),
+        "qt": compute_qt_progress(fed.get("series", [])),
+        "hy_ig_gap": compute_hy_ig_gap(_find(groups, "credit", "hy_oas"),
+                                       _find(groups, "credit", "ig_oas")),
+        "net_liquidity": compute_net_liquidity(groups),
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────
+# 종합 판정 3줄 — 룰 템플릿(LLM 미사용)
+# ─────────────────────────────────────────────────────────────────────
+_UNKNOWN = "판정 불가"
+
+
+def build_assessment(groups: dict, derived: dict) -> list[dict]:
+    """유동성·신용·재정 3줄 판정. 근거 데이터가 없으면 '판정 불가'."""
+    rows = []
+
+    # 유동성 — M2 YoY 부호로 판정, 연준자산 축소율은 부연
+    m2_yoy = derived.get("m2_yoy")
+    if isinstance(m2_yoy, (int, float)):
+        verdict = "완화" if m2_yoy > 2 else "긴축" if m2_yoy < 0 else "중립"
+        text = f"M2 전년비 {m2_yoy:+.1f}%"
+        qt = derived.get("qt") or {}
+        if isinstance(qt.get("drawdown_pct"), (int, float)):
+            text += f" · 연준자산 피크 대비 {qt['drawdown_pct']:.1f}% 축소"
+    else:
+        verdict, text = _UNKNOWN, "M2 데이터 없음"
+    rows.append({"id": "liquidity", "label": "유동성", "verdict": verdict, "text": text})
+
+    # 신용 — HY OAS 3년 백분위
+    hy = _find(groups, "credit", "hy_oas")
+    rank = hy.get("pct_rank_3y") if hy.get("_status") == "ok" else None
+    if isinstance(rank, (int, float)):
+        verdict = ("스트레스" if rank > _RANK_HIGH
+                   else "안정" if rank < _RANK_LOW else "경계")
+        text = f"하이일드 OAS {hy.get('latest'):.2f}% (3년 백분위 {rank:.0f}%)"
+        gap = derived.get("hy_ig_gap")
+        if isinstance(gap, (int, float)):
+            text += f" · HY−IG {gap:+.0f}bp"
+    else:
+        verdict, text = _UNKNOWN, "신용 스프레드 데이터 없음"
+    rows.append({"id": "credit", "label": "신용", "verdict": verdict, "text": text})
+
+    # 재정 — 부채/GDP 1년 변화
+    dg = _find(groups, "fiscal", "debt_gdp")
+    if dg.get("_status") == "ok" and isinstance(dg.get("chg_1y"), (int, float)):
+        verdict = "부담 가중" if dg["chg_1y"] > 0 else "지속가능"
+        text = f"부채/GDP {dg['latest']:.1f}% (1년 {dg['chg_1y']:+.1f}%p)"
+        it = _find(groups, "fiscal", "interest")
+        if it.get("_status") == "ok" and isinstance(it.get("chg_1y"), (int, float)):
+            text += f" · 이자지급 1년 {it['chg_1y']:+,.0f}십억$"
+    else:
+        verdict, text = _UNKNOWN, "재정 데이터 없음"
+    rows.append({"id": "fiscal", "label": "재정", "verdict": verdict, "text": text})
+
+    return rows

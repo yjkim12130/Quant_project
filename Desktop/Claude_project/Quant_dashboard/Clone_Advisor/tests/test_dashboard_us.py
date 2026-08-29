@@ -95,3 +95,73 @@ def test_build_indicator_assessment_flips_for_higher_is_better():
     obs = [{"date": f"2026-0{i}-01", "value": float(i)} for i in range(1, 9)]
     out = adu.build_indicator({"_status": "ok", "observations": obs}, meta)
     assert "양호" in out["assessment"]
+
+
+# ── 파생 계산 ────────────────────────────────────────────────
+def test_compute_m2_yoy_percent_change():
+    obs = [{"date": "2025-08-01", "value": 100.0},
+           {"date": "2026-08-01", "value": 110.0}]
+    assert adu.compute_m2_yoy(obs) == 10.0
+
+
+def test_compute_m2_yoy_short_history_returns_none():
+    assert adu.compute_m2_yoy([{"date": "2026-08-01", "value": 100.0}]) is None
+
+
+def test_compute_qt_progress_measures_drawdown_from_peak():
+    obs = [{"date": "2026-01-01", "value": 8000.0},
+           {"date": "2026-04-01", "value": 9000.0},   # 피크
+           {"date": "2026-08-01", "value": 6750.0}]
+    out = adu.compute_qt_progress(obs)
+    assert out["peak"] == 9000.0
+    assert out["peak_date"] == "2026-04-01"
+    assert out["current"] == 6750.0
+    assert out["drawdown"] == 2250.0
+    assert out["drawdown_pct"] == 25.0
+
+
+def test_compute_hy_ig_gap_in_basis_points():
+    hy = {"_status": "ok", "latest": 2.63}
+    ig = {"_status": "ok", "latest": 0.79}
+    assert adu.compute_hy_ig_gap(hy, ig) == 184.0
+
+
+def test_compute_hy_ig_gap_none_when_either_missing():
+    assert adu.compute_hy_ig_gap({"_status": "NO_DATA", "latest": None},
+                                 {"_status": "ok", "latest": 0.79}) is None
+
+
+def test_compute_net_liquidity_normalizes_billions_before_subtracting():
+    # WALCL·WTREGEN은 $M, RRP만 $B — 정규화 없이 빼면 1000배 틀린다
+    groups = {"liquidity": {"indicators": [
+        {"id": "fed_assets", "_status": "ok", "latest": 6_730_912.0,
+         "unit": "Mil. of U.S. $"},
+        {"id": "rrp", "_status": "ok", "latest": 0.17, "unit": "Bil. of US $"},
+        {"id": "tga", "_status": "ok", "latest": 950_736.0,
+         "unit": "Mil. of U.S. $"},
+    ]}}
+    assert adu.compute_net_liquidity(groups) == 5_780_006.0
+
+
+def test_compute_net_liquidity_none_when_component_missing():
+    groups = {"liquidity": {"indicators": [
+        {"id": "fed_assets", "_status": "NO_FRED_KEY", "latest": None,
+         "unit": "Mil. of U.S. $"},
+    ]}}
+    assert adu.compute_net_liquidity(groups) is None
+
+
+# ── 종합 판정 ────────────────────────────────────────────────
+def test_build_assessment_flags_credit_stress_at_high_rank():
+    groups = {"credit": {"indicators": [
+        {"id": "hy_oas", "_status": "ok", "latest": 8.0, "pct_rank_3y": 95.0},
+    ]}}
+    rows = adu.build_assessment(groups, {})
+    credit = next(r for r in rows if r["id"] == "credit")
+    assert credit["verdict"] == "스트레스"
+
+
+def test_build_assessment_reports_unknown_when_data_missing():
+    rows = adu.build_assessment({}, {})
+    assert all(r["verdict"] == "판정 불가" for r in rows)
+    assert len(rows) == 3
