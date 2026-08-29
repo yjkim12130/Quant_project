@@ -1,6 +1,7 @@
 # ── API 키 (절대 커밋 금지) ─────────────────────────────────
 .anthropic_api_key
 .dart_api_key
+.fred_api_key
 .app_password
 .env
 *.key
