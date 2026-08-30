@@ -47,7 +47,8 @@ def fetch_fred_series(series_id: str, api_key: str, years: int = 3) -> dict:
         r = requests.get(
             f"{_FRED_BASE}/series/observations",
             params={"series_id": series_id, "api_key": api_key,
-                    "file_type": "json", "observation_start": start},
+                    "file_type": "json", "observation_start": start,
+                    "sort_order": "asc"},
             headers=_HEADERS, timeout=20)
         if r.status_code != 200:
             return {"_status": "NO_DATA", "series_id": series_id,
