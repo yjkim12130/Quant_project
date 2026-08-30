@@ -402,3 +402,48 @@ def test_low_boundary_rank_agrees_between_card_and_summary():
 def test_mid_rank_is_neutral_in_both_card_and_summary():
     assert adu._assess(50.0, "worse") == "중간권"
     assert _credit_verdict(50.0) == "경계"
+
+
+# ── 판정 임계값 분기 커버리지 (F8) ───────────────────────────────────
+# build_assessment은 이 기능의 경제적 주장이 모여 있는 곳인데 기존 테스트는
+# derived={}만 넘겨 8개 분기 중 1개(신용 스트레스)만 실행했다. 유동성 4분면은
+# F3 테스트가 이미 덮으므로 여기선 신용 나머지 분기와 재정 2분기를 채운다.
+def test_build_assessment_credit_stable_at_low_rank():
+    assert _credit_verdict(10.0) == "안정"
+
+
+def test_build_assessment_credit_caution_at_mid_rank():
+    assert _credit_verdict(50.0) == "경계"
+
+
+def test_build_assessment_fiscal_burden_increasing_when_ratio_rises():
+    groups = {"fiscal": {"indicators": [
+        {"id": "debt_gdp", "_status": "ok", "latest": 120.5, "chg_1y": 2.3}]}}
+    fiscal = next(r for r in adu.build_assessment(groups, {}) if r["id"] == "fiscal")
+    assert fiscal["verdict"] == "부담 가중"
+
+
+def test_build_assessment_fiscal_sustainable_when_ratio_falls():
+    groups = {"fiscal": {"indicators": [
+        {"id": "debt_gdp", "_status": "ok", "latest": 118.0, "chg_1y": -1.0}]}}
+    fiscal = next(r for r in adu.build_assessment(groups, {}) if r["id"] == "fiscal")
+    assert fiscal["verdict"] == "지속가능"
+
+
+def test_build_assessment_fiscal_unknown_when_data_missing():
+    fiscal = next(r for r in adu.build_assessment({}, {}) if r["id"] == "fiscal")
+    assert fiscal["verdict"] == "판정 불가"
+
+
+# ── 레지스트리 unit 계약 (F8) ────────────────────────────────────────
+# macro_series.json 오타(예: "Bil. of U.S. $" — 매핑된 "Bil. of US $"와
+# 다름)는 to_musd()에서 조용히 None이 된다. 모든 unit이 _UNIT_TO_MUSD에
+# 있거나 알려진 비금액 단위인지 계약으로 고정한다.
+_NON_MONEY_UNITS = {"%", "% of GDP"}
+
+
+def test_all_registry_units_are_mapped_or_known_non_money():
+    reg = adu.load_macro_series()
+    units = {i.get("unit") for g in reg["groups"] for i in g.get("indicators", [])}
+    unmapped = units - set(adu._UNIT_TO_MUSD) - _NON_MONEY_UNITS
+    assert not unmapped, f"매핑되지 않은 unit: {unmapped}"
