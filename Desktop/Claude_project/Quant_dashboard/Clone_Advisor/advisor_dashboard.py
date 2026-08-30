@@ -130,7 +130,9 @@ def build_yield_curve(raw: dict) -> dict:
     """
     status = raw.get("_status")
     if status != "ok" or not raw.get("series"):
-        return {"_status": status if status != "ok" else "NO_DATA",
+        # _status 키 자체가 없으면 status는 None이다. status != "ok"만 보면
+        # None이 그대로 새어 나간다(build_indicator에서 이미 고친 결함과 동일).
+        return {"_status": status if (status and status != "ok") else "NO_DATA",
                 "_msg": raw.get("_msg", ""), **_EMPTY_YIELD_CURVE}
 
     series = [
