@@ -233,3 +233,109 @@ def test_registry_gives_fed_assets_a_longer_lookback():
     fed = next(i for g in reg["groups"] if g["id"] == "liquidity"
                for i in g["indicators"] if i["id"] == "fed_assets")
     assert fed["years"] >= 5
+
+
+# ── 순유동성 시계열 (관측치마다 단위 정규화) ─────────────────────────
+def _liq_groups(fed=None, rrp=None, tga=None):
+    """liquidity 그룹 3종을 시계열로 세팅. 기본값은 전부 정상."""
+    return {"liquidity": {"indicators": [
+        {"id": "fed_assets", "_status": "ok", "unit": "Mil. of U.S. $",
+         "series": fed if fed is not None else [
+             {"date": "2026-06-03", "value": 6_800_000.0},
+             {"date": "2026-06-10", "value": 6_750_000.0}]},
+        {"id": "rrp", "_status": "ok", "unit": "Bil. of US $",
+         "series": rrp if rrp is not None else [
+             {"date": "2026-06-03", "value": 10.0},     # = 10,000 $M
+             {"date": "2026-06-08", "value": 99.0},     # 교집합 밖(일간)
+             {"date": "2026-06-10", "value": 20.0}]},   # = 20,000 $M
+        {"id": "tga", "_status": "ok", "unit": "Mil. of U.S. $",
+         "series": tga if tga is not None else [
+             {"date": "2026-06-03", "value": 800_000.0},
+             {"date": "2026-06-10", "value": 750_000.0}]},
+    ]}}
+
+
+def test_net_liquidity_series_intersects_dates_and_sorts():
+    out = adu.build_net_liquidity_series(_liq_groups())
+    # 역레포만 일간이라 06-08은 교집합에서 빠진다 → 주간이 된다
+    assert [o["date"] for o in out] == ["2026-06-03", "2026-06-10"]
+
+
+def test_net_liquidity_series_normalizes_billions_per_observation():
+    # 정규화를 빼먹으면 6,800,000 - 10 - 800,000 = 5,999,990 으로 1000배 틀린다
+    out = adu.build_net_liquidity_series(_liq_groups())
+    assert out[0]["value"] == 6_800_000.0 - 10_000.0 - 800_000.0   # 5,990,000
+    assert out[1]["value"] == 6_750_000.0 - 20_000.0 - 750_000.0   # 5,980,000
+
+
+def test_net_liquidity_series_empty_when_a_component_failed():
+    groups = _liq_groups()
+    groups["liquidity"]["indicators"][1]["_status"] = "NO_DATA"
+    assert adu.build_net_liquidity_series(groups) == []
+
+
+def test_net_liquidity_series_empty_when_no_common_dates():
+    groups = _liq_groups(tga=[{"date": "2025-01-01", "value": 800_000.0}])
+    assert adu.build_net_liquidity_series(groups) == []
+
+
+def test_build_derived_exposes_net_liquidity_series_and_3m_change():
+    derived = adu.build_derived(_liq_groups())
+    assert len(derived["net_liquidity_series"]) == 2
+    assert "net_liquidity_chg_3m" in derived
+
+
+# ── 유동성 판정 4분면 (스펙 §7: 순유동성 3개월 변화 + M2 YoY 부호) ────
+def _liquidity_row(derived):
+    return next(r for r in adu.build_assessment({}, derived) if r["id"] == "liquidity")
+
+
+def test_liquidity_easing_when_both_signals_positive():
+    row = _liquidity_row({"net_liquidity": 5_800_000.0,
+                          "net_liquidity_chg_3m": 120_000.0, "m2_yoy": 5.4})
+    assert row["verdict"] == "완화"
+    assert "$5.80T" in row["text"]          # $M 원시값이 아니라 조 단위로
+
+
+def test_liquidity_tightening_when_both_signals_negative():
+    row = _liquidity_row({"net_liquidity": 5_800_000.0,
+                          "net_liquidity_chg_3m": -120_000.0, "m2_yoy": -1.2})
+    assert row["verdict"] == "긴축"
+
+
+def test_liquidity_neutral_when_signals_disagree():
+    row = _liquidity_row({"net_liquidity": 5_800_000.0,
+                          "net_liquidity_chg_3m": 120_000.0, "m2_yoy": -1.2})
+    assert row["verdict"] == "중립"
+
+
+def test_liquidity_falls_back_to_m2_sign_and_says_so():
+    # 구 규칙(m2_yoy > 2)이면 1.0%는 "중립"이었다 — 스펙은 부호만 본다
+    row = _liquidity_row({"m2_yoy": 1.0})
+    assert row["verdict"] == "완화"
+    assert "순유동성 근거 없음" in row["text"]
+
+
+def test_liquidity_unknown_when_no_evidence_at_all():
+    assert _liquidity_row({})["verdict"] == "판정 불가"
+
+
+# ── 금액 표시 포맷 ───────────────────────────────────────────────────
+def test_fmt_usd_shrinks_raw_dollars_to_trillions():
+    # 15자리("37,900,000,000,000.00")가 좁은 metric 카드를 넘치던 문제
+    assert adu.fmt_usd(37_900_000_000_000.0, "$") == "$37.90T"
+
+
+def test_fmt_usd_picks_billions_and_millions_by_magnitude():
+    assert adu.fmt_usd(950_736.0, "Mil. of U.S. $") == "$950.7B"
+    assert adu.fmt_usd(0.17, "Bil. of US $") == "$170.0M"
+
+
+def test_fmt_usd_leaves_non_money_units_alone():
+    assert adu.fmt_usd(2.63, "%") == "2.63"
+    assert adu.fmt_usd(None, "%") == "—"
+
+
+def test_fmt_usd_signs_deltas():
+    assert adu.fmt_usd(120_000.0, signed=True) == "+$120.0B"
+    assert adu.fmt_usd(-120_000.0, signed=True) == "-$120.0B"

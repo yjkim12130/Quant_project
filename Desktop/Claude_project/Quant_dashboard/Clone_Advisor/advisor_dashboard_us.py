@@ -52,6 +52,31 @@ def to_musd(value: Optional[float], unit: str) -> Optional[float]:
     return None if mult is None else value * mult
 
 
+# 파생값은 전부 $M 기준이라 표시 포맷터의 기본 단위도 $M이다.
+_MUSD = "Mil. of U.S. $"
+
+
+def fmt_usd(value: Optional[float], unit: str = _MUSD, signed: bool = False) -> str:
+    """금액을 자릿수에 맞춰 $T/$B/$M로 줄여 표기. 금액 단위가 아니면 원값.
+
+    연방 총부채는 원 단위 달러($)로 와서 그대로 찍으면 15자리가 되고 좁은
+    metric 카드를 넘친다. 그렇다고 조($T) 고정으로 하면 역레포(수백 $M)나
+    월간 재정수지가 0.00T이 되어 못 읽는다 — 그래서 크기에 맞춰 고른다.
+    """
+    if not isinstance(value, (int, float)):
+        return "—"
+    musd = to_musd(value, unit)
+    if musd is None:                      # "%", "% of GDP" 등 비금액 단위
+        return f"{value:+,.2f}" if signed else f"{value:,.2f}"
+    sign = "-" if musd < 0 else ("+" if signed else "")
+    a = abs(musd)
+    if a >= 1_000_000:
+        return f"{sign}${a / 1_000_000:,.2f}T"
+    if a >= 1_000:
+        return f"{sign}${a / 1_000:,.1f}B"
+    return f"{sign}${a:,.1f}M"
+
+
 def pct_rank(values: list[float], current: float) -> Optional[float]:
     """values 안에서 current의 백분위(0~100). 자기 자신 포함 <= 비율."""
     if not values:
@@ -242,16 +267,54 @@ def compute_net_liquidity(groups: dict) -> Optional[float]:
     return round(parts[0] - parts[1] - parts[2], 2)
 
 
+_NET_LIQUIDITY_PARTS = ("fed_assets", "rrp", "tga")
+
+
+def build_net_liquidity_series(groups: dict) -> list[dict]:
+    """순유동성 시계열 = 연준 총자산 − 역레포 − 재무부 일반계정 ($M).
+
+    스칼라 버전(compute_net_liquidity)과 같은 단위 함정을 관측치마다 밟는다
+    — WALCL/WTREGEN은 $M인데 RRPONTSYD만 $B라 날짜별로 to_musd()를 태우지
+    않으면 1000배 틀린다.
+
+    세 시리즈는 주기가 다르다(연준자산·TGA는 주간, 역레포는 일간). 보간 대신
+    공통 날짜 교집합만 쓴다 — 결과는 주간이 되고 그걸로 충분하다. 셋 중
+    하나라도 ok가 아니면 빈 리스트(부분 합성으로 거짓 추세를 만들지 않는다).
+    """
+    maps: list[dict] = []
+    for iid in _NET_LIQUIDITY_PARTS:
+        ind = _find(groups, "liquidity", iid)
+        if ind.get("_status") != "ok":
+            return []
+        unit = ind.get("unit", "")
+        by_date = {}
+        for o in ind.get("series", []):
+            value = to_musd(o.get("value"), unit)
+            day = o.get("date")
+            if value is not None and day:
+                by_date[day] = value
+        if not by_date:
+            return []
+        maps.append(by_date)
+
+    common = set(maps[0]) & set(maps[1]) & set(maps[2])
+    return [{"date": d, "value": round(maps[0][d] - maps[1][d] - maps[2][d], 2)}
+            for d in sorted(common)]
+
+
 def build_derived(groups: dict) -> dict:
     """파생 지표 묶음."""
     m2 = _find(groups, "liquidity", "m2")
     fed = _find(groups, "liquidity", "fed_assets")
+    nl_series = build_net_liquidity_series(groups)
     return {
         "m2_yoy": compute_m2_yoy(m2.get("series", [])),
         "qt": compute_qt_progress(fed.get("series", [])),
         "hy_ig_gap": compute_hy_ig_gap(_find(groups, "credit", "hy_oas"),
                                        _find(groups, "credit", "ig_oas")),
         "net_liquidity": compute_net_liquidity(groups),
+        "net_liquidity_series": nl_series,
+        "net_liquidity_chg_3m": change_over(nl_series, 90),
     }
 
 
@@ -261,20 +324,44 @@ def build_derived(groups: dict) -> dict:
 _UNKNOWN = "판정 불가"
 
 
+def _sign_verdict(value: float) -> str:
+    """근거가 하나뿐일 때 그 부호만으로 방향을 읽는다."""
+    return "완화" if value > 0 else "긴축" if value < 0 else "중립"
+
+
 def build_assessment(groups: dict, derived: dict) -> list[dict]:
     """유동성·신용·재정 3줄 판정. 근거 데이터가 없으면 '판정 불가'."""
     rows = []
 
-    # 유동성 — M2 YoY 부호로 판정, 연준자산 축소율은 부연
+    # 유동성 — 스펙 §7: "순유동성 3개월 변화 + M2 YoY 부호"
     m2_yoy = derived.get("m2_yoy")
-    if isinstance(m2_yoy, (int, float)):
-        verdict = "완화" if m2_yoy > 2 else "긴축" if m2_yoy < 0 else "중립"
-        text = f"M2 전년비 {m2_yoy:+.1f}%"
+    nl = derived.get("net_liquidity")
+    nl_chg = derived.get("net_liquidity_chg_3m")
+    has_m2 = isinstance(m2_yoy, (int, float))
+    has_nl = isinstance(nl_chg, (int, float))
+
+    nl_txt = (f"순유동성 {fmt_usd(nl)} "
+              f"(3개월 {fmt_usd(nl_chg, signed=True)})") if has_nl else ""
+    m2_txt = f"M2 전년비 {m2_yoy:+.1f}%" if has_m2 else ""
+
+    if has_nl and has_m2:
+        # 두 근거의 부호가 같을 때만 방향을 단정한다. 엇갈리면 중립.
+        verdict = ("완화" if nl_chg > 0 and m2_yoy > 0 else
+                   "긴축" if nl_chg < 0 and m2_yoy < 0 else "중립")
+        text = f"{nl_txt} · {m2_txt}"
+    elif has_m2:
+        verdict = _sign_verdict(m2_yoy)
+        text = f"{m2_txt} · 순유동성 근거 없음(연준자산·역레포·TGA 중 결측)"
+    elif has_nl:
+        verdict = _sign_verdict(nl_chg)
+        text = f"{nl_txt} · M2 데이터 없음"
+    else:
+        verdict, text = _UNKNOWN, "유동성 데이터 없음"
+
+    if verdict != _UNKNOWN:
         qt = derived.get("qt") or {}
         if isinstance(qt.get("drawdown_pct"), (int, float)):
             text += f" · 연준자산 피크 대비 {qt['drawdown_pct']:.1f}% 축소"
-    else:
-        verdict, text = _UNKNOWN, "M2 데이터 없음"
     rows.append({"id": "liquidity", "label": "유동성", "verdict": verdict, "text": text})
 
     # 신용 — HY OAS 3년 백분위

@@ -624,6 +624,19 @@ with tab4:
 
         for group in bus["groups"].values():
             st.markdown(f"### {group['label']}")
+
+            # 순유동성은 어느 지표 카드에도 없는 파생값이라 여기서 노출한다.
+            # 시장에 실제로 남는 유동성 = 연준자산 − 역레포 − TGA (스펙 §7)
+            if group.get("id") == "liquidity":
+                nl = bus.get("derived", {}).get("net_liquidity")
+                nl_chg = bus.get("derived", {}).get("net_liquidity_chg_3m")
+                if isinstance(nl, (int, float)):
+                    st.metric(
+                        "순유동성 (연준자산 − 역레포 − TGA)", adu.fmt_usd(nl),
+                        delta=(f"{adu.fmt_usd(nl_chg, signed=True)} (3개월)"
+                               if isinstance(nl_chg, (int, float)) else None))
+                    st.caption("세 시리즈의 공통 관측일(주간) 기준 · $M 정규화 후 합성")
+
             inds = group["indicators"]
             if not inds:
                 # 레지스트리에서 indicators를 비운 그룹. st.columns(0)은 예외를
@@ -637,11 +650,12 @@ with tab4:
 
             g_cols = st.columns(len(inds))
             for i, ind in enumerate(inds):
-                value = ind["latest"]
+                # 연방 총부채는 원 단위 달러라 그대로 찍으면 15자리다 —
+                # fmt_usd가 자릿수에 맞춰 $T/$B/$M로 줄인다.
+                unit = ind.get("unit", "")
                 g_cols[i].metric(
-                    ind["label"],
-                    f"{value:,.2f}" if isinstance(value, (int, float)) else "—",
-                    delta=(f"{ind['chg_1m']:+,.2f} (1개월)"
+                    ind["label"], adu.fmt_usd(ind["latest"], unit),
+                    delta=(f"{adu.fmt_usd(ind['chg_1m'], unit, signed=True)} (1개월)"
                            if isinstance(ind["chg_1m"], (int, float)) else None))
                 g_cols[i].caption(f"{ind['unit_label']} · {ind['freq']}"
                                   + (f" · {ind['assessment']}" if ind["assessment"] else ""))

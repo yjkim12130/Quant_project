@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Optional
 
 import advisor_dashboard as adb
+import advisor_dashboard_us as adu
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -404,9 +405,12 @@ def _macro_group_html(group: dict) -> str:
     for ind in inds:
         value = ind.get("latest")
         chg = ind.get("chg_1m")
+        unit = ind.get("unit", "")
         cls = "up" if isinstance(chg, (int, float)) and chg >= 0 else "down"
-        val_txt = f"{value:,.2f}" if isinstance(value, (int, float)) else "—"
-        chg_txt = f"1개월 {chg:+,.2f}" if isinstance(chg, (int, float)) else "1개월 —"
+        # 연방 총부채(원 단위 달러)가 15자리로 카드를 넘치지 않도록 축약한다
+        val_txt = adu.fmt_usd(value, unit)
+        chg_txt = (f"1개월 {adu.fmt_usd(chg, unit, signed=True)}"
+                   if isinstance(chg, (int, float)) else "1개월 —")
         cards.append(
             f'<div class="card"><h3>{html.escape(ind.get("label", ""))}</h3>'
             f'<div class="val">{val_txt}</div>'
@@ -427,6 +431,26 @@ def _macro_group_html(group: dict) -> str:
     return f'<div class="grid">{"".join(cards)}</div>{table}'
 
 
+def _net_liquidity_html(derived: dict) -> str:
+    """순유동성 카드 — 어느 지표 카드에도 없는 파생값이라 따로 낸다.
+
+    tab4의 st.metric과 같은 내용을 자립형 HTML로 옮긴 것(스펙 §7).
+    """
+    nl = derived.get("net_liquidity")
+    if not isinstance(nl, (int, float)):
+        return ""
+    chg = derived.get("net_liquidity_chg_3m")
+    cls = "up" if isinstance(chg, (int, float)) and chg >= 0 else "down"
+    chg_txt = (f"3개월 {adu.fmt_usd(chg, signed=True)}"
+               if isinstance(chg, (int, float)) else "3개월 —")
+    return ('<div class="grid"><div class="card">'
+            "<h3>순유동성 (연준자산 − 역레포 − TGA)</h3>"
+            f'<div class="val">{adu.fmt_usd(nl)}</div>'
+            f'<div class="{cls}">{chg_txt}</div>'
+            "<div>세 시리즈의 공통 관측일(주간) 기준 · $M 정규화 후 합성</div>"
+            "</div></div>")
+
+
 def _macro_assessment_html(rows: list[dict]) -> str:
     if not rows:
         return "<p>판정 데이터가 없습니다.</p>"
@@ -443,9 +467,13 @@ def render_html_us(briefing: dict) -> str:
     plotly를 심을 수 없는 자립형 HTML이므로(Streamlit 탭에는 인터랙티브
     차트가 있다) 카드의 1개월 변화와 최근 5개 관측치 표로 추세를 대신
     전달한다. 그룹/지표 조회 실패는 예외를 내지 않고 안내 문구로 대체한다."""
+    derived = briefing.get("derived", {}) or {}
     sections = [("종합 판정", _macro_assessment_html(briefing.get("assessment", [])))]
     for group in briefing.get("groups", {}).values():
-        sections.append((group.get("label", ""), _macro_group_html(group)))
+        body = _macro_group_html(group)
+        if group.get("id") == "liquidity":
+            body = _net_liquidity_html(derived) + body
+        sections.append((group.get("label", ""), body))
 
     body = "".join(f'<div class="section-title">{html.escape(title)}</div>{section_html}'
                    for title, section_html in sections)
