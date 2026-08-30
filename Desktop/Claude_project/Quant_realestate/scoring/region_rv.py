@@ -190,3 +190,47 @@ def region_rv(index, tiers, params=None):
                     .transform(lambda s: _trailing_z(s, params.lookback_months,
                                                      params.min_group_z)))
     return df
+
+
+def pair_ratio(index, key_a, key_b, params=None):
+    """두 지역 직접 비교 (스펙 §4.1). 티어가 달라도 비교 가능하다.
+
+    반환: month, price_a, price_b, ratio, z
+    """
+    params = params or Params()
+    a = index[index["region_key"] == key_a].set_index("month")["price"].rename("price_a")
+    b = index[index["region_key"] == key_b].set_index("month")["price"].rename("price_b")
+    out = pd.concat([a, b], axis=1).dropna().sort_index()
+    if out.empty:
+        return out.assign(ratio=np.nan, z=np.nan).reset_index(names="month")
+    out["ratio"] = out["price_a"] / out["price_b"]
+    out["z"] = _trailing_z(out["ratio"], params.lookback_months, params.min_group_z)
+    return out.reset_index(names="month")
+
+
+def region_jeonse_ratio(conn, sale_index, level="sgg", params=None, min_weight=0.5):
+    """지역 전세가율 (표시 전용). 매매와 같은 고정 바스켓을 전세 보증금에 적용한 뒤
+    sale_index의 매매 대표가로 나눈다. 순수 전세(월세 0)만 쓰고, trades_jeonse는
+    2011-01부터라 그 이전 월은 NaN이 된다.
+
+    반환: region_key, month, jeonse_price, jeonse_ratio
+    """
+    _check_level(level)
+    params = params or Params()
+    base = sale_index[["region_key", "month", "price"]].copy()
+    try:
+        tr = _load_trades(conn, "trades_jeonse", "deposit",
+                          "AND COALESCE(monthly_rent, 0) = 0")
+    except Exception:  # noqa: BLE001 - 테이블 자체가 없는 중간 상태 방어
+        tr = pd.DataFrame()
+    if tr.empty:
+        return base.assign(jeonse_price=np.nan,
+                           jeonse_ratio=np.nan)[["region_key", "month",
+                                                 "jeonse_price", "jeonse_ratio"]]
+    tr["region_key"] = _region_key(tr, level)
+    jeonse = (_basket_index(tr, "deposit", params, min_weight)
+              .rename(columns={"price": "jeonse_price"})[["region_key", "month",
+                                                          "jeonse_price"]])
+    out = base.merge(jeonse, on=["region_key", "month"], how="left")
+    out["jeonse_ratio"] = out["jeonse_price"] / out["price"]
+    return out[["region_key", "month", "jeonse_price", "jeonse_ratio"]]

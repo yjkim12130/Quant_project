@@ -226,3 +226,54 @@ def test_rv_z_sign_convention_negative_is_cheap():
     rv = R.region_rv(cheap, R.assign_tiers(cheap, n_tiers=3))
     last = rv[(rv["region_key"] == "D") & (rv["month"] == MONTHS7[-1])]
     assert last["rv_z"].iloc[0] < 0
+
+
+def test_pair_ratio_is_scale_invariant():
+    idx = _fake_index(LEVELS7, MONTHS7)
+    p1 = R.pair_ratio(idx, "A", "B")
+    scaled = idx.copy()
+    scaled.loc[scaled["region_key"] == "A", "price"] *= 7.0
+    p2 = R.pair_ratio(scaled, "A", "B")
+    assert np.allclose(p1["z"].dropna(), p2["z"].dropna())     # z는 곱셈 상수에 불변
+    assert np.allclose(p2["ratio"], p1["ratio"] * 7.0)         # 비율 자체는 7배
+
+
+def test_pair_ratio_uses_only_overlapping_months():
+    idx = _fake_index(LEVELS7, MONTHS7)
+    trimmed = idx[~((idx["region_key"] == "B") & (idx["month"] < "2020-01"))]
+    p = R.pair_ratio(trimmed, "A", "B")
+    assert p["month"].min() == pd.Period("2020-01", freq="M")
+
+
+def test_region_jeonse_ratio_joins_to_sale_index():
+    months = pd.period_range("2020-01", "2021-12", freq="M")
+    df = make_trades([(a, b, p, 10) for a, b, p in NINE], months, "11470", "양천구", "목동")
+    conn = _memory_db(df, "trades_sale")
+    jeonse = df.copy()
+    jeonse["deposit"] = jeonse["deal_amount"] * 0.6
+    jeonse["monthly_rent"] = 0
+    jeonse["contract_date"] = jeonse["month"].dt.to_timestamp().dt.strftime("%Y-%m-15")
+    jeonse[["region_code", "region_name", "dong_name", "exclusive_area", "build_year",
+            "contract_date", "deposit", "monthly_rent"]].to_sql("trades_jeonse", conn,
+                                                                index=False)
+    sale_index = R.region_price_index(conn, "sgg")
+    out = R.region_jeonse_ratio(conn, sale_index, "sgg")
+    assert len(out) == len(sale_index)
+    assert out["jeonse_ratio"].dropna().round(3).eq(0.6).all()
+    conn.close()
+
+
+def test_region_jeonse_ratio_excludes_monthly_rent():
+    months = pd.period_range("2020-01", "2021-12", freq="M")
+    df = make_trades([(a, b, p, 10) for a, b, p in NINE], months, "11470", "양천구", "목동")
+    conn = _memory_db(df, "trades_sale")
+    jeonse = df.copy()
+    jeonse["deposit"] = jeonse["deal_amount"] * 0.6
+    jeonse["monthly_rent"] = 50            # 전부 월세 -> 전세가율은 전부 NaN
+    jeonse["contract_date"] = jeonse["month"].dt.to_timestamp().dt.strftime("%Y-%m-15")
+    jeonse[["region_code", "region_name", "dong_name", "exclusive_area", "build_year",
+            "contract_date", "deposit", "monthly_rent"]].to_sql("trades_jeonse", conn,
+                                                                index=False)
+    out = R.region_jeonse_ratio(conn, R.region_price_index(conn, "sgg"), "sgg")
+    assert out["jeonse_ratio"].isna().all()
+    conn.close()
