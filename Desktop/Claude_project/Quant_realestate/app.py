@@ -100,8 +100,8 @@ budget = st.sidebar.number_input("총 예산 상한 (억원, 0=미적용)", min_
 
 # ---------------------------------------------------------------- 탭
 
-tab0, tabT, tabA, tabS, tabTr, tab1, tab2, tab3 = st.tabs(
-    ["📖 가이드", "⏱️ 매수 타이밍", "🌐 자산 비교", "🏗️ 공급", "🚇 교통",
+tab0, tabT, tabA, tabR, tabS, tabTr, tab1, tab2, tab3 = st.tabs(
+    ["📖 가이드", "⏱️ 매수 타이밍", "🌐 자산 비교", "🗺️ 급지 비교", "🏗️ 공급", "🚇 교통",
      "🔍 저평가 스크리너", "🏢 단지 상세", "🧪 백테스트"])
 
 # ---------------------------------------------------------------- Tab0 가이드
@@ -429,6 +429,130 @@ with tabA:
 """)
     except Exception as e:  # noqa: BLE001
         st.error(f"자산 비교 탭 오류: {e}")
+        st.exception(e)
+
+# ---------------------------------------------------------------- TabR 급지 비교
+
+REGION_LEVELS = {"구 단위 (시군구 68개)": "sgg", "동 단위 (법정동 928개)": "dong"}
+
+
+@st.cache_data(ttl=3600, show_spinner="지역 가격지수 계산 중 (최초 1회, 30초 내외)...")
+def load_region_index(level):
+    import sqlite3
+    from scoring.engine import DB_PATH
+    from scoring.region_rv import region_price_index
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        return region_price_index(conn, level)
+    except Exception:  # noqa: BLE001 - 테이블 부재 등 중간 상태에서도 앱이 죽지 않게
+        return pd.DataFrame(columns=["month", "region_key", "price", "w_valid",
+                                     "n_trades", "region_label"])
+    finally:
+        conn.close()
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_region_universe(level):
+    """커버리지 문구의 분모. region_price_index는 가중치 게이트를 한 달도 통과하지 못한
+    지역을 아예 반환하지 않으므로(동 단위 240개), 지수 결과로 분모를 세면 제외 규모가
+    과소표시된다. 원천 실거래에서 직접 센다."""
+    import sqlite3
+    from scoring.engine import DB_PATH
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        if level == "sgg":
+            q = "SELECT COUNT(DISTINCT region_code) FROM trades_sale WHERE cancelled = 0"
+        else:
+            q = ("SELECT COUNT(*) FROM (SELECT DISTINCT region_code, dong_name "
+                 "FROM trades_sale WHERE cancelled = 0)")
+        return int(pd.read_sql_query(q, conn).iat[0, 0])
+    finally:
+        conn.close()
+
+
+@st.cache_data(ttl=3600, show_spinner="전세가율 계산 중...")
+def load_region_jeonse(level):
+    """전세는 654만 행이라 무겁다. 사용자가 전세가율을 켤 때만 호출한다."""
+    import sqlite3
+    from scoring.engine import DB_PATH
+    from scoring.region_rv import region_jeonse_ratio
+    idx = load_region_index(level)
+    if idx.empty:
+        return pd.DataFrame(columns=["region_key", "month", "jeonse_price", "jeonse_ratio"])
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        return region_jeonse_ratio(conn, idx, level)
+    except Exception:  # noqa: BLE001
+        return pd.DataFrame(columns=["region_key", "month", "jeonse_price", "jeonse_ratio"])
+    finally:
+        conn.close()
+
+
+with tabR:
+    try:
+        from scoring.region_rv import assign_tiers, pair_ratio, region_rv as compute_region_rv
+
+        st.markdown("##### 비슷한 급지끼리 비교 - 같은 급지에서 평소보다 싸진 곳 찾기")
+        c1, c2 = st.columns([2, 1])
+        level_label = c1.radio("비교 단위", list(REGION_LEVELS), horizontal=True)
+        level = REGION_LEVELS[level_label]
+        n_tiers = c2.slider("급지 개수", 3, 8, 5)
+
+        r_idx = load_region_index(level)
+        if r_idx.empty:
+            st.warning("지역 가격지수를 계산할 데이터가 없습니다. 실거래 적재 상태를 확인하세요.")
+        else:
+            r_tiers = assign_tiers(r_idx, n_tiers=n_tiers)
+            total = load_region_universe(level)
+            st.caption(f"{level_label.split()[0]} 단위: 전체 {total}개 중 **{len(r_tiers)}개** "
+                       f"랭킹 가능 (거래가 희소해 대표가를 못 만드는 지역은 제외됩니다)")
+
+            rv = compute_region_rv(r_idx, r_tiers)
+            latest = rv["month"].max()
+            snap = rv[rv["month"] == latest].copy()
+
+            # 12개월 모멘텀 - 표시 전용
+            mom = (r_idx.sort_values("month").groupby("region_key")["price"]
+                        .apply(lambda s: s.iloc[-1] / s.iloc[-13] - 1 if len(s) > 12 else np.nan)
+                        .rename("mom12").reset_index())
+            snap = snap.merge(mom, on="region_key", how="left")
+            n_months = (r_idx.groupby("region_key")["price"].size()
+                             .rename("n_months").reset_index())
+            snap = snap.merge(n_months, on="region_key", how="left")
+
+            show_jr = st.checkbox("전세가율 함께 보기 (추가 로딩 30초)", value=False)
+            if show_jr:
+                jr = load_region_jeonse(level)
+                jr_last = jr[jr["month"] == latest][["region_key", "jeonse_ratio"]]
+                snap = snap.merge(jr_last, on="region_key", how="left")
+
+            tier_opts = sorted(r_tiers["tier"].unique())
+            sel_tier = st.selectbox(
+                "급지 선택", tier_opts, format_func=lambda t: (
+                    f"T{t} - {', '.join(r_tiers[r_tiers['tier'] == t].sort_values('avg_price', ascending=False)['region_label'].head(4))} 등"))
+
+            table = snap[snap["tier"] == sel_tier].sort_values("rv_z")
+            cols = {"region_label": "지역", "price": "대표가(만원/㎡)", "rv_z": "급지대비 z",
+                    "ratio": "급지대비 배수", "mom12": "12개월 모멘텀", "n_months": "관측월수"}
+            if show_jr:
+                cols["jeonse_ratio"] = "전세가율"
+            view = table[[c for c in cols if c in table.columns]].rename(columns=cols)
+            st.dataframe(
+                view.style.format({"대표가(만원/㎡)": "{:,.0f}", "급지대비 z": "{:+.2f}",
+                                   "급지대비 배수": "{:.3f}", "12개월 모멘텀": "{:+.1%}",
+                                   "전세가율": "{:.1%}"}, na_rep="-"),
+                hide_index=True, use_container_width=True)
+
+            cheap = table[table["rv_z"] < -1.0]["region_label"].head(3).tolist()
+            msg = (f"기준월 {latest}. T{sel_tier} 급지 {len(table)}개 지역 중 "
+                   f"급지 대비 -1σ보다 싸진 곳은 {len(table[table['rv_z'] < -1.0])}곳입니다. ")
+            msg += (f"가장 싼 쪽부터 <b>{', '.join(cheap)}</b>. " if cheap
+                    else "지금은 -1σ를 넘는 곳이 없습니다. ")
+            msg += ("z는 '이 지역이 같은 급지 평균 대비 평소보다 얼마나 싸졌는가'이지 "
+                    "'절대적으로 싸다'가 아닙니다. 아직 백테스트로 검증되지 않은 지표입니다.")
+            _ai_box(msg)
+    except Exception as e:  # noqa: BLE001
+        st.error(f"급지 비교 탭 오류: {e}")
         st.exception(e)
 
 # ---------------------------------------------------------------- TabS 공급
