@@ -218,10 +218,13 @@ def region_jeonse_ratio(conn, sale_index, level="sgg", params=None, min_weight=0
     _check_level(level)
     params = params or Params()
     base = sale_index[["region_key", "month", "price"]].copy()
-    try:
+    has_table = pd.read_sql_query(
+        "SELECT COUNT(*) n FROM sqlite_master WHERE type='table' AND name='trades_jeonse'",
+        conn).iat[0, 0]
+    if has_table:
         tr = _load_trades(conn, "trades_jeonse", "deposit",
                           "AND COALESCE(monthly_rent, 0) = 0")
-    except Exception:  # noqa: BLE001 - 테이블 자체가 없는 중간 상태 방어
+    else:
         tr = pd.DataFrame()
     if tr.empty:
         return base.assign(jeonse_price=np.nan,

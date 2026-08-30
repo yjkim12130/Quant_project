@@ -277,3 +277,15 @@ def test_region_jeonse_ratio_excludes_monthly_rent():
     out = R.region_jeonse_ratio(conn, R.region_price_index(conn, "sgg"), "sgg")
     assert out["jeonse_ratio"].isna().all()
     conn.close()
+
+
+def test_region_jeonse_ratio_survives_missing_table():
+    months = pd.period_range("2020-01", "2021-12", freq="M")
+    df = make_trades([(a, b, p, 10) for a, b, p in NINE], months, "11470", "양천구", "목동")
+    conn = _memory_db(df, "trades_sale")          # trades_jeonse 없음
+    sale_index = R.region_price_index(conn, "sgg")
+    out = R.region_jeonse_ratio(conn, sale_index, "sgg")
+    assert len(out) == len(sale_index)
+    assert out["jeonse_ratio"].isna().all()
+    assert list(out.columns) == ["region_key", "month", "jeonse_price", "jeonse_ratio"]
+    conn.close()
