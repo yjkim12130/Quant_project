@@ -233,6 +233,26 @@ def build_page2() -> dict:
     }
 
 
+def refresh_policy_card_news(cards: list[dict]) -> list[dict]:
+    """카드별 policy_cards.json의 "query"로 Google News를 조회해
+    fact_state/source_url만 덮어쓴다. outlook/korea_impact/polarity/accuracy/
+    korea_link/checkpoint는 판단이 필요한 수기 필드라 건드리지 않는다.
+    카드별 조회는 서로 독립이라 한 카드가 실패해도 나머지는 영향받지 않고,
+    실패한 카드는 기존 값을 그대로 유지한다.
+    """
+    out = []
+    for c in cards:
+        updated = dict(c)
+        query = c.get("query", "")
+        lang = "en" if c.get("country") == "US" else "ko"
+        news = an.fetch_policy_news(query, lang=lang)
+        if news:
+            updated["fact_state"] = news[0].get("title", updated.get("fact_state", ""))
+            updated["source_url"] = news[0].get("link", "")
+        out.append(updated)
+    return out
+
+
 # ─────────────────────────────────────────────────────────────────────
 # 오케스트레이션
 # ─────────────────────────────────────────────────────────────────────

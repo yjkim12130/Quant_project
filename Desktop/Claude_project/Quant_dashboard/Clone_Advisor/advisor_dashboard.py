@@ -18,12 +18,13 @@ from datetime import date, timedelta
 from typing import Optional
 
 import advisor_briefing as ab
+import advisor_news as an
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
 # ─────────────────────────────────────────────────────────────────────
 # Tech Dashboard 표시 순서/라벨 — 참고 이미지 순서(S&P500/Nasdaq/Dow/SOX/
-# VIX/10Y/DXY/USD-KRW)와 동일. advisor_report.py도 이 순서를 그대로 쓴다.
+# VIX/10Y/30Y/DXY/USD-KRW)와 동일. advisor_report.py도 이 순서를 그대로 쓴다.
 # ─────────────────────────────────────────────────────────────────────
 TECH_LABELS: dict[str, str] = {
     "sp500": "S&P 500",
@@ -32,6 +33,7 @@ TECH_LABELS: dict[str, str] = {
     "sox": "SOX(반도체)",
     "vix": "VIX",
     "us10y": "美 10년물",
+    "us30y": "美 30년물",
     "dxy": "DXY",
     "usdkrw": "USD/KRW",
 }
@@ -66,6 +68,85 @@ def summarize_movers(dashboard: dict, top_n: int = 3) -> list[dict]:
             "text": f"{label} {chg:+.2f}%로 {direction}",
         })
     return out
+
+
+# ─────────────────────────────────────────────────────────────────────
+# ③-1 미국 국채 금리 곡선 — 장단기 스프레드 2종(bp)
+# ─────────────────────────────────────────────────────────────────────
+# 10Y-3M은 뉴욕연준 침체확률 모형이 쓰는 공식 스프레드고, 30Y-10Y는 이번에
+# 추가한 30년물로 보는 장기구간 기울기다. 야후에 2년물 인덱스 티커가 없어
+# 교과서적 10Y-2Y 대신 이 조합을 쓴다(2026-08-29 사용자 확정).
+SPREAD_LABELS: dict[str, str] = {
+    "t10y3m": "10년-3개월",
+    "t30y10y": "30년-10년",
+}
+
+_TRADING_DAYS_1M = 21
+_TRADING_DAYS_3M = 63
+# 1개월 변화가 이 폭 미만이면 방향을 붙이지 않는다 — bp를 정수로
+# 표기하므로 "+0bp인데 스티프닝" 같은 모순을 막는다.
+_FLAT_BP = 1.0
+
+_EMPTY_YIELD_CURVE = {"series": [], "latest": {}, "chg_1m": {}, "chg_3m": {},
+                      "inverted": None, "text": ""}
+
+
+def _spread_change(series: list[dict], lookback: int) -> dict:
+    """lookback 거래일 전 대비 스프레드 변화(bp). 이력이 짧으면 가장 오래된 값 기준."""
+    if len(series) < 2:
+        return {}
+    past = series[-min(lookback + 1, len(series))]
+    return {k: round(series[-1][k] - past[k], 1) for k in SPREAD_LABELS}
+
+
+def _yield_curve_text(latest: dict, chg_1m: dict, inverted: bool) -> str:
+    """룰 템플릿 한 줄 요약 — LLM 미사용(설계 스펙 §2)."""
+    d10 = chg_1m.get("t10y3m")
+    if inverted:
+        state = "장단기 금리 역전(경기 침체 경고 구간)"
+    elif not isinstance(d10, (int, float)) or abs(d10) < _FLAT_BP:
+        state = "기울기 횡보"
+    elif d10 > 0:
+        state = "스티프닝(장단기 차 확대)"
+    else:
+        state = "플래트닝(장단기 차 축소)"
+
+    parts = []
+    for key, label in SPREAD_LABELS.items():
+        value = latest.get(key)
+        if not isinstance(value, (int, float)):
+            continue
+        delta = chg_1m.get(key)
+        delta_txt = f"(1개월 {delta:+.0f}bp)" if isinstance(delta, (int, float)) else ""
+        parts.append(f"{label} {value:+.0f}bp{delta_txt}")
+    return f"{' · '.join(parts)} — {state}" if parts else state
+
+
+def build_yield_curve(raw: dict) -> dict:
+    """advisor_news.get_yield_curve_history() 출력 → 스프레드 시계열·추세 요약.
+
+    금리는 % 단위(예: 4.25)로 오므로 스프레드는 bp(×100)로 환산한다.
+    수집 실패는 그대로 전파해 렌더러가 섹션만 접고 나머지는 살리게 한다.
+    """
+    status = raw.get("_status")
+    if status != "ok" or not raw.get("series"):
+        return {"_status": status if status != "ok" else "NO_DATA",
+                "_msg": raw.get("_msg", ""), **_EMPTY_YIELD_CURVE}
+
+    series = [
+        {"date": r["date"],
+         "t10y3m": round((r["us10y"] - r["us3m"]) * 100, 1),
+         "t30y10y": round((r["us30y"] - r["us10y"]) * 100, 1)}
+        for r in raw["series"]
+    ]
+    latest = {k: series[-1][k] for k in SPREAD_LABELS}
+    chg_1m = _spread_change(series, _TRADING_DAYS_1M)
+    chg_3m = _spread_change(series, _TRADING_DAYS_3M)
+    inverted = latest["t10y3m"] < 0
+
+    return {"_status": "ok", "series": series, "latest": latest,
+            "chg_1m": chg_1m, "chg_3m": chg_3m, "inverted": inverted,
+            "text": _yield_curve_text(latest, chg_1m, inverted)}
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -255,6 +336,8 @@ def build_dashboard() -> dict:
     vix_price = dashboard.get("vix", {}).get("price") if isinstance(dashboard.get("vix"), dict) else None
     scenarios = generate_scenarios(ojs_signals, vix_price)
 
+    yield_curve = build_yield_curve(an.get_yield_curve_history())
+
     calendar = load_econ_calendar()
 
     watchlist = load_theme_watchlist()
@@ -267,6 +350,7 @@ def build_dashboard() -> dict:
         "summary": movers,
         "must_know": list(movers),
         "tech_dashboard": dashboard,
+        "yield_curve": yield_curve,
         "todays_action": ojs,
         "top_news": top_headlines,
         "impact_flow": impact.get("flow", []),

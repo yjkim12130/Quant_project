@@ -66,6 +66,45 @@ def _tech_dashboard_html(dash: dict) -> str:
     return f'<div class="grid">{"".join(cards)}</div>'
 
 
+def _fmt_bp(v) -> str:
+    return f"{v:+.0f}bp" if isinstance(v, (int, float)) else "—"
+
+
+def _yield_curve_html(yc: dict) -> str:
+    """장단기 스프레드 카드 2장 + 추세 요약 + 최근 5거래일 관측치.
+
+    자립형 HTML이라 plotly를 심을 수 없어(Streamlit 탭에는 추세 차트가 있다)
+    카드의 1개월·3개월 변화와 최근 관측치 표로 추세를 대신 전달한다.
+    """
+    if yc.get("_status") != "ok":
+        return (f"<p>금리 곡선 데이터 조회 실패 [{html.escape(str(yc.get('_status')))}]"
+                f": {html.escape(str(yc.get('_msg', '')))}</p>")
+
+    cards = []
+    for key, label in adb.SPREAD_LABELS.items():
+        value = yc["latest"].get(key)
+        d1m = yc["chg_1m"].get(key)
+        d3m = yc["chg_3m"].get(key)
+        cls = "up" if isinstance(d1m, (int, float)) and d1m >= 0 else "down"
+        cards.append(
+            f'<div class="card"><h3>{html.escape(label)}</h3>'
+            f'<div class="val">{_fmt_bp(value)}</div>'
+            f'<div class="{cls}">1개월 {_fmt_bp(d1m)} · 3개월 {_fmt_bp(d3m)}</div></div>'
+        )
+
+    rows = "".join(
+        f'<tr><td>{html.escape(r["date"])}</td>'
+        f'<td>{_fmt_bp(r["t10y3m"])}</td><td>{_fmt_bp(r["t30y10y"])}</td></tr>'
+        for r in yc["series"][-5:]
+    )
+    return (
+        f'<div class="grid">{"".join(cards)}</div>'
+        f'<p>{html.escape(yc.get("text", ""))}</p>'
+        "<table><tr><th>날짜</th><th>10년-3개월</th><th>30년-10년</th></tr>"
+        f"{rows}</table>"
+    )
+
+
 def _summary_html(movers: list[dict]) -> str:
     if not movers:
         return "<p>변동 데이터가 없습니다.</p>"
@@ -217,6 +256,8 @@ def render_html(dashboard: dict) -> str:
         ("① Today's Summary", _summary_html(dashboard["summary"])),
         ("② 오늘 반드시 알아야 할 3가지", _must_know_html(dashboard["must_know"])),
         ("③ Tech Dashboard", _tech_dashboard_html(dashboard["tech_dashboard"])),
+        ("③-1 미국 국채 금리 곡선 · 장단기 스프레드",
+         _yield_curve_html(dashboard.get("yield_curve", {}))),
         ("④ Today's Action", _action_html(dashboard["todays_action"])),
         ("⑤ TOP NEWS", _news_html(dashboard["top_news"])),
         ("⑥ Global → Korea Impact Flow", _flow_html(dashboard["impact_flow"])),
