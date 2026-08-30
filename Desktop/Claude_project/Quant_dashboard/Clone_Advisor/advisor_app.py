@@ -625,7 +625,12 @@ with tab4:
         for group in bus["groups"].values():
             st.markdown(f"### {group['label']}")
             inds = group["indicators"]
-            if inds and all(i["_status"] == "NO_FRED_KEY" for i in inds):
+            if not inds:
+                # 레지스트리에서 indicators를 비운 그룹. st.columns(0)은 예외를
+                # 던지므로 여기서 끊는다(HTML 리포트도 같은 문구를 쓴다).
+                st.info("지표가 없습니다.")
+                continue
+            if all(i["_status"] == "NO_FRED_KEY" for i in inds):
                 st.warning("FRED API 키가 없어 이 그룹을 표시할 수 없습니다. "
                            "`.fred_api_key` 파일에 키를 저장하세요.")
                 continue

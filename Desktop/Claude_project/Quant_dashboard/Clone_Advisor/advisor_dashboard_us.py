@@ -282,24 +282,42 @@ def build_assessment(groups: dict, derived: dict) -> list[dict]:
 # ─────────────────────────────────────────────────────────────────────
 # 오케스트레이션
 # ─────────────────────────────────────────────────────────────────────
+def _empty_briefing(status: str, msg: str = "") -> dict:
+    """실패 시 반환할 빈 브리핑. 렌더러가 기대하는 키를 모두 갖춘다."""
+    return {"_status": status, "_msg": msg, "groups": {}, "derived": {},
+            "assessment": [],
+            "generated_at": datetime.now().isoformat(timespec="seconds")}
+
+
 def build_briefing_us() -> dict:
-    """레지스트리 → 수집 → 조립 → 파생 → 판정 전체 파이프라인."""
+    """레지스트리 → 수집 → 조립 → 파생 → 판정 전체 파이프라인.
+
+    macro_series.json은 사용자 손편집 지점이므로(스펙 §5) 모양이 어긋난
+    레지스트리가 들어올 수 있다. 그런 경우에도 예외를 밖으로 던지지 않고
+    NO_REGISTRY로 되돌린다 — 이 탭(tab4)이 tab1보다 먼저 실행되기 때문에
+    여기서 예외가 새면 종목 분석 탭까지 통째로 빈 화면이 된다.
+    """
     registry = load_macro_series()
     if not registry:
-        return {"_status": "NO_REGISTRY", "groups": {}, "derived": {},
-                "assessment": [],
-                "generated_at": datetime.now().isoformat(timespec="seconds")}
+        return _empty_briefing("NO_REGISTRY")
 
-    raw = am.collect_macro(registry)
-    groups = {
-        g["id"]: build_group(raw.get(g["id"], {}), g)
-        for g in registry.get("groups", []) if g.get("id")
-    }
-    derived = build_derived(groups)
+    try:
+        raw = am.collect_macro(registry)
+        groups = {
+            g["id"]: build_group(raw.get(g["id"], {}), g)
+            for g in registry.get("groups", [])
+            if isinstance(g, dict) and g.get("id")
+        }
+        derived = build_derived(groups)
+        assessment = build_assessment(groups, derived)
+    except Exception as e:
+        return _empty_briefing("NO_REGISTRY", f"레지스트리 처리 실패: {type(e).__name__}")
+
     return {
         "_status": "ok",
+        "_msg": "",
         "groups": groups,
         "derived": derived,
-        "assessment": build_assessment(groups, derived),
+        "assessment": assessment,
         "generated_at": datetime.now().isoformat(timespec="seconds"),
     }

@@ -165,3 +165,34 @@ def test_build_assessment_reports_unknown_when_data_missing():
     rows = adu.build_assessment({}, {})
     assert all(r["verdict"] == "판정 불가" for r in rows)
     assert len(rows) == 3
+
+
+# ── 손편집된 레지스트리 방어 (tab4 예외가 앱 전체를 죽이지 않게) ──────
+# macro_series.json은 "코드 수정 없이 지표 추가" 지점이라(스펙 §5) JSON
+# 파싱은 되지만 모양이 어긋난 입력이 들어올 수 있다. tab4는 tab1보다 먼저
+# 실행되므로 여기서 예외가 새면 종목 분석 탭까지 빈 화면이 된다.
+import advisor_macro as am
+
+
+def test_collect_macro_survives_groups_as_dict():
+    # groups가 리스트가 아니라 dict — 순회하면 문자열 키가 나와 .get이 터진다
+    assert am.collect_macro({"groups": {"credit": {"indicators": []}}}) == {}
+
+
+def test_collect_macro_survives_groups_as_string_list():
+    assert am.collect_macro({"groups": ["credit", "liquidity"]}) == {}
+
+
+def test_collect_macro_survives_group_with_no_indicators():
+    # 네트워크를 타지 않는다 — 지표가 0개라 fetch 호출이 없다
+    out = am.collect_macro({"groups": [{"id": "credit", "label": "신용"}]})
+    assert out == {"credit": {}}
+
+
+def test_collect_macro_skips_non_dict_indicator():
+    out = am.collect_macro({"groups": [{"id": "credit", "indicators": ["hy_oas"]}]})
+    assert out == {"credit": {}}
+
+
+def test_collect_macro_survives_registry_without_groups():
+    assert am.collect_macro({}) == {}

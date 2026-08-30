@@ -116,13 +116,28 @@ def collect_macro(registry: dict, years: int = 3) -> dict:
 
     FRED 키가 없으면 source=="fred" 지표는 전부 NO_FRED_KEY로 표시하고
     재무부 지표만 수집한다 — 키 발급 전에도 탭이 뜨게 하기 위함(스펙 §8).
+
+    macro_series.json은 사용자가 코드 수정 없이 손으로 고치는 지점이라
+    (스펙 §5) JSON 파싱은 되지만 모양이 어긋난 입력이 들어올 수 있다.
+    그런 항목은 예외를 던지지 않고 조용히 건너뛴다 — 여기서 예외가 새면
+    탭 하나가 아니라 앱 스크립트 전체가 멈춘다.
     """
     api_key = get_fred_key()
     out: dict = {}
-    for group in registry.get("groups", []):
+    groups = registry.get("groups") if isinstance(registry, dict) else None
+    if not isinstance(groups, list):
+        return out
+    for group in groups:
+        if not isinstance(group, dict):
+            continue
         gid = group.get("id", "")
         out[gid] = {}
-        for meta in group.get("indicators", []):
+        indicators = group.get("indicators")
+        if not isinstance(indicators, list):
+            continue
+        for meta in indicators:
+            if not isinstance(meta, dict):
+                continue
             iid = meta.get("id", "")
             source = meta.get("source")
             if source == "treasury":
