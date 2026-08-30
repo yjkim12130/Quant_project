@@ -33,8 +33,13 @@ _DASHBOARD_TICKERS = {
 }
 
 # 장단기 스프레드 계산 전용 만기 3종. ^IRX(13주)는 Tech Dashboard KPI에는
-# 올리지 않는다 — KPI에 넣으면 summarize_movers()/impact_rules 매칭 후보가
-# 늘어나 기존 상위 변동 종목 선정 결과가 흔들린다.
+# 올리지 않는다 — 사용자가 표시를 요청한 지표가 아니라 스프레드 계산용
+# 입력일 뿐이기 때문이다.
+# ^TYX(30년물)는 반대로 KPI에 포함돼 있다 — 사용자가 "미국 30년물 금리도
+# 추가해달라"고 명시적으로 요청했다. 그 결과 summarize_movers() 후보가
+# 9개가 되어 "오늘 반드시 알아야 할 3가지" 선정에 금리 지표가 최대 2개까지
+# 들어올 수 있다(의도된 트레이드오프). impact_rules는 JSON에 명시된
+# driver 이름으로만 매칭하며 us30y 룰이 없어 영향받지 않는다.
 _YIELD_CURVE_TICKERS = {
     "us3m": "^IRX",
     "us10y": "^TNX",
