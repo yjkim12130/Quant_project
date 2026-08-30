@@ -389,6 +389,76 @@ def _policy_cards_html(cards: list[dict]) -> str:
     return f'<div class="grid">{"".join(blocks)}</div>'
 
 
+# ─────────────────────────────────────────────────────────────────────
+# Family E — 미국 재정·통화 모니터 HTML 렌더러
+# ─────────────────────────────────────────────────────────────────────
+def _macro_group_html(group: dict) -> str:
+    """지표 카드 + 지표별 최근 5개 관측치 표."""
+    inds = group.get("indicators", [])
+    if not inds:
+        return "<p>지표가 없습니다.</p>"
+    if all(i.get("_status") == "NO_FRED_KEY" for i in inds):
+        return "<p>FRED API 키가 없어 이 그룹을 표시할 수 없습니다.</p>"
+
+    cards = []
+    for ind in inds:
+        value = ind.get("latest")
+        chg = ind.get("chg_1m")
+        cls = "up" if isinstance(chg, (int, float)) and chg >= 0 else "down"
+        val_txt = f"{value:,.2f}" if isinstance(value, (int, float)) else "—"
+        chg_txt = f"1개월 {chg:+,.2f}" if isinstance(chg, (int, float)) else "1개월 —"
+        cards.append(
+            f'<div class="card"><h3>{html.escape(ind.get("label", ""))}</h3>'
+            f'<div class="val">{val_txt}</div>'
+            f'<div class="{cls}">{chg_txt}</div>'
+            f'<div>{html.escape(ind.get("unit_label", ""))} · '
+            f'{html.escape(ind.get("assessment", ""))}</div></div>')
+
+    rows = []
+    for ind in inds:
+        if ind.get("_status") != "ok":
+            continue
+        for o in ind.get("series", [])[-5:]:
+            rows.append(f'<tr><td>{html.escape(ind.get("label", ""))}</td>'
+                        f'<td>{html.escape(o["date"])}</td>'
+                        f'<td>{o["value"]:,.2f}</td></tr>')
+    table = ("<table><tr><th>지표</th><th>날짜</th><th>값</th></tr>"
+             f'{"".join(rows)}</table>') if rows else ""
+    return f'<div class="grid">{"".join(cards)}</div>{table}'
+
+
+def _macro_assessment_html(rows: list[dict]) -> str:
+    if not rows:
+        return "<p>판정 데이터가 없습니다.</p>"
+    cards = "".join(
+        f'<div class="card"><h3>{html.escape(r.get("label", ""))}</h3>'
+        f'<div class="val">{html.escape(r.get("verdict", ""))}</div>'
+        f'<div>{html.escape(r.get("text", ""))}</div></div>' for r in rows)
+    return f'<div class="grid">{cards}</div>'
+
+
+def render_html_us(briefing: dict) -> str:
+    """advisor_dashboard_us.build_briefing_us() 출력 → 독립 실행형 HTML.
+
+    plotly를 심을 수 없는 자립형 HTML이므로(Streamlit 탭에는 인터랙티브
+    차트가 있다) 카드의 1개월 변화와 최근 5개 관측치 표로 추세를 대신
+    전달한다. 그룹/지표 조회 실패는 예외를 내지 않고 안내 문구로 대체한다."""
+    sections = [("종합 판정", _macro_assessment_html(briefing.get("assessment", [])))]
+    for group in briefing.get("groups", {}).values():
+        sections.append((group.get("label", ""), _macro_group_html(group)))
+
+    body = "".join(f'<div class="section-title">{html.escape(title)}</div>{section_html}'
+                   for title, section_html in sections)
+    generated_at = briefing.get("generated_at", "") or ""
+    return (
+        "<!DOCTYPE html><html lang='ko'><head><meta charset='utf-8'>"
+        f"<title>미국 재정·통화 모니터 {html.escape(generated_at[:10])}</title>"
+        f"<style>{_CSS}</style></head><body>"
+        '<div class="header"><h1>미국 재정·통화 모니터</h1>'
+        f'<div>생성 시각: {html.escape(generated_at)}</div></div>'
+        f"{body}</body></html>")
+
+
 def render_html_kr(briefing: dict) -> str:
     """advisor_dashboard_kr.build_briefing_kr() 출력 → PAGE1+PAGE2 HTML 문자열."""
     p1 = briefing.get("page1", {})
