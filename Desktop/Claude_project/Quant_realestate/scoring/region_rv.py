@@ -237,3 +237,47 @@ def region_jeonse_ratio(conn, sale_index, level="sgg", params=None, min_weight=0
     out = base.merge(jeonse, on=["region_key", "month"], how="left")
     out["jeonse_ratio"] = out["jeonse_price"] / out["price"]
     return out[["region_key", "month", "jeonse_price", "jeonse_ratio"]]
+
+
+if __name__ == "__main__":
+    import sqlite3
+    import sys
+    import time
+
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+
+    level = sys.argv[1] if len(sys.argv) > 1 else "sgg"
+    conn = sqlite3.connect(DB_PATH)
+    t0 = time.time()
+    idx = region_price_index(conn, level)
+    print("[%s] index %.1fs rows=%d regions=%d %s~%s"
+          % (level, time.time() - t0, len(idx), idx["region_key"].nunique(),
+             idx["month"].min(), idx["month"].max()))
+
+    tiers = assign_tiers(idx)
+    print("\n[티어 배정] 랭킹 가능 %d / 전체 %d"
+          % (len(tiers), idx["region_key"].nunique()))
+    for tv, g in tiers.sort_values("avg_price", ascending=False).groupby("tier"):
+        head = ", ".join(g.sort_values("avg_price", ascending=False)["region_label"].head(8))
+        print("  T%d (%d개): %s" % (tv, len(g), head))
+
+    rv = region_rv(idx, tiers)
+    last = rv[rv["month"] == rv["month"].max()]
+    print("\n[%s 급지 대비 저평가 상위 10]" % rv["month"].max())
+    cols = ["region_label", "tier", "price", "tier_median", "ratio", "rv_z"]
+    print(last.sort_values("rv_z")[cols].head(10)
+              .to_string(index=False, float_format=lambda x: "%.2f" % x))
+
+    if level == "sgg":
+        key = dict(zip(idx["region_label"], idx["region_key"]))
+        def _find(sub):
+            hits = [v for v in key if sub in v]
+            return (key[hits[0]], hits[0]) if hits else (None, None)
+        for a_sub, b_sub in [("분당", "양천"), ("과천", "분당")]:
+            (ka, la), (kb, lb) = _find(a_sub), _find(b_sub)
+            if ka and kb:
+                pr = pair_ratio(idx, ka, kb)
+                print("\n%s / %s : 현재 %.3f배, 전체평균 %.3f배, z %+.2f"
+                      % (la, lb, pr["ratio"].iloc[-1], pr["ratio"].mean(), pr["z"].iloc[-1]))
+    conn.close()
