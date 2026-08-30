@@ -120,3 +120,27 @@ def region_price_index(conn, level="sgg", params=None, min_weight=0.5):
     trades["region_key"] = _region_key(trades, level)
     idx = _basket_index(trades, "deal_amount", params, min_weight)
     return idx.merge(_region_labels(trades, level), on="region_key", how="left")
+
+
+def assign_tiers(index, n_tiers=5, min_months=24):
+    """전 기간 평균 대표가로 지역을 n_tiers 분위로 나눈다 (스펙 §3).
+
+    티어는 시점 고정이다 - 월마다 다시 매기면 지역이 티어를 넘나들면서 비율 z가
+    무의미해진다. tier=1이 최상위 가격대.
+    """
+    agg = (index.groupby("region_key")
+                .agg(avg_price=("price", "mean"), n_months=("price", "size")).reset_index())
+    if "region_label" in index.columns:
+        agg = agg.merge(index[["region_key", "region_label"]].drop_duplicates("region_key"),
+                        on="region_key", how="left")
+    agg = agg[agg["n_months"] >= min_months].reset_index(drop=True)
+    if agg.empty:
+        return agg.assign(tier=pd.Series(dtype="int64"))
+
+    n_eff = min(int(n_tiers), agg["region_key"].nunique())
+    if n_eff <= 1:
+        return agg.assign(tier=1)
+    # rank(first)로 동률을 풀어 분위 경계가 터지지 않게 한 뒤, qcut 방향을 뒤집어
+    # 1이 최상위 가격대가 되게 한다.
+    q = pd.qcut(agg["avg_price"].rank(method="first"), n_eff, labels=False, duplicates="drop")
+    return agg.assign(tier=(q.max() - q + 1).astype(int))

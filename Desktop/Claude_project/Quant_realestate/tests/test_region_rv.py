@@ -129,3 +129,46 @@ def test_region_price_index_rejects_bad_level():
     with pytest.raises(ValueError):
         R.region_price_index(conn, "gu")
     conn.close()
+
+
+def _fake_index(levels, months, seed=0):
+    """levels: {region_key: 기준 ㎡당가}. 지역마다 다른 로그정규 표류를 준다."""
+    rng = np.random.default_rng(seed)
+    rows = []
+    for key, base in levels.items():
+        drift = np.cumsum(rng.normal(0.002, 0.01, len(months)))
+        for m, d in zip(months, drift):
+            rows.append({"region_key": key, "region_label": key, "month": m,
+                         "price": base * np.exp(d)})
+    return pd.DataFrame(rows)
+
+
+LEVELS7 = {"A": 3000, "B": 2500, "C": 2000, "D": 1500, "E": 1200, "F": 900, "G": 700}
+MONTHS7 = pd.period_range("2018-01", "2024-12", freq="M")
+
+
+def test_assign_tiers_orders_highest_price_as_tier_1():
+    idx = _fake_index(LEVELS7, MONTHS7)
+    t = R.assign_tiers(idx, n_tiers=3).set_index("region_key")
+    assert t.loc["A", "tier"] == 1      # 가장 비싼 지역이 T1
+    assert t.loc["G", "tier"] == 3      # 가장 싼 지역이 마지막 티어
+    assert t["tier"].nunique() == 3
+
+
+def test_assign_tiers_filters_short_history():
+    idx = _fake_index(LEVELS7, MONTHS7)
+    short = pd.concat([idx[idx["region_key"] != "A"],
+                       idx[(idx["region_key"] == "A") & (idx["month"] < "2018-04")]])
+    keys = R.assign_tiers(short, n_tiers=3, min_months=24)["region_key"].values
+    assert "A" not in keys
+    assert "B" in keys
+
+
+def test_assign_tiers_handles_fewer_regions_than_tiers():
+    idx = _fake_index({"A": 100, "B": 200}, MONTHS7)
+    assert R.assign_tiers(idx, n_tiers=8)["tier"].nunique() == 2
+
+
+def test_assign_tiers_empty_input_returns_empty():
+    idx = _fake_index(LEVELS7, MONTHS7[:3])
+    assert R.assign_tiers(idx, n_tiers=3, min_months=24).empty
