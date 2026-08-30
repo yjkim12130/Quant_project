@@ -28,6 +28,7 @@ import advisor_llm as al
 import advisor_dashboard as adb
 import advisor_report as ar
 import advisor_dashboard_kr as adk
+import advisor_dashboard_us as adu
 
 st.set_page_config(page_title="자문역 인사이트 · 종목 분석 · 시황 브리핑",
                    page_icon="🧮", layout="wide")
@@ -143,6 +144,11 @@ def load_briefing_kr() -> dict:
     return adk.build_briefing_kr()
 
 
+@st.cache_data(ttl=21600, show_spinner=False)   # 6시간 — 월간·분기 시리즈
+def load_briefing_us() -> dict:
+    return adu.build_briefing_us()
+
+
 def price_chart(close, ojs: dict):
     """종가 + 200일선 + 오재승 그물망 12 MA 리본(정/역배열 색)."""
     fig = go.Figure()
@@ -168,6 +174,55 @@ def price_chart(close, ojs: dict):
                       margin=dict(l=8, r=8, t=8, b=8),
                       paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="#161922",
                       legend=dict(orientation="h", y=1.04, x=0,
+                                  bgcolor="rgba(0,0,0,0)"))
+    fig.update_xaxes(gridcolor="#2e3650")
+    fig.update_yaxes(gridcolor="#2e3650")
+    return fig
+
+
+_SPREAD_COLORS = {"t10y3m": "#4fc3f7", "t30y10y": "#ffb74d"}
+
+
+def yield_curve_chart(series: list[dict]):
+    """장단기 스프레드 추세 — 0선을 기준선으로 깔아 역전 구간이 보이게."""
+    dates = [r["date"] for r in series]
+    fig = go.Figure()
+    for key, label in adb.SPREAD_LABELS.items():
+        fig.add_trace(go.Scatter(
+            x=dates, y=[r[key] for r in series], mode="lines", name=label,
+            line=dict(width=1.6, color=_SPREAD_COLORS.get(key)),
+            hovertemplate=f"{label} %{{y:+.0f}}bp<extra></extra>"))
+    fig.add_hline(y=0, line=dict(width=1.2, color="#ff5252", dash="dash"),
+                  annotation_text="역전 기준선(0bp)", annotation_position="bottom right",
+                  annotation_font_color="#ff5252")
+    fig.update_layout(template="plotly_dark", height=340,
+                      margin=dict(l=8, r=8, t=8, b=8),
+                      paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="#161922",
+                      legend=dict(orientation="h", y=1.04, x=0,
+                                  bgcolor="rgba(0,0,0,0)"))
+    fig.update_xaxes(gridcolor="#2e3650")
+    fig.update_yaxes(gridcolor="#2e3650", ticksuffix="bp")
+    return fig
+
+
+_MACRO_COLORS = ["#4fc3f7", "#ffb74d", "#81c784", "#e57373", "#ba68c8"]
+
+
+def macro_chart(indicators: list[dict], title: str):
+    """같은 단위의 지표들만 한 차트에. 단위가 섞이면 호출부에서 나눠 넘긴다."""
+    fig = go.Figure()
+    for i, ind in enumerate(indicators):
+        series = ind.get("series", [])
+        if not series:
+            continue
+        fig.add_trace(go.Scatter(
+            x=[o["date"] for o in series], y=[o["value"] for o in series],
+            mode="lines", name=ind["label"],
+            line=dict(width=1.6, color=_MACRO_COLORS[i % len(_MACRO_COLORS)])))
+    fig.update_layout(template="plotly_dark", height=300, title=title,
+                      margin=dict(l=8, r=8, t=36, b=8),
+                      paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="#161922",
+                      legend=dict(orientation="h", y=1.02, x=0,
                                   bgcolor="rgba(0,0,0,0)"))
     fig.update_xaxes(gridcolor="#2e3650")
     fig.update_yaxes(gridcolor="#2e3650")
@@ -237,7 +292,8 @@ st.sidebar.caption("와이제이링크 · 헥토파이낸셜 · 켄코아에어�
 # (d4a28c7), tab1이 먼저 오면 "브리핑 생성" 버튼 클릭이 tab2/tab3 렌더링에 도달하지
 # 못하고 조용히 삼켜진다. 이 순서를 다시 뒤집지 말 것 — 필요하면 st.stop() 의존을
 # 먼저 제거해야 한다.
-tab1, tab2, tab3 = st.tabs(["🧮 종목 분석", "📰 시황 브리핑", "🏦 증시·정책 브리핑"])
+tab1, tab2, tab3, tab4 = st.tabs(
+    ["🧮 종목 분석", "📰 시황 브리핑", "🏦 증시·정책 브리핑", "🇺🇸 재정·통화"])
 
 with tab2:
     st.caption("일간 시황 대시보드 · 오재승(매크로·타이밍) × 빈규리(펀더멘탈) · 온디맨드 생성")
@@ -305,6 +361,26 @@ with tab2:
                     f"{price:,.2f}" if isinstance(price, (int, float)) else "—",
                     delta=f"{chg}%" if chg is not None else None,
                 )
+
+        st.markdown("### ③-1 미국 국채 금리 곡선 · 장단기 스프레드")
+        yc = dboard.get("yield_curve", {})
+        if yc.get("_status") != "ok":
+            st.warning(f"금리 곡선 데이터 조회 실패 [{yc.get('_status')}]: {yc.get('_msg','')}")
+        else:
+            if yc.get("inverted"):
+                st.error(f"⚠️ {yc['text']}")
+            else:
+                st.info(yc["text"])
+            sp_cols = st.columns(len(adb.SPREAD_LABELS))
+            for i, (k, label) in enumerate(adb.SPREAD_LABELS.items()):
+                value = yc["latest"].get(k)
+                delta = yc["chg_1m"].get(k)
+                sp_cols[i].metric(
+                    label,
+                    f"{value:+.0f}bp" if isinstance(value, (int, float)) else "—",
+                    delta=f"{delta:+.0f}bp (1개월)" if isinstance(delta, (int, float)) else None,
+                )
+            st.plotly_chart(yield_curve_chart(yc["series"]), use_container_width=True)
 
         st.markdown("### ④ Today's Action")
         action = dboard["todays_action"]
@@ -477,23 +553,37 @@ with tab3:
                 st.markdown(f"**{s.get('title','')}** — {s.get('fact_state','')}")
 
             st.markdown("### 정책카드 비교")
+            if st.button("🔄 정책 뉴스 새로고침"):
+                with st.spinner("정책 카드별 최신 뉴스 크롤링 중…"):
+                    all_cards = (p2.get("policy_cards", {}).get("us", [])
+                                 + p2.get("policy_cards", {}).get("kr", []))
+                    refreshed = adk.refresh_policy_card_news(all_cards)
+                    st.session_state["policy_news_overrides"] = {
+                        c.get("id"): c for c in refreshed if c.get("id")
+                    }
+            st.caption("fact_state·출처 링크만 Google News에서 자동 갱신 — 향후방향/한국영향/체크포인트는 policy_cards.json 수기 값 그대로.")
+
+            overrides = st.session_state.get("policy_news_overrides", {})
+
+            def _render_policy_card(c: dict) -> None:
+                merged = {**c, **overrides.get(c.get("id"), {})}
+                with st.expander(merged.get("title", "")):
+                    st.markdown(f"**사실상태**: {merged.get('fact_state','')}")
+                    if merged.get("source_url"):
+                        st.caption(f"[출처]({merged['source_url']})")
+                    st.markdown(f"**향후방향**: {merged.get('outlook','')}")
+                    st.markdown(f"**한국시장영향**: {merged.get('korea_impact','')} "
+                               f"({merged.get('polarity','')} · 정확도 {merged.get('accuracy','')})")
+
             pc1, pc2 = st.columns(2)
             with pc1:
                 st.markdown("**🇺🇸 미국**")
                 for c in p2.get("policy_cards", {}).get("us", []):
-                    with st.expander(c.get("title", "")):
-                        st.markdown(f"**사실상태**: {c.get('fact_state','')}")
-                        st.markdown(f"**향후방향**: {c.get('outlook','')}")
-                        st.markdown(f"**한국시장영향**: {c.get('korea_impact','')} "
-                                   f"({c.get('polarity','')} · 정확도 {c.get('accuracy','')})")
+                    _render_policy_card(c)
             with pc2:
                 st.markdown("**🇰🇷 한국**")
                 for c in p2.get("policy_cards", {}).get("kr", []):
-                    with st.expander(c.get("title", "")):
-                        st.markdown(f"**사실상태**: {c.get('fact_state','')}")
-                        st.markdown(f"**향후방향**: {c.get('outlook','')}")
-                        st.markdown(f"**한국시장영향**: {c.get('korea_impact','')} "
-                                   f"({c.get('polarity','')} · 정확도 {c.get('accuracy','')})")
+                    _render_policy_card(c)
 
             st.markdown("### 미·한 연결경로")
             for l in p2.get("korea_links", []):
@@ -502,6 +592,64 @@ with tab3:
             st.markdown("### 체크포인트")
             for c in p2.get("checkpoints", []):
                 st.markdown(f"- {c}")
+
+with tab4:
+    st.caption("미국 재정·통화·신용 상태 · FRED + 미 재무부 · 6시간 캐시")
+    if st.button("🇺🇸 브리핑 생성", type="primary"):
+        with st.spinner("FRED·재무부 시계열 수집 중…"):
+            st.session_state["briefing_us"] = load_briefing_us()
+
+    bus = st.session_state.get("briefing_us")
+    if not bus:
+        st.info("위 버튼을 눌러 미국 재정·통화 브리핑을 생성하세요.")
+    elif bus.get("_status") == "NO_REGISTRY":
+        st.error("macro_series.json을 읽을 수 없습니다.")
+    else:
+        st.caption(f"생성 시각: {bus['generated_at']}")
+
+        try:
+            report_html_us = ar.render_html_us(bus)
+            st.download_button(
+                "📥 리포트 다운로드 (HTML)", data=report_html_us,
+                file_name=f"{bus['generated_at'][:10]}_briefing_us.html",
+                mime="text/html", key="download_us")
+        except Exception as e:
+            st.warning(f"HTML 리포트 생성 실패: {e}")
+
+        st.markdown("### 종합 판정")
+        a_cols = st.columns(3)
+        for i, row in enumerate(bus["assessment"]):
+            a_cols[i].metric(row["label"], row["verdict"])
+            a_cols[i].caption(row["text"])
+
+        for group in bus["groups"].values():
+            st.markdown(f"### {group['label']}")
+            inds = group["indicators"]
+            if inds and all(i["_status"] == "NO_FRED_KEY" for i in inds):
+                st.warning("FRED API 키가 없어 이 그룹을 표시할 수 없습니다. "
+                           "`.fred_api_key` 파일에 키를 저장하세요.")
+                continue
+
+            g_cols = st.columns(len(inds))
+            for i, ind in enumerate(inds):
+                value = ind["latest"]
+                g_cols[i].metric(
+                    ind["label"],
+                    f"{value:,.2f}" if isinstance(value, (int, float)) else "—",
+                    delta=(f"{ind['chg_1m']:+,.2f} (1개월)"
+                           if isinstance(ind["chg_1m"], (int, float)) else None))
+                g_cols[i].caption(f"{ind['unit_label']} · {ind['freq']}"
+                                  + (f" · {ind['assessment']}" if ind["assessment"] else ""))
+
+            # 단위별로 차트를 나눈다 — %와 $를 한 축에 겹치지 않기 위함
+            by_unit: dict[str, list[dict]] = {}
+            for ind in inds:
+                if ind["_status"] == "ok" and ind.get("series"):
+                    by_unit.setdefault(ind["unit_label"], []).append(ind)
+            for unit_label, unit_inds in by_unit.items():
+                st.plotly_chart(
+                    macro_chart(unit_inds, f"{group['label']} — {unit_label}"),
+                    use_container_width=True)
 
 with tab1:
     if not (run_clicked or name):
