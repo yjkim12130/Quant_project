@@ -655,7 +655,8 @@ with tab4:
                 unit = ind.get("unit", "")
                 g_cols[i].metric(
                     ind["label"], adu.fmt_usd(ind["latest"], unit),
-                    delta=(f"{adu.fmt_usd(ind['chg_1m'], unit, signed=True)} (1개월)"
+                    delta=(f"{adu.fmt_usd(ind['chg_1m'], unit, signed=True)} "
+                           f"({ind.get('chg_1m_label', '1개월')})"
                            if isinstance(ind["chg_1m"], (int, float)) else None))
                 g_cols[i].caption(f"{ind['unit_label']} · {ind['freq']}"
                                   + (f" · {ind['assessment']}" if ind["assessment"] else ""))

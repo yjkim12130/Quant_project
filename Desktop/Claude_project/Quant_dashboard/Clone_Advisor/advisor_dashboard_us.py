@@ -92,6 +92,19 @@ def _parse(d: str) -> Optional[date]:
         return None
 
 
+def _closest_observation(obs: list[dict], target: date) -> Optional[dict]:
+    """target 날짜에 가장 가까운 관측치. change_over와 change_over_labeled가 공유."""
+    best, best_gap = None, None
+    for o in obs:
+        d = _parse(o["date"])
+        if d is None:
+            continue
+        gap = abs((d - target).days)
+        if best_gap is None or gap < best_gap:
+            best, best_gap = o, gap
+    return best
+
+
 def change_over(obs: list[dict], days: int) -> Optional[float]:
     """days일 전 대비 변화(절대값 차).
 
@@ -104,17 +117,47 @@ def change_over(obs: list[dict], days: int) -> Optional[float]:
     if last_date is None:
         return None
     target = last_date - timedelta(days=days)
-    best, best_gap = None, None
-    for o in obs[:-1]:
-        d = _parse(o["date"])
-        if d is None:
-            continue
-        gap = abs((d - target).days)
-        if best_gap is None or gap < best_gap:
-            best, best_gap = o, gap
+    best = _closest_observation(obs[:-1], target)
     if best is None:
         return None
     return round(obs[-1]["value"] - best["value"], 2)
+
+
+def _period_label(actual_days: int) -> str:
+    """실제 관측 간격(일) → 사람이 읽는 기간 라벨.
+
+    분기 시리즈에서 change_over(obs, 30)을 부르면 가장 가까운 관측치가
+    실제로는 ~91일 전이다. 요청한 30일이 아니라 실제로 골라진 간격을 보고
+    라벨을 정해야 "1개월"이라는 거짓 라벨을 피할 수 있다.
+    """
+    if actual_days <= 45:
+        return "1개월"
+    if actual_days <= 135:
+        return "1분기"
+    if actual_days <= 400:
+        return "1년"
+    return f"{actual_days}일"
+
+
+def change_over_labeled(obs: list[dict], days: int) -> tuple[Optional[float], str]:
+    """change_over(obs, days) + 실제로 선택된 관측치 간격에 맞는 기간 라벨.
+
+    change_over의 기존 시그니처(다른 곳에서 이미 쓰고 있다)는 건드리지 않고
+    별도 헬퍼로 라벨까지 함께 돌려준다.
+    """
+    fallback = _period_label(days)
+    if len(obs) < 2:
+        return None, fallback
+    last_date = _parse(obs[-1]["date"])
+    if last_date is None:
+        return None, fallback
+    target = last_date - timedelta(days=days)
+    best = _closest_observation(obs[:-1], target)
+    if best is None:
+        return None, fallback
+    best_date = _parse(best["date"])
+    actual_days = abs((last_date - best_date).days) if best_date else days
+    return round(obs[-1]["value"] - best["value"], 2), _period_label(actual_days)
 
 
 def recent_window(obs: list[dict], days: int = _RANK_WINDOW_DAYS) -> list[dict]:
@@ -159,7 +202,7 @@ def build_indicator(raw: dict, meta: dict) -> dict:
         "unit": meta.get("unit", ""), "unit_label": meta.get("unit_label", ""),
         "freq": meta.get("freq", ""),
         "latest": None, "latest_date": None,
-        "chg_1m": None, "chg_1y": None, "pct_rank_3y": None,
+        "chg_1m": None, "chg_1m_label": "1개월", "chg_1y": None, "pct_rank_3y": None,
         "assessment": "", "series": [],
     }
     status = raw.get("_status")
@@ -173,10 +216,12 @@ def build_indicator(raw: dict, meta: dict) -> dict:
     # 자르지 않으면 pct_rank_3y가 지표마다 다른 기간을 뜻하게 된다.
     window = recent_window(obs)
     rank = pct_rank([o["value"] for o in window], obs[-1]["value"])
+    chg_1m, chg_1m_label = change_over_labeled(obs, 30)
     base.update({
         "_status": "ok", "_msg": "",
         "latest": obs[-1]["value"], "latest_date": obs[-1]["date"],
-        "chg_1m": change_over(obs, 30), "chg_1y": change_over(obs, 365),
+        "chg_1m": chg_1m, "chg_1m_label": chg_1m_label,
+        "chg_1y": change_over(obs, 365),
         "pct_rank_3y": rank,
         "assessment": _assess(rank, meta.get("higher_is", "neutral")),
         "series": obs,

@@ -339,3 +339,43 @@ def test_fmt_usd_leaves_non_money_units_alone():
 def test_fmt_usd_signs_deltas():
     assert adu.fmt_usd(120_000.0, signed=True) == "+$120.0B"
     assert adu.fmt_usd(-120_000.0, signed=True) == "-$120.0B"
+
+
+# ── chg_1m 기간 라벨 (F4) ────────────────────────────────────────────
+# change_over(obs, 30)은 허용오차 없이 "30일에 가장 가까운" 관측치를 고른다.
+# 분기 시리즈는 전분기(~91일 전)가 가장 가깝다 — 실제 간격을 보고 라벨을
+# 고르지 않으면 전분기 대비 변화가 "1개월"로 잘못 표시된다.
+def test_change_over_labeled_is_1_month_for_monthly_series():
+    obs = [{"date": "2026-07-01", "value": 10.0},
+           {"date": "2026-08-01", "value": 12.0}]
+    delta, label = adu.change_over_labeled(obs, 30)
+    assert delta == 2.0
+    assert label == "1개월"
+
+
+def test_change_over_labeled_is_1_quarter_for_quarterly_series():
+    obs = [{"date": "2026-05-01", "value": 118.0},
+           {"date": "2026-08-01", "value": 120.0}]   # 실제 간격 92일
+    delta, label = adu.change_over_labeled(obs, 30)
+    assert delta == 2.0
+    assert label == "1분기"
+
+
+def test_change_over_labeled_short_history_falls_back_to_requested_period():
+    delta, label = adu.change_over_labeled([{"date": "2026-08-29", "value": 1.0}], 30)
+    assert delta is None
+    assert label == "1개월"
+
+
+def test_build_indicator_exposes_chg_1m_label_for_quarterly_series():
+    meta = dict(_META_HY, freq="분기")
+    obs = [{"date": "2026-05-01", "value": 118.0},
+           {"date": "2026-08-01", "value": 120.0}]
+    out = adu.build_indicator({"_status": "ok", "observations": obs}, meta)
+    assert out["chg_1m"] == 2.0
+    assert out["chg_1m_label"] == "1분기"
+
+
+def test_build_indicator_chg_1m_label_defaults_when_no_data():
+    out = adu.build_indicator({}, _META_HY)
+    assert out["chg_1m_label"] == "1개월"

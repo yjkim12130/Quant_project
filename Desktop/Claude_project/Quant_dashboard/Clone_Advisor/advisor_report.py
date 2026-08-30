@@ -409,8 +409,9 @@ def _macro_group_html(group: dict) -> str:
         cls = "up" if isinstance(chg, (int, float)) and chg >= 0 else "down"
         # 연방 총부채(원 단위 달러)가 15자리로 카드를 넘치지 않도록 축약한다
         val_txt = adu.fmt_usd(value, unit)
-        chg_txt = (f"1개월 {adu.fmt_usd(chg, unit, signed=True)}"
-                   if isinstance(chg, (int, float)) else "1개월 —")
+        chg_label = ind.get("chg_1m_label", "1개월")
+        chg_txt = (f"{chg_label} {adu.fmt_usd(chg, unit, signed=True)}"
+                   if isinstance(chg, (int, float)) else f"{chg_label} —")
         cards.append(
             f'<div class="card"><h3>{html.escape(ind.get("label", ""))}</h3>'
             f'<div class="val">{val_txt}</div>'
