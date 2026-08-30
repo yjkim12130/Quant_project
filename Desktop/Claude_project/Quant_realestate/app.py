@@ -551,6 +551,103 @@ with tabR:
             msg += ("z는 '이 지역이 같은 급지 평균 대비 평소보다 얼마나 싸졌는가'이지 "
                     "'절대적으로 싸다'가 아닙니다. 아직 백테스트로 검증되지 않은 지표입니다.")
             _ai_box(msg)
+
+            st.divider()
+            st.markdown("##### 두 지역 직접 비교")
+            label2key = dict(zip(r_tiers["region_label"], r_tiers["region_key"]))
+            names = sorted(label2key)
+            d1, d2 = st.columns(2)
+            def _pick(col, title, default):
+                i = names.index(default) if default in names else 0
+                return col.selectbox(title, names, index=i)
+            name_a = _pick(d1, "지역 A", next((n for n in names if "분당" in n), names[0]))
+            name_b = _pick(d2, "지역 B", next((n for n in names if "양천" in n), names[-1]))
+
+            pr = pair_ratio(r_idx, label2key[name_a], label2key[name_b])
+            if len(pr) < 13:
+                st.info("두 지역이 겹치는 기간이 짧아 비교 차트를 그릴 수 없습니다.")
+            else:
+                mu, sd = pr["ratio"].mean(), pr["ratio"].std()
+                x = pr["month"].dt.to_timestamp()
+                figp = go.Figure()
+                figp.add_trace(go.Scatter(x=x, y=pr["ratio"], name=f"{name_a} / {name_b}",
+                                          line=dict(color=ACCENT, width=2.5)))
+                figp.add_hline(y=mu, line=dict(color="#888", dash="dash"),
+                               annotation_text=f"평균 {mu:.3f}배")
+                for k, dash in [(1, "dot"), (-1, "dot")]:
+                    figp.add_hline(y=mu + k * sd, line=dict(color="#bbb", dash=dash))
+                figp.update_layout(
+                    title=f"{name_a} / {name_b} 대표가 배수", height=420,
+                    margin=dict(t=110, b=0), yaxis=dict(title="배수"),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02,
+                                xanchor="left", x=0))
+                st.plotly_chart(figp, use_container_width=True)
+
+                cur, z = pr["ratio"].iloc[-1], pr["z"].iloc[-1]
+                if pd.isna(z):
+                    verdict = "관측 기간이 짧아 z를 낼 수 없습니다."
+                elif z > 0:
+                    verdict = (f"<b>{name_a}</b>가 평소보다 비싸졌습니다 "
+                               f"(뒤집어 보면 {name_b}가 상대적으로 싸진 것)")
+                else:
+                    verdict = f"<b>{name_a}</b>가 {name_b} 대비 평소보다 싸졌습니다"
+                _ai_box(f"{name_a}/{name_b} 현재 <b>{cur:.3f}배</b>, 전체 기간 평균 "
+                        f"{mu:.3f}배 (±1σ = {mu - sd:.3f}~{mu + sd:.3f}). "
+                        f"z {z:+.2f} - {verdict}.")
+
+            st.divider()
+            st.markdown("##### 급지 지도 - 가격대와 저평가 정도를 한눈에")
+            sc = snap.dropna(subset=["rv_z"])
+            figs = go.Figure()
+            for tv in sorted(sc["tier"].unique()):
+                g = sc[sc["tier"] == tv]
+                figs.add_trace(go.Scatter(
+                    x=g["price"], y=g["rv_z"], mode="markers", name=f"T{tv}",
+                    marker=dict(size=9, opacity=0.8),
+                    text=g["region_label"], customdata=g[["n_months"]],
+                    hovertemplate="%{text}<br>대표가 %{x:,.0f}만원/㎡<br>"
+                                  "급지대비 z %{y:+.2f}<br>관측 %{customdata[0]}개월<extra></extra>"))
+            figs.add_hline(y=-1.0, line=dict(color=RED, dash="dot"),
+                           annotation_text="-1σ")
+            figs.update_layout(
+                title=f"{latest} 기준 - 아래쪽일수록 같은 급지 대비 싸진 지역",
+                height=520, margin=dict(t=110, b=0),
+                xaxis=dict(title="대표가 (만원/㎡)"), yaxis=dict(title="급지 대비 z"),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02,
+                            xanchor="left", x=0))
+            st.plotly_chart(figs, use_container_width=True)
+
+            with st.expander("📖 읽는 법"):
+                st.markdown(f"""
+- **급지(티어)**: 전 기간 평균 ㎡당가로 지역을 {n_tiers}등분한 것. **티어 자체는 신호가 아닙니다** -
+  T5에 있다고 싼 게 아니고 T1에 있다고 비싼 게 아닙니다. 어느 지역과 비교할지를 정할 뿐입니다.
+  티어는 시점 고정입니다(월마다 다시 매기면 비교 대상이 흔들려 z가 무의미해집니다).
+- **급지 대비 z**: 이 지역 대표가 ÷ 같은 급지의 다른 지역들 중위값. 그 배수가 자기 역사(24개월)
+  대비 몇 σ 떨어져 있는지. **음수 = 같은 급지 안에서 평소보다 싸졌다.** 스크리너의 단지 `rv_z`,
+  자산 비교 탭의 z와 부호 관례가 같습니다. 계산에 현재값을 넣지 않아(shift 1) 미래 정보 누수가
+  없습니다.
+- ⚠️ **z가 큰 것과 많이 싼 것은 다릅니다.** z의 분모는 그 지역 배수의 24개월 표준편차라,
+  **평소 급지 평균에 딱 붙어 있던 지역은 σ가 작아 작은 이탈도 큰 z로 찍힙니다.** 그래서 표에
+  `급지대비 배수`를 함께 실었습니다 — z가 -4σ라도 배수가 1.05에서 0.97로 내려온 정도라면
+  "역사적으로 이례적"이긴 해도 "많이 싸다"는 아닙니다. 두 숫자를 같이 보세요.
+- **대표가(고정 바스켓)**: 그냥 그 달 거래의 중위 ㎡당가를 쓰면, 신축 대단지가 입주한 달에는
+  가격이 안 올랐어도 지역 평균이 뛰어 보입니다. 그래서 면적 3밴드 × 연식 3밴드 = 9칸으로 나눠
+  각각 중위가를 낸 뒤, **모든 지역에 똑같은 가중치**로 합칩니다. "모든 지역이 똑같은 구성의
+  아파트를 가졌다면" 기준이라 지역 간 비교가 공정해집니다.
+  - 다만 **칸 안의 변화는 못 잡습니다.** 예를 들어 `~10년` 칸 안에서 2016년생과 갓 입주한
+    2025년생의 거래 비중이 바뀌는 것은 그대로 남습니다.
+- **12개월 모멘텀**: 거래가 희소해 중간에 빠진 달이 있는 지역은 실제로 12개월보다 긴 구간을
+  비교한 값일 수 있습니다.
+- **랭킹에서 빠지는 지역**: 9칸 중 절반 이상이 거래된 달이 24개월 이상이어야 랭킹에 오릅니다.
+  동 단위는 거래가 희소해 3분의 1가량이 빠집니다. **빠졌다는 건 "저평가가 아니다"가 아니라
+  "판단할 데이터가 없다"는 뜻입니다.**
+- **전세가율**: 같은 고정 바스켓을 전세 보증금에 적용한 값 ÷ 매매 대표가. 순수 전세(월세 0)만
+  씁니다. 전세 실거래는 2011년부터라 그 이전은 비어 있습니다.
+- **데이터**: 국토교통부 실거래가 - 매매 2006-01~, 전세 2011-01~ (해제 거래 제외).
+- ⚠️ **이 지표는 아직 백테스트로 검증되지 않았습니다.** 단지 스크리너의 `rv_z`는 그룹 대비
+  초과수익 +7.3%p(12개월, p<0.001)까지 확인하고 쓰는 반면, 지역 레벨 z는 같은 검증을 거치지
+  않았습니다. 그래서 스크리너 점수에 섞지 않고 조회 전용으로만 둡니다.
+""")
     except Exception as e:  # noqa: BLE001
         st.error(f"급지 비교 탭 오류: {e}")
         st.exception(e)
