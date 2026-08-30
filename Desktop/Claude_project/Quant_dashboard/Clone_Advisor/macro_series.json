@@ -22,7 +22,7 @@
          "freq": "월간", "higher_is": "neutral"},
         {"id": "fed_assets", "label": "연준 총자산", "source": "fred",
          "series_id": "WALCL", "unit": "Mil. of U.S. $", "unit_label": "백만$",
-         "freq": "주간", "higher_is": "neutral"},
+         "freq": "주간", "higher_is": "neutral", "years": 8},
         {"id": "rrp", "label": "역레포 잔액", "source": "fred",
          "series_id": "RRPONTSYD", "unit": "Bil. of US $", "unit_label": "십억$",
          "freq": "일간", "higher_is": "worse"},

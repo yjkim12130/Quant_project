@@ -111,6 +111,19 @@ def fetch_debt_to_penny(years: int = 3) -> dict:
                 "observations": [], "_msg": type(e).__name__}
 
 
+def _years_for(meta: dict, default: int) -> int:
+    """지표 메타의 years 조회기간 override. 없거나 이상하면 default.
+
+    QT 진행도는 "역대 피크 대비"라 WALCL만 기본 3년보다 긴 이력이 필요하다
+    (실제 사이클 피크는 2022-04). 레지스트리는 손편집 지점이라 정수가 아닌
+    값이 들어올 수 있으므로 여기서 걸러낸다.
+    """
+    span = meta.get("years", default)
+    if isinstance(span, bool) or not isinstance(span, int) or span <= 0:
+        return default
+    return span
+
+
 def collect_macro(registry: dict, years: int = 3) -> dict:
     """레지스트리를 순회하며 그룹별·지표별 원본을 모은다.
 
@@ -140,8 +153,9 @@ def collect_macro(registry: dict, years: int = 3) -> dict:
                 continue
             iid = meta.get("id", "")
             source = meta.get("source")
+            span = _years_for(meta, years)
             if source == "treasury":
-                out[gid][iid] = fetch_debt_to_penny(years=years)
+                out[gid][iid] = fetch_debt_to_penny(years=span)
             elif not api_key:
                 out[gid][iid] = {"_status": "NO_FRED_KEY",
                                  "series_id": meta.get("series_id", ""),
@@ -149,5 +163,5 @@ def collect_macro(registry: dict, years: int = 3) -> dict:
                                  "_msg": "FRED API 키 미설정"}
             else:
                 out[gid][iid] = fetch_fred_series(
-                    meta.get("series_id", ""), api_key, years=years)
+                    meta.get("series_id", ""), api_key, years=span)
     return out

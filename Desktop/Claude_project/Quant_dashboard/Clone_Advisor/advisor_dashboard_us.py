@@ -28,6 +28,10 @@ _UNIT_TO_MUSD = {
 _RANK_LOW = 33.0
 _RANK_HIGH = 66.0
 
+# pct_rank_3y가 이름 그대로이려면 백분위 입력을 3년으로 잘라야 한다.
+# fed_assets만 QT 피크(2022-04)를 담으려고 8년치를 받아오기 때문이다.
+_RANK_WINDOW_DAYS = 1095
+
 
 def load_macro_series() -> Optional[dict]:
     """macro_series.json 로드. 없거나 손상됐으면 None."""
@@ -88,6 +92,27 @@ def change_over(obs: list[dict], days: int) -> Optional[float]:
     return round(obs[-1]["value"] - best["value"], 2)
 
 
+def recent_window(obs: list[dict], days: int = _RANK_WINDOW_DAYS) -> list[dict]:
+    """마지막 관측일 기준 days일 이내 관측치만 남긴다.
+
+    지표별 조회기간이 다르면(fed_assets는 8년) 백분위 모수도 달라져
+    "3년 백분위"라는 이름이 거짓이 된다. 백분위 입력만 자르고 차트용
+    series는 받아온 전체를 그대로 둔다.
+    """
+    if not obs:
+        return []
+    last_date = _parse(obs[-1]["date"])
+    if last_date is None:
+        return list(obs)
+    cutoff = last_date - timedelta(days=days)
+    out = []
+    for o in obs:
+        d = _parse(o.get("date", ""))
+        if d is None or d >= cutoff:
+            out.append(o)
+    return out
+
+
 def _assess(rank: Optional[float], higher_is: str) -> str:
     """백분위 + 해석 방향 → 한 줄 판정."""
     if rank is None:
@@ -119,8 +144,10 @@ def build_indicator(raw: dict, meta: dict) -> dict:
         base["_msg"] = raw.get("_msg", "")
         return base
 
-    values = [o["value"] for o in obs]
-    rank = pct_rank(values, values[-1])
+    # 백분위 모수는 최근 3년으로 자른다 — fed_assets만 8년치를 받아오므로
+    # 자르지 않으면 pct_rank_3y가 지표마다 다른 기간을 뜻하게 된다.
+    window = recent_window(obs)
+    rank = pct_rank([o["value"] for o in window], obs[-1]["value"])
     base.update({
         "_status": "ok", "_msg": "",
         "latest": obs[-1]["value"], "latest_date": obs[-1]["date"],

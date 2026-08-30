@@ -196,3 +196,40 @@ def test_collect_macro_skips_non_dict_indicator():
 
 def test_collect_macro_survives_registry_without_groups():
     assert am.collect_macro({}) == {}
+
+
+# ── 백분위 3년 윈도우 (fed_assets만 8년치를 받아오는 데 따른 방어) ────
+def test_recent_window_drops_observations_older_than_three_years():
+    obs = [{"date": "2018-04-01", "value": 8_965_487.0},   # QT 피크, 창 밖
+           {"date": "2024-01-01", "value": 7_000_000.0},
+           {"date": "2026-08-01", "value": 6_730_912.0}]
+    assert [o["date"] for o in adu.recent_window(obs)] == ["2024-01-01", "2026-08-01"]
+
+
+def test_pct_rank_3y_ignores_extremes_older_than_three_years():
+    # 8년치를 받아오는 fed_assets에서도 pct_rank_3y는 최근 3년만 봐야 한다.
+    # 자르지 않으면 2018년 극단값 때문에 백분위가 33.3%로 나온다.
+    meta = {"id": "fed_assets", "label": "연준 총자산",
+            "unit": "Mil. of U.S. $", "unit_label": "백만$",
+            "freq": "주간", "higher_is": "neutral"}
+    obs = [{"date": "2018-04-01", "value": 100.0},   # 창 밖 최대값
+           {"date": "2024-01-01", "value": 10.0},
+           {"date": "2026-08-01", "value": 20.0}]
+    out = adu.build_indicator({"_status": "ok", "observations": obs}, meta)
+    assert out["pct_rank_3y"] == 100.0          # 최근 3년(10, 20) 중 최대
+    assert len(out["series"]) == 3              # 차트용 series는 자르지 않는다
+
+
+def test_years_override_is_read_from_indicator_meta():
+    assert am._years_for({"years": 8}, 3) == 8
+    assert am._years_for({}, 3) == 3
+    assert am._years_for({"years": "8"}, 3) == 3      # 손편집 오타 방어
+    assert am._years_for({"years": 0}, 3) == 3
+
+
+def test_registry_gives_fed_assets_a_longer_lookback():
+    # WALCL의 실제 사이클 피크는 2022-04 — 기본 3년 창에는 들어오지 않는다
+    reg = adu.load_macro_series()
+    fed = next(i for g in reg["groups"] if g["id"] == "liquidity"
+               for i in g["indicators"] if i["id"] == "fed_assets")
+    assert fed["years"] >= 5
