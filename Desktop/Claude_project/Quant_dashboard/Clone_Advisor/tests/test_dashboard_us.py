@@ -379,3 +379,26 @@ def test_build_indicator_exposes_chg_1m_label_for_quarterly_series():
 def test_build_indicator_chg_1m_label_defaults_when_no_data():
     out = adu.build_indicator({}, _META_HY)
     assert out["chg_1m_label"] == "1개월"
+
+
+# ── 경계값 통일: _assess(카드)와 build_assessment(요약)가 66.0/33.0에서
+#    같은 판단을 내려야 한다 (F7) ─────────────────────────────────────
+def _credit_verdict(rank):
+    groups = {"credit": {"indicators": [
+        {"id": "hy_oas", "_status": "ok", "latest": 3.0, "pct_rank_3y": rank}]}}
+    return next(r for r in adu.build_assessment(groups, {}) if r["id"] == "credit")["verdict"]
+
+
+def test_high_boundary_rank_agrees_between_card_and_summary():
+    assert "고점권" in adu._assess(66.0, "worse")      # 카드: >= 66 → 고점권
+    assert _credit_verdict(66.0) == "스트레스"           # 요약도 66.0에서 스트레스
+
+
+def test_low_boundary_rank_agrees_between_card_and_summary():
+    assert "저점권" in adu._assess(33.0, "worse")       # 카드: <= 33 → 저점권
+    assert _credit_verdict(33.0) == "안정"               # 요약도 33.0에서 안정
+
+
+def test_mid_rank_is_neutral_in_both_card_and_summary():
+    assert adu._assess(50.0, "worse") == "중간권"
+    assert _credit_verdict(50.0) == "경계"

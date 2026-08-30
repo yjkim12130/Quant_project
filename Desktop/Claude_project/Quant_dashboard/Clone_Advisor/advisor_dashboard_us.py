@@ -413,8 +413,10 @@ def build_assessment(groups: dict, derived: dict) -> list[dict]:
     hy = _find(groups, "credit", "hy_oas")
     rank = hy.get("pct_rank_3y") if hy.get("_status") == "ok" else None
     if isinstance(rank, (int, float)):
-        verdict = ("스트레스" if rank > _RANK_HIGH
-                   else "안정" if rank < _RANK_LOW else "경계")
+        # _assess()와 경계를 통일한다(둘 다 >=/<=) — 그렇지 않으면 정확히
+        # 66.0에서 카드는 "고점권", 요약은 "경계"라고 서로 다른 말을 한다.
+        verdict = ("스트레스" if rank >= _RANK_HIGH
+                   else "안정" if rank <= _RANK_LOW else "경계")
         text = f"하이일드 OAS {hy.get('latest'):.2f}% (3년 백분위 {rank:.0f}%)"
         gap = derived.get("hy_ig_gap")
         if isinstance(gap, (int, float)):
