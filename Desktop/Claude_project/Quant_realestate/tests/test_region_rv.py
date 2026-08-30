@@ -172,3 +172,57 @@ def test_assign_tiers_handles_fewer_regions_than_tiers():
 def test_assign_tiers_empty_input_returns_empty():
     idx = _fake_index(LEVELS7, MONTHS7[:3])
     assert R.assign_tiers(idx, n_tiers=3, min_months=24).empty
+
+
+def _naive_loo_median(s):
+    v = s.to_numpy(dtype=float)
+    return pd.Series([np.median(np.delete(v, i)) for i in range(len(v))], index=s.index)
+
+
+def test_loo_median_matches_naive_implementation():
+    rng = np.random.default_rng(1)
+    for n in [2, 3, 4, 5, 6, 7, 12, 13, 40]:
+        s = pd.Series(rng.normal(size=n))
+        assert np.allclose(R._loo_median(s), _naive_loo_median(s), equal_nan=True), n
+
+
+def test_loo_median_single_element_is_nan():
+    assert R._loo_median(pd.Series([5.0])).isna().all()
+
+
+def test_middle_region_of_odd_tier_gets_z():
+    """자기포함 중위값이면 3개 티어의 가운데 지역은 ratio가 항상 1.0이라 z가 영구 NaN이 된다."""
+    idx = _fake_index({"A": 3000, "B": 2500, "C": 2000}, MONTHS7)
+    rv = R.region_rv(idx, R.assign_tiers(idx, n_tiers=1))
+    assert rv[rv["region_key"] == "B"]["rv_z"].notna().any()
+
+
+def test_no_look_ahead():
+    idx = _fake_index(LEVELS7, MONTHS7)
+    base = R.region_rv(idx, R.assign_tiers(idx, n_tiers=3))
+    mod = idx.copy()
+    mod.loc[(mod["region_key"] == "A") & (mod["month"] == MONTHS7[-1]), "price"] *= 1.5
+    after = R.region_rv(mod, R.assign_tiers(mod, n_tiers=3))
+    cut = MONTHS7[-1]
+    b = base[(base["region_key"] == "A") & (base["month"] < cut)]["rv_z"].dropna().to_numpy()
+    a = after[(after["region_key"] == "A") & (after["month"] < cut)]["rv_z"].dropna().to_numpy()
+    assert np.allclose(a, b)
+
+
+def test_short_history_region_is_dropped_not_crashing():
+    idx = _fake_index(LEVELS7, MONTHS7)
+    tiny = _fake_index({"Z": 1000}, MONTHS7[:3])
+    combined = pd.concat([idx, tiny], ignore_index=True)
+    rv = R.region_rv(combined, R.assign_tiers(combined, n_tiers=3, min_months=24))
+    assert "Z" not in rv["region_key"].values
+
+
+def test_rv_z_sign_convention_negative_is_cheap():
+    """한 지역만 가격을 떨어뜨리면 그 지역의 최신 rv_z가 음수여야 한다."""
+    idx = _fake_index(LEVELS7, MONTHS7)
+    cheap = idx.copy()
+    tail = cheap["month"] >= MONTHS7[-6]
+    cheap.loc[(cheap["region_key"] == "D") & tail, "price"] *= 0.8
+    rv = R.region_rv(cheap, R.assign_tiers(cheap, n_tiers=3))
+    last = rv[(rv["region_key"] == "D") & (rv["month"] == MONTHS7[-1])]
+    assert last["rv_z"].iloc[0] < 0

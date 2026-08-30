@@ -144,3 +144,49 @@ def assign_tiers(index, n_tiers=5, min_months=24):
     # 1이 최상위 가격대가 되게 한다.
     q = pd.qcut(agg["avg_price"].rank(method="first"), n_eff, labels=False, duplicates="drop")
     return agg.assign(tier=(q.max() - q + 1).astype(int))
+
+
+def _loo_median(s: pd.Series) -> pd.Series:
+    """자기 자신을 뺀 중위값 (스펙 §4).
+
+    자기포함 중위값을 쓰면 티어 구성원이 홀수일 때 정중앙 지역의 ratio가 매월 정확히
+    1.0로 고정되고 표준편차 0 -> rv_z가 영구 NaN이 된다.
+
+    정렬 기반 O(n log n). n개 중 하나를 빼면 남은 n-1개의 중위값은 정렬된 배열에서
+    제거된 원소의 위치에 따라 두세 가지 값 중 하나로 결정된다.
+    """
+    v = s.to_numpy(dtype=float)
+    n = len(v)
+    if n <= 1:
+        return pd.Series(np.nan, index=s.index)
+    order = np.argsort(v, kind="stable")
+    sv = v[order]
+    rank = np.empty(n, dtype=int)
+    rank[order] = np.arange(n)
+    k = n // 2
+    if n % 2 == 0:          # n-1이 홀수 -> 남은 것의 중위는 단일 원소
+        out = np.where(rank < k, sv[k], sv[k - 1])
+    else:                   # n-1이 짝수 -> 두 원소의 평균
+        lo = (sv[k] + sv[k + 1]) / 2 if k + 1 < n else np.nan
+        hi = (sv[k - 1] + sv[k]) / 2
+        mid = (sv[k - 1] + sv[k + 1]) / 2 if k + 1 < n else np.nan
+        out = np.where(rank < k, lo, np.where(rank > k, hi, mid))
+    return pd.Series(out, index=s.index)
+
+
+def region_rv(index, tiers, params=None):
+    """급지 대비 저평가 (스펙 §4). rv_z가 음수면 같은 급지 대비 평소보다 싸다.
+
+    반환: index의 컬럼 + tier, tier_median, ratio, rv_z
+    """
+    params = params or Params()
+    df = index.merge(tiers[["region_key", "tier"]], on="region_key", how="inner")
+    if df.empty:
+        return df.assign(tier_median=np.nan, ratio=np.nan, rv_z=np.nan)
+    df["tier_median"] = df.groupby(["tier", "month"], observed=True)["price"].transform(_loo_median)
+    df["ratio"] = df["price"] / df["tier_median"]
+    df = df.sort_values(["region_key", "month"]).reset_index(drop=True)
+    df["rv_z"] = (df.groupby("region_key", observed=True)["ratio"]
+                    .transform(lambda s: _trailing_z(s, params.lookback_months,
+                                                     params.min_group_z)))
+    return df
