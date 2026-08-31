@@ -1,5 +1,6 @@
 import copy
 
+from yunjin_studio import formatter
 from yunjin_studio.schema import SHOOTING_KEYS, validate_publish_pack, validate_shooting_guide
 
 VALID_SHOOTING = {
@@ -180,3 +181,253 @@ def test_seo_title_candidates_wrong_type_is_reported():
     data["b3_blog"]["seo_title_candidates"] = "not a list"
     errors = validate_publish_pack(data)
     assert any("seo_title_candidates" in e for e in errors)
+
+
+# --- round 3: 라운드 2가 "이미 안전하다"고 잘못 주장한 세 지점 -----------------------
+#
+# 공통점: truthy 진위값 검사(`if not card.get(key)`)는 문자열처럼 "존재하지만 잘못된
+# 타입"인 값을 통과시켜 버린다. round 2는 tips/body_markdown 두 곳만 고쳤고 나머지는
+# "이미 안전하다"고 주장했지만, 그 근거는 타입 강제 호출부(_as_dict/_as_list)만 훑은
+# 것이었다 — 실제 소비자인 formatter.py 가 무엇을 반복(for)하고 무엇에 .get() 을
+# 호출하는지는 보지 않았다. 아래는 그 축으로 다시 짚은 세 가지 실제 재현 사례다.
+
+
+def test_ingredients_as_string_is_reported_as_wrong_type():
+    data = copy.deepcopy(VALID_SHOOTING)
+    data["recipe_card"]["ingredients"] = "삼겹살 600g"
+    errors = validate_shooting_guide(data)
+    assert any("recipe_card.ingredients 는 list 여야 함" in e for e in errors)
+
+
+def test_ingredients_group_non_dict_entry_is_reported():
+    data = copy.deepcopy(VALID_SHOOTING)
+    data["recipe_card"]["ingredients"] = ["주재료: 삼겹살 600g"]
+    errors = validate_shooting_guide(data)
+    assert any("recipe_card.ingredients[0] 는 dict 여야 함" in e for e in errors)
+
+
+def test_ingredients_items_non_dict_entry_is_reported():
+    data = copy.deepcopy(VALID_SHOOTING)
+    data["recipe_card"]["ingredients"][0]["items"] = ["삼겹살 600g"]
+    errors = validate_shooting_guide(data)
+    assert any("items[0] 는 dict 여야 함" in e for e in errors)
+
+
+def test_steps_as_string_is_reported_as_wrong_type():
+    data = copy.deepcopy(VALID_SHOOTING)
+    data["recipe_card"]["steps"] = "밑간부터 볶기까지"
+    errors = validate_shooting_guide(data)
+    assert any("recipe_card.steps 는 list 여야 함" in e for e in errors)
+
+
+def test_steps_non_dict_entry_is_reported():
+    data = copy.deepcopy(VALID_SHOOTING)
+    data["recipe_card"]["steps"] = ["밑간부터 볶기까지"]
+    errors = validate_shooting_guide(data)
+    assert any("recipe_card.steps[0] 는 dict 여야 함" in e for e in errors)
+
+
+def test_a3_camera_scenes_as_string_is_reported_as_wrong_type():
+    data = copy.deepcopy(VALID_SHOOTING)
+    data["a3_camera"]["scenes"] = "탑뷰로 고정"
+    errors = validate_shooting_guide(data)
+    assert any("a3_camera.scenes 는 list 여야 함" in e for e in errors)
+
+
+def test_a3_camera_scenes_non_dict_entry_is_reported():
+    data = copy.deepcopy(VALID_SHOOTING)
+    data["a3_camera"]["scenes"] = ["탑뷰로 고정"]
+    errors = validate_shooting_guide(data)
+    assert any("a3_camera.scenes[0] 는 dict 여야 함" in e for e in errors)
+
+
+def test_a2_script_wrong_type_message_names_the_real_problem():
+    """a2_script = '문자열' 은 비어 있는 게 아니라 타입이 틀린 것이다 — '비어 있음'이라는
+    잘못된 메시지 대신 실제 문제를 이름으로 남겨야 한다."""
+    data = copy.deepcopy(VALID_SHOOTING)
+    data["a2_script"] = "무언가의 대본"
+    errors = validate_shooting_guide(data)
+    assert any("a2_script 는 list 여야 함" in e for e in errors)
+    assert not any(e == "a2_script 비어 있음" for e in errors)
+
+
+def test_a2_script_non_dict_entry_is_reported():
+    data = copy.deepcopy(VALID_SHOOTING)
+    data["a2_script"] = ["그냥 문자열"]
+    errors = validate_shooting_guide(data)
+    assert any("a2_script[0] 는 dict 여야 함" in e for e in errors)
+
+
+def test_a5_checklist_wrong_type_is_reported():
+    data = copy.deepcopy(VALID_SHOOTING)
+    data["a5_checklist"] = "체크리스트 텍스트"
+    errors = validate_shooting_guide(data)
+    assert any("a5_checklist 는 dict 여야 함" in e for e in errors)
+
+
+def test_photo_slots_wrong_type_is_reported():
+    data = copy.deepcopy(VALID_PUBLISH)
+    data["b3_blog"]["photo_slots"] = "재료 사진 하나"
+    errors = validate_publish_pack(data)
+    assert any("b3_blog.photo_slots 는 list 여야 함" in e for e in errors)
+
+
+def test_photo_slots_non_dict_entry_is_reported():
+    data = copy.deepcopy(VALID_PUBLISH)
+    data["b3_blog"]["photo_slots"] = ["재료 사진 하나"]
+    errors = validate_publish_pack(data)
+    assert any("b3_blog.photo_slots[0] 는 dict 여야 함" in e for e in errors)
+
+
+def test_hashtags_non_string_entry_is_reported():
+    data = copy.deepcopy(VALID_PUBLISH)
+    data["b2_instagram"]["hashtags"] = [123]
+    errors = validate_publish_pack(data)
+    assert any("b2_instagram.hashtags[0] 는 문자열이어야 함" in e for e in errors)
+
+
+def test_tags_non_string_entry_is_reported():
+    data = copy.deepcopy(VALID_PUBLISH)
+    data["b3_blog"]["tags"] = [123]
+    errors = validate_publish_pack(data)
+    assert any("b3_blog.tags[0] 는 문자열이어야 함" in e for e in errors)
+
+
+# --- 핵심 불변식: validate 가 [] 면 render 는 절대 예외를 던지지 않는다 -----------------
+#
+# 이전 두 라운드는 이 계약 자체를 테스트한 적이 없다. "타입 오류를 이름으로 남긴다"는
+# 개별 사례 테스트만으로는, formatter.py 가 실제로 무엇을 소비하는지 놓친 필드가 있어도
+# 알아챌 방법이 없다. 아래 테스트는 스키마가 아니라 소비자(formatter)를 기준으로 삼아,
+# "검증 통과 = 렌더링 성공"이라는 계약을 직접 확인한다.
+
+
+def _set_nested(data, path, value):
+    target = data
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = value
+    return data
+
+
+def _seeded_shooting():
+    """구조(a1_scenario.structure)/장면(a3_camera.scenes)은 VALID_SHOOTING에서 빈 리스트다.
+    원소 단위 타입 오류를 시험하려면 최소 하나씩은 채워둔 사본이 필요하다."""
+    data = copy.deepcopy(VALID_SHOOTING)
+    data["a1_scenario"]["structure"] = [
+        {"from_sec": 0, "to_sec": 5, "section": "훅", "purpose": "시선을 끈다"}
+    ]
+    data["a3_camera"]["scenes"] = [
+        {"scene": "1", "angle": "탑뷰", "tripod": "O", "lighting": "자연광", "movement": "고정"}
+    ]
+    return data
+
+
+_WRONG_TYPE_VALUES = ["문자열", 123, 3.14, True, {"unexpected": "dict"}]
+_ENTRY_WRONG_TYPE_VALUES = ["문자열 원소", 123, None, ["중첩", "리스트"]]
+
+_SHOOTING_FIELD_PATHS = [
+    ("recipe_card",),
+    ("recipe_card", "ingredients"),
+    ("recipe_card", "steps"),
+    ("recipe_card", "tips"),
+    ("recipe_card", "fail_points"),
+    ("a1_scenario",),
+    ("a1_scenario", "structure"),
+    ("a2_script",),
+    ("a3_camera",),
+    ("a3_camera", "scenes"),
+    ("a3_camera", "common_mistakes"),
+    ("a4_differentiator",),
+    ("a4_differentiator", "channel_edge"),
+    ("a4_differentiator", "series_ideas"),
+    ("a5_checklist",),
+    ("a5_checklist", "before_cooking"),
+    ("a5_checklist", "equipment"),
+    ("a5_checklist", "during_shoot"),
+    ("a5_checklist", "must_not_miss"),
+    ("a5_checklist", "after_shoot"),
+]
+
+_SHOOTING_ENTRY_PATHS = [
+    ("recipe_card", "ingredients", 0),
+    ("recipe_card", "ingredients", 0, "items", 0),
+    ("recipe_card", "steps", 0),
+    ("recipe_card", "tips", 0),
+    ("a1_scenario", "structure", 0),
+    ("a2_script", 0),
+    ("a3_camera", "scenes", 0),
+]
+
+_PUBLISH_FIELD_PATHS = [
+    ("b2_instagram",),
+    ("b2_instagram", "carousel"),
+    ("b2_instagram", "hashtags"),
+    ("b2_instagram", "story_lines"),
+    ("b2_instagram", "thumbnail_ideas"),
+    ("b3_blog",),
+    ("b3_blog", "seo_title_candidates"),
+    ("b3_blog", "photo_slots"),
+    ("b3_blog", "tags"),
+]
+
+_PUBLISH_ENTRY_PATHS = [
+    ("b2_instagram", "carousel", 0),
+    ("b2_instagram", "hashtags", 0),
+    ("b3_blog", "photo_slots", 0),
+    ("b3_blog", "tags", 0),
+]
+
+
+def test_shooting_guide_validate_pass_implies_render_succeeds():
+    """어떤 입력이든, validate_shooting_guide 가 [] 를 돌려주면 render_shooting_guide 는
+    예외를 던지지 않아야 한다. 필드 단위/원소 단위로 다양한 잘못된 타입을 주입해 이
+    계약을 직접 확인한다 — 이 테스트 하나가 3라운드에 걸친 버그를 전부 잡아냈어야 한다."""
+    failures = []
+
+    for path in _SHOOTING_FIELD_PATHS:
+        for value in _WRONG_TYPE_VALUES:
+            data = _set_nested(copy.deepcopy(VALID_SHOOTING), path, value)
+            if validate_shooting_guide(data) == []:
+                try:
+                    formatter.render_shooting_guide(data)
+                except Exception as exc:  # noqa: BLE001 - 실패 지점 자체를 보고하기 위함
+                    failures.append(f"field path={path} value={value!r} -> {type(exc).__name__}: {exc}")
+
+    for path in _SHOOTING_ENTRY_PATHS:
+        for value in _ENTRY_WRONG_TYPE_VALUES:
+            data = _set_nested(_seeded_shooting(), path, value)
+            if validate_shooting_guide(data) == []:
+                try:
+                    formatter.render_shooting_guide(data)
+                except Exception as exc:
+                    failures.append(f"entry path={path} value={value!r} -> {type(exc).__name__}: {exc}")
+
+    assert failures == [], "\n".join(failures)
+
+
+def test_publish_pack_validate_pass_implies_render_succeeds():
+    """validate_publish_pack 이 [] 를 돌려주면 render_instagram/render_blog 는 예외를
+    던지지 않아야 한다. 같은 계약을 인스타/블로그 쪽에서도 확인한다."""
+    failures = []
+
+    for path in _PUBLISH_FIELD_PATHS:
+        for value in _WRONG_TYPE_VALUES:
+            data = _set_nested(copy.deepcopy(VALID_PUBLISH), path, value)
+            if validate_publish_pack(data) == []:
+                try:
+                    formatter.render_instagram(data)
+                    formatter.render_blog(data)
+                except Exception as exc:
+                    failures.append(f"field path={path} value={value!r} -> {type(exc).__name__}: {exc}")
+
+    for path in _PUBLISH_ENTRY_PATHS:
+        for value in _ENTRY_WRONG_TYPE_VALUES:
+            data = _set_nested(copy.deepcopy(VALID_PUBLISH), path, value)
+            if validate_publish_pack(data) == []:
+                try:
+                    formatter.render_instagram(data)
+                    formatter.render_blog(data)
+                except Exception as exc:
+                    failures.append(f"entry path={path} value={value!r} -> {type(exc).__name__}: {exc}")
+
+    assert failures == [], "\n".join(failures)
