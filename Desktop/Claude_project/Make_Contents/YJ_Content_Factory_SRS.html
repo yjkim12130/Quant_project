@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YJ-Content Factory — SW 요구사항 명세서</title>
+<style>
+  :root{
+    --bg:#0d1117;
+    --bg-soft:#161b22;
+    --bg-card:#1c232d;
+    --bg-elev:#222b36;
+    --border:#2d3743;
+    --border-soft:#242c36;
+    --text:#e6edf3;
+    --text-dim:#9aa7b4;
+    --text-faint:#6b7785;
+    --accent:#8b7cf6;
+    --accent-soft:#a594f9;
+    /* 윤진 — 따뜻한 코랄/주황 */
+    --yj:#ff7a59;
+    --yj-soft:#ff9d83;
+    --yj-bg:rgba(255,122,89,.10);
+    --yj-border:rgba(255,122,89,.35);
+    /* 영준 — 시원한 블루 */
+    --yo:#4a9eff;
+    --yo-soft:#7bb8ff;
+    --yo-bg:rgba(74,158,255,.10);
+    --yo-border:rgba(74,158,255,.35);
+    --ok:#3fb950;
+    --ok-bg:rgba(63,185,80,.12);
+    --warn:#e3b341;
+    --warn-bg:rgba(227,179,65,.12);
+    --shadow:0 8px 30px rgba(0,0,0,.4);
+    --radius:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth;scroll-padding-top:84px}
+  body{
+    font-family:"Pretendard","Segoe UI",-apple-system,BlinkMacSystemFont,"Malgun Gothic",sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    line-height:1.7;
+    -webkit-font-smoothing:antialiased;
+    background-image:
+      radial-gradient(circle at 15% 0%,rgba(139,124,246,.07),transparent 40%),
+      radial-gradient(circle at 85% 5%,rgba(74,158,255,.06),transparent 38%);
+  }
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+
+  /* ===== NAV ===== */
+  nav{
+    position:sticky;top:0;z-index:100;
+    background:rgba(13,17,23,.82);
+    backdrop-filter:blur(14px);
+    border-bottom:1px solid var(--border);
+  }
+  .nav-inner{
+    max-width:1080px;margin:0 auto;padding:12px 24px;
+    display:flex;align-items:center;gap:20px;
+    flex-wrap:wrap;
+  }
+  .nav-brand{font-weight:800;letter-spacing:-.3px;font-size:15px;white-space:nowrap}
+  .nav-brand .dot{color:var(--accent)}
+  .nav-links{display:flex;gap:4px;flex-wrap:wrap;flex:1}
+  .nav-links a{
+    font-size:13px;color:var(--text-dim);
+    padding:6px 11px;border-radius:8px;transition:.18s;font-weight:500;
+  }
+  .nav-links a:hover{background:var(--bg-elev);color:var(--text)}
+
+  /* ===== HERO ===== */
+  header.hero{
+    padding:70px 0 48px;
+    border-bottom:1px solid var(--border-soft);
+    position:relative;
+  }
+  .badge-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:22px}
+  .badge{
+    display:inline-flex;align-items:center;gap:7px;
+    font-size:12.5px;font-weight:600;
+    padding:6px 13px;border-radius:30px;
+    border:1px solid var(--border);background:var(--bg-soft);
+    color:var(--text-dim);
+  }
+  .badge .pulse{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 rgba(63,185,80,.6);animation:pulse 2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(63,185,80,.5)}70%{box-shadow:0 0 0 8px rgba(63,185,80,0)}100%{box-shadow:0 0 0 0 rgba(63,185,80,0)}}
+  h1.title{
+    font-size:54px;font-weight:850;letter-spacing:-1.8px;line-height:1.08;
+    background:linear-gradient(120deg,#fff 20%,#a594f9 55%,#4a9eff 90%);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+    margin-bottom:18px;
+  }
+  .subtitle{font-size:18px;color:var(--text-dim);max-width:680px;line-height:1.65}
+  .subtitle strong{color:var(--text);font-weight:600}
+  .hero-meta{display:flex;gap:26px;margin-top:30px;flex-wrap:wrap;font-size:13.5px;color:var(--text-faint)}
+  .hero-meta b{color:var(--text-dim);font-weight:600}
+
+  /* ===== SECTION ===== */
+  section{padding:54px 0;border-bottom:1px solid var(--border-soft)}
+  .sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:8px}
+  .sec-num{
+    font-size:14px;font-weight:800;color:var(--accent);
+    font-variant-numeric:tabular-nums;
+    border:1px solid var(--accent);border-radius:8px;
+    padding:2px 9px;line-height:1.4;
+  }
+  h2{font-size:30px;font-weight:800;letter-spacing:-.7px}
+  .sec-desc{color:var(--text-dim);font-size:15px;margin:6px 0 30px;max-width:760px}
+  h3{font-size:19px;font-weight:700;margin:30px 0 14px;letter-spacing:-.3px;display:flex;align-items:center;gap:9px}
+  h4{font-size:15px;font-weight:700;color:var(--text-dim);margin:18px 0 10px;text-transform:uppercase;letter-spacing:.5px}
+
+  /* ===== CARDS ===== */
+  .card{
+    background:var(--bg-card);border:1px solid var(--border);
+    border-radius:var(--radius);padding:24px 26px;
+  }
+  .grid{display:grid;gap:18px}
+  .grid-2{grid-template-columns:1fr 1fr}
+  @media(max-width:760px){.grid-2{grid-template-columns:1fr}}
+
+  ul.clean{list-style:none;display:flex;flex-direction:column;gap:9px}
+  ul.clean li{position:relative;padding-left:22px;color:var(--text-dim);font-size:14.5px}
+  ul.clean li::before{content:"";position:absolute;left:2px;top:10px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+  ul.clean li strong{color:var(--text);font-weight:600}
+
+  .pill{display:inline-block;font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;margin:3px 4px 3px 0}
+
+  /* 채널 카드 컬러 변형 */
+  .ch-yj{border-color:var(--yj-border);background:linear-gradient(180deg,var(--yj-bg),transparent 70%),var(--bg-card)}
+  .ch-yo{border-color:var(--yo-border);background:linear-gradient(180deg,var(--yo-bg),transparent 70%),var(--bg-card)}
+  .ch-tag{font-size:13px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px}
+  .ch-yj .ch-tag{color:var(--yj)}
+  .ch-yo .ch-tag{color:var(--yo)}
+  .ch-name{font-size:21px;font-weight:800;margin-bottom:4px}
+  .ch-sub{color:var(--text-dim);font-size:14px;margin-bottom:16px}
+  .ch-yj .pill{background:var(--yj-bg);color:var(--yj-soft);border:1px solid var(--yj-border)}
+  .ch-yo .pill{background:var(--yo-bg);color:var(--yo-soft);border:1px solid var(--yo-border)}
+  .ch-yj ul.clean li::before{background:var(--yj)}
+  .ch-yo ul.clean li::before{background:var(--yo)}
+
+  .note{
+    margin-top:16px;padding:12px 15px;border-radius:10px;font-size:13.5px;
+    background:var(--warn-bg);border:1px solid rgba(227,179,65,.3);color:#f0d795;
+    display:flex;gap:10px;align-items:flex-start;
+  }
+  .note .ic{flex-shrink:0}
+
+  /* ===== PIPELINE DIAGRAM ===== */
+  .pipe-wrap{margin:14px 0 8px}
+  .phase-label{
+    display:inline-flex;align-items:center;gap:9px;
+    font-size:14px;font-weight:800;padding:7px 16px;border-radius:10px;margin-bottom:6px;
+  }
+  .yj-accent{color:var(--yj)} .yo-accent{color:var(--yo)}
+  .phase-label.yj{background:var(--yj-bg);border:1px solid var(--yj-border);color:var(--yj-soft)}
+  .phase-label.yo{background:var(--yo-bg);border:1px solid var(--yo-border);color:var(--yo-soft)}
+  .phase-cap{font-size:13.5px;color:var(--text-faint);margin:0 0 14px 2px}
+
+  .flow{
+    display:grid;grid-template-columns:1fr auto 1fr auto 1fr;
+    align-items:stretch;gap:0;margin:10px 0;
+  }
+  @media(max-width:760px){
+    .flow{grid-template-columns:1fr;gap:8px}
+    .flow .arrow{transform:rotate(90deg);padding:4px 0;justify-self:center}
+  }
+  .flow-box{
+    background:var(--bg-elev);border:1px solid var(--border);border-radius:12px;
+    padding:16px 16px;display:flex;flex-direction:column;gap:7px;
+  }
+  .flow-box .fb-head{font-size:12px;font-weight:800;letter-spacing:.6px;text-transform:uppercase}
+  .fb-in{color:var(--text-dim)} .fb-proc{color:var(--accent-soft)} .fb-out{color:var(--ok)}
+  .flow-box .fb-head.yj{color:var(--yj)} .flow-box .fb-head.yo{color:var(--yo)}
+  .flow-box ul{list-style:none;display:flex;flex-direction:column;gap:5px}
+  .flow-box li{font-size:12.8px;color:var(--text-dim);padding-left:14px;position:relative;line-height:1.45}
+  .flow-box li::before{content:"›";position:absolute;left:0;color:var(--text-faint);font-weight:700}
+  .arrow{display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:24px;padding:0 14px}
+  .yj-box{border-color:var(--yj-border)} .yo-box{border-color:var(--yo-border)}
+
+  .between-step{
+    text-align:center;font-size:13px;color:var(--text-faint);
+    padding:14px;margin:6px 0;border:1px dashed var(--border);border-radius:10px;
+    background:repeating-linear-gradient(45deg,transparent,transparent 8px,rgba(255,255,255,.012) 8px,rgba(255,255,255,.012) 16px);
+  }
+  .between-step b{color:var(--text-dim)}
+
+  /* output detail list */
+  .out-list{display:grid;gap:10px;margin-top:12px}
+  .out-item{
+    display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:start;
+    background:var(--bg-soft);border:1px solid var(--border-soft);border-radius:10px;padding:13px 16px;
+  }
+  .out-code{
+    font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums;
+    padding:3px 9px;border-radius:7px;white-space:nowrap;height:fit-content;margin-top:1px;
+  }
+  .yj-code{background:var(--yj-bg);color:var(--yj-soft);border:1px solid var(--yj-border)}
+  .yo-code{background:var(--yo-bg);color:var(--yo-soft);border:1px solid var(--yo-border)}
+  .out-item .ot{font-weight:700;font-size:14.5px;display:block;margin-bottom:2px}
+  .out-item .od{font-size:13px;color:var(--text-dim)}
+
+  /* ===== ARCHITECTURE ===== */
+  .engine-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:8px}
+  @media(max-width:680px){.engine-grid{grid-template-columns:1fr}}
+  .engine-card{background:var(--bg-soft);border:1px solid var(--border);border-radius:12px;padding:18px 20px}
+  .engine-card .en{font-weight:800;font-size:15px;color:var(--accent-soft);margin-bottom:5px;font-family:ui-monospace,"Cascadia Code",monospace}
+  .engine-card .ed{font-size:13.5px;color:var(--text-dim)}
+
+  table{width:100%;border-collapse:collapse;margin-top:14px;font-size:14px;overflow:hidden;border-radius:12px;border:1px solid var(--border)}
+  thead th{background:var(--bg-elev);color:var(--text);font-weight:700;text-align:left;padding:12px 16px;font-size:13px;letter-spacing:.3px}
+  tbody td{padding:11px 16px;border-top:1px solid var(--border-soft);color:var(--text-dim)}
+  tbody tr:hover{background:var(--bg-soft)}
+  tbody td:first-child{color:var(--text);font-weight:600}
+  .ph-tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;background:var(--accent);color:#fff}
+  .ph1{background:#3fb950}.ph2{background:#4a9eff}.ph3{background:#8b7cf6}
+
+  /* ===== TIMELINE ===== */
+  .timeline{position:relative;margin-top:10px;padding-left:34px}
+  .timeline::before{content:"";position:absolute;left:11px;top:6px;bottom:6px;width:2px;background:linear-gradient(180deg,var(--ok),var(--yo),var(--accent),var(--yj))}
+  .tl-item{position:relative;padding:0 0 28px 0}
+  .tl-item:last-child{padding-bottom:0}
+  .tl-dot{position:absolute;left:-30px;top:3px;width:20px;height:20px;border-radius:50%;border:3px solid var(--bg);background:var(--accent);box-shadow:0 0 0 1px var(--border)}
+  .tl-item.p1 .tl-dot{background:var(--ok)} .tl-item.p2 .tl-dot{background:var(--yo)} .tl-item.p3 .tl-dot{background:var(--accent)} .tl-item.p4 .tl-dot{background:var(--yj)}
+  .tl-phase{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+  .tl-phase .pn{font-weight:800;font-size:17px}
+  .tl-dur{font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--bg-elev);border:1px solid var(--border);color:var(--text-dim)}
+  .tl-item ul.clean li{font-size:14px}
+
+  /* ===== UNRESOLVED ===== */
+  .open-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:6px}
+  @media(max-width:680px){.open-grid{grid-template-columns:1fr}}
+  .open-item{
+    display:flex;align-items:center;gap:12px;
+    background:var(--warn-bg);border:1px solid rgba(227,179,65,.28);border-radius:10px;padding:13px 16px;
+  }
+  .open-item .q{flex-shrink:0;font-weight:800;color:var(--warn);font-size:16px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(227,179,65,.4);border-radius:7px}
+  .open-item .ot{font-size:14px;color:var(--text)}
+  .open-item .tbd{margin-left:auto;font-size:11px;font-weight:700;color:var(--warn);background:rgba(227,179,65,.15);padding:2px 9px;border-radius:6px;white-space:nowrap}
+  .legend{display:flex;gap:18px;margin-bottom:20px;flex-wrap:wrap;font-size:13px}
+  .legend span{display:inline-flex;align-items:center;gap:7px;color:var(--text-dim)}
+  .legend .sw{width:12px;height:12px;border-radius:4px}
+
+  /* ===== CHANGELOG ===== */
+  .log-item{display:flex;gap:16px;padding:14px 0;border-bottom:1px solid var(--border-soft)}
+  .log-item:last-child{border-bottom:none}
+  .log-ver{font-weight:800;font-size:14px;color:var(--accent-soft);font-family:ui-monospace,monospace;white-space:nowrap;width:62px;flex-shrink:0}
+  .log-date{font-size:12.5px;color:var(--text-faint);white-space:nowrap;width:96px;flex-shrink:0;font-variant-numeric:tabular-nums}
+  .log-desc{font-size:14px;color:var(--text-dim)}
+  .log-desc b{color:var(--text)}
+
+  footer{padding:40px 0 60px;text-align:center;color:var(--text-faint);font-size:13px}
+  footer .ft-title{font-weight:700;color:var(--text-dim);margin-bottom:6px}
+
+  .status-line{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-dim);margin-top:14px}
+  .vision-card{
+    background:linear-gradient(120deg,rgba(139,124,246,.08),rgba(74,158,255,.05));
+    border:1px solid var(--border);border-radius:var(--radius);padding:26px 28px;margin-top:18px;
+  }
+  .vision-card .vlabel{font-size:12px;font-weight:800;letter-spacing:1px;color:var(--accent);text-transform:uppercase;margin-bottom:10px}
+  .vision-card p{font-size:16.5px;color:var(--text);line-height:1.7}
+  .vision-card p em{color:var(--accent-soft);font-style:normal;font-weight:600}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <div class="nav-brand">YJ-Content Factory<span class="dot">.</span></div>
+    <div class="nav-links">
+      <a href="#overview">개요</a>
+      <a href="#channels">채널</a>
+      <a href="#yj-pipeline">윤진 파이프라인</a>
+      <a href="#yo-pipeline">영준 파이프라인</a>
+      <a href="#architecture">아키텍처</a>
+      <a href="#roadmap">로드맵</a>
+      <a href="#open">미결 사항</a>
+      <a href="#changelog">변경 이력</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="badge-row">
+      <span class="badge"><span class="pulse"></span>Living Document</span>
+      <span class="badge">SW 요구사항 명세서</span>
+      <span class="badge">v0.1 · Draft</span>
+    </div>
+    <h1 class="title">YJ-Content Factory</h1>
+    <p class="subtitle">
+      부부 크리에이터 <strong>윤진 + 영준</strong>을 위한 콘텐츠 자동화 시스템.
+      정해진 포맷의 Input만 넣으면 <strong>블로그 · 인스타 · 유튜브</strong> 콘텐츠가 자동 생성되고,
+      최종적으로는 AI 영상 생성(Vix)까지 연결되는 파이프라인.
+    </p>
+    <div class="hero-meta">
+      <span><b>개발 도구</b> · Claude Code (CLI)</span>
+      <span><b>개발</b> · 영준</span>
+      <span><b>사용</b> · 윤진(콘텐츠) · 영준(콘텐츠+개발)</span>
+      <span><b>최종 수정</b> · 2026-05-29</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ===== 1. 개요 ===== -->
+  <section id="overview">
+    <div class="sec-head"><span class="sec-num">01</span><h2>프로젝트 개요</h2></div>
+    <p class="sec-desc">콘텐츠 제작의 반복 작업을 자동화하여 부부의 시간을 절약하고, 영상 자산을 체계적으로 축적하는 것을 목표로 한다.</p>
+
+    <div class="vision-card">
+      <div class="vlabel">핵심 비전</div>
+      <p>
+        정해진 포맷의 <em>Input</em>만 넣으면, 블로그 · 인스타 · 유튜브 콘텐츠가 <em>자동 생성</em>되는 프로그램.
+        최종적으로는 만들어진 산출물을 기반으로 <em>Vix(AI 영상 생성 툴)</em>를 연동해 영상까지 자동 생성한다.
+      </p>
+    </div>
+
+    <div class="grid grid-2" style="margin-top:18px">
+      <div class="card">
+        <h4 style="margin-top:0">제작 주체</h4>
+        <ul class="clean">
+          <li><strong>윤진</strong> — 콘텐츠 제작 (요리 + 육아)</li>
+          <li><strong>영준</strong> — 콘텐츠 제작 + 시스템 개발 (재테크/투자)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4 style="margin-top:0">산출 대상 플랫폼</h4>
+        <div>
+          <span class="pill" style="background:var(--bg-elev);border:1px solid var(--border);color:var(--text-dim)">네이버 블로그</span>
+          <span class="pill" style="background:var(--bg-elev);border:1px solid var(--border);color:var(--text-dim)">Instagram (릴스·캐러셀·스토리)</span>
+          <span class="pill" style="background:var(--bg-elev);border:1px solid var(--border);color:var(--text-dim)">YouTube (쇼츠·롱폼)</span>
+          <span class="pill" style="background:var(--bg-elev);border:1px solid var(--border);color:var(--text-dim)">→ Vix 영상 (Phase 3)</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 2. 채널 구성 ===== -->
+  <section id="channels">
+    <div class="sec-head"><span class="sec-num">02</span><h2>채널 구성</h2></div>
+    <p class="sec-desc">두 개의 독립 채널을 운영하며, 향후 부부 콜라보 콘텐츠로 시너지를 확대한다. <strong style="color:var(--ok)">확정 사항</strong></p>
+
+    <div class="grid grid-2">
+      <div class="card ch-yj">
+        <div class="ch-tag">윤진 채널</div>
+        <div class="ch-name">요리 + 육아</div>
+        <div class="ch-sub">하나의 채널로 통합 운영</div>
+        <h4 style="color:var(--yj-soft)">콘텐츠 카테고리</h4>
+        <ul class="clean">
+          <li>요리 레시피</li>
+          <li>육아 일상 / 꿀팁</li>
+          <li>교차 콘텐츠 (아이 간식, 이유식 등)</li>
+        </ul>
+        <h4 style="color:var(--yj-soft)">플랫폼</h4>
+        <div>
+          <span class="pill">Instagram</span>
+          <span class="pill">YouTube</span>
+          <span class="pill">네이버 블로그</span>
+        </div>
+      </div>
+
+      <div class="card ch-yo">
+        <div class="ch-tag">영준 채널</div>
+        <div class="ch-name">재테크 · 투자 · 절세</div>
+        <div class="ch-sub">경제 채널</div>
+        <h4 style="color:var(--yo-soft)">콘텐츠 카테고리</h4>
+        <ul class="clean">
+          <li>퀀트 투자 (오늘의 매매 지침)</li>
+          <li>재테크 기초 / 포트폴리오</li>
+          <li>절세 팁</li>
+        </ul>
+        <h4 style="color:var(--yo-soft)">플랫폼</h4>
+        <div>
+          <span class="pill">YouTube</span>
+          <span class="pill">Instagram</span>
+          <span class="pill">네이버 블로그</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card ch-yo" style="margin-top:18px">
+      <h4 style="color:var(--yo-soft);margin-top:0">영준 채널 특이사항 — 퀀트앱 연동</h4>
+      <p style="font-size:14.5px;color:var(--text-dim)">
+        영준은 이미 퀀트 앱 <strong style="color:var(--text)">YJ-Quant (Streamlit 기반)</strong>를 운영 중이며,
+        매일 <strong style="color:var(--text)">"오늘의 지침"</strong>(어떤 종목을 어떤 비율로 매수/매도할지)이
+        텍스트 + 화면 캡처 형태로 나온다. 이 지침 데이터를 그대로 Input으로 넣으면 콘텐츠가 자동 생성되어야 한다.
+      </p>
+      <div class="note">
+        <span class="ic">⚠️</span>
+        <span><strong>필수 규칙</strong> — 투자 콘텐츠의 모든 Output에는 <strong>"투자 권유가 아닙니다"</strong> 면책 조항이 자동 삽입되어야 한다.</span>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:18px;background:linear-gradient(120deg,var(--yj-bg),var(--yo-bg))">
+      <h4 style="margin-top:0;color:var(--text)">부부 시너지 <span style="font-weight:500;color:var(--text-faint);text-transform:none;letter-spacing:0">(향후)</span></h4>
+      <p style="font-size:14.5px;color:var(--text-dim)">윤진 요리 × 영준 재테크 콜라보 콘텐츠 — 예: <strong style="color:var(--text)">"월 식비 30만원 집밥 챌린지"</strong></p>
+    </div>
+  </section>
+
+  <!-- ===== 3. 윤진 파이프라인 ===== -->
+  <section id="yj-pipeline">
+    <div class="sec-head"><span class="sec-num">03</span><h2 class="yj-accent" style="color:var(--text)">윤진 파이프라인</h2></div>
+    <p class="sec-desc">촬영 <strong>전</strong>(가이드 생성)과 촬영 <strong>후</strong>(콘텐츠 생성)로 나뉘는 2단계 워크플로우. 두 단계는 레시피 데이터로 자동 연결된다.</p>
+
+    <!-- Phase A -->
+    <div class="phase-label yj">PHASE A · 촬영 전</div>
+    <p class="phase-cap">"어떻게 찍을지" 가이드 생성 — 영상이 없는 상태에서 텍스트만으로 생성. 윤진이 태블릿/프린트로 보고 촬영.</p>
+    <div class="flow">
+      <div class="flow-box yj-box">
+        <div class="fb-head yj">INPUT · 텍스트</div>
+        <ul>
+          <li>요리명</li>
+          <li>재료 + 양</li>
+          <li>조리 과정 (순서)</li>
+          <li>꿀팁 / 실패 포인트</li>
+          <li>비하인드 에피소드</li>
+          <li>목표 러닝타임 (30·60·90초)</li>
+        </ul>
+      </div>
+      <div class="arrow">→</div>
+      <div class="flow-box yj-box">
+        <div class="fb-head yj">처리 · Claude</div>
+        <ul>
+          <li>채널 프로필 + Input 조립</li>
+          <li>촬영 가이드 생성</li>
+        </ul>
+      </div>
+      <div class="arrow">→</div>
+      <div class="flow-box yj-box">
+        <div class="fb-head yj">OUTPUT · 촬영 가이드</div>
+        <ul>
+          <li>A1 영상 시나리오</li>
+          <li>A2 촬영 대본</li>
+          <li>A3 구도/앵글 가이드</li>
+          <li>A4 차별화 포인트</li>
+          <li>A5 촬영 체크리스트</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="out-list">
+      <div class="out-item"><span class="out-code yj-code">A1</span><div><span class="ot">영상 시나리오</span><span class="od">전체 영상 구조 · 타임라인 · 후킹 문장 · BGM 분위기</span></div></div>
+      <div class="out-item"><span class="out-code yj-code">A2</span><div><span class="ot">촬영 대본</span><span class="od">타임코드별 멘트 · 액션 지시 · 표정 가이드</span></div></div>
+      <div class="out-item"><span class="out-code yj-code">A3</span><div><span class="ot">촬영 구도/앵글 가이드</span><span class="od">장면별 삼각대 위치·높이·각도 · 앵글(탑뷰/45도/정면/클로즈업) · 조명 팁 · 카메라 이동 타이밍 · 흔한 실수 경고 · 반드시 찍어야 할 장면 TOP 5 · 완성 비주얼 샷</span></div></div>
+      <div class="out-item"><span class="out-code yj-code">A4</span><div><span class="ot">차별화 포인트</span><span class="od">경쟁 채널 대비 차별점 · 시리즈화 가능성</span></div></div>
+      <div class="out-item"><span class="out-code yj-code">A5</span><div><span class="ot">촬영 체크리스트</span><span class="od">요리 전 · 장비 · 촬영 중 · 놓치면 안 되는 것 · 촬영 후 체크</span></div></div>
+    </div>
+
+    <div class="between-step">↓ &nbsp;<b>윤진이가 가이드를 보고 촬영</b>&nbsp; ↓</div>
+
+    <!-- Phase B -->
+    <div class="phase-label yj">PHASE B · 촬영 후</div>
+    <p class="phase-cap">찍은 영상으로 멀티 플랫폼 콘텐츠 생성. Phase A의 레시피 데이터가 자동 연결됨.</p>
+    <div class="flow">
+      <div class="flow-box yj-box">
+        <div class="fb-head yj">INPUT</div>
+        <ul>
+          <li>촬영 영상 (.mp4)</li>
+          <li>Phase A 레시피 (자동 연결)</li>
+          <li>(선택) 촬영 중 변경 메모</li>
+          <li>(선택) 완성 요리 사진</li>
+        </ul>
+      </div>
+      <div class="arrow">→</div>
+      <div class="flow-box yj-box">
+        <div class="fb-head yj">처리 · 영상 분석</div>
+        <ul>
+          <li>Whisper STT 자막 추출</li>
+          <li>FFmpeg/OpenCV 키프레임·썸네일</li>
+          <li>장면 전환 감지</li>
+        </ul>
+      </div>
+      <div class="arrow">→</div>
+      <div class="flow-box yj-box">
+        <div class="fb-head yj">OUTPUT · 멀티 플랫폼</div>
+        <ul>
+          <li>B1 편집 가이드</li>
+          <li>B2 인스타그램 패키지</li>
+          <li>B3 네이버 블로그 글</li>
+          <li>B4 유튜브 패키지</li>
+          <li>B5 수익화 연결</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="out-list">
+      <div class="out-item"><span class="out-code yj-code">B1</span><div><span class="ot">편집 가이드</span><span class="od">삭제 구간(타임코드+이유) · 배속 구간 · 슬로우모션 · 자막(타임코드+텍스트) · 텍스트 오버레이 · BGM 전환 · 효과음 · 예상 길이</span></div></div>
+      <div class="out-item"><span class="out-code yj-code">B2</span><div><span class="ot">인스타그램 패키지</span><span class="od">릴스 캡션+해시태그 · 캐러셀 5~7장 텍스트 · 스토리 문구 · 썸네일 추천</span></div></div>
+      <div class="out-item"><span class="out-code yj-code">B3</span><div><span class="ot">네이버 블로그 글</span><span class="od">SEO 제목 · 본문(서론-재료표-과정-팁-마무리) · 사진 위치 · 태그</span></div></div>
+      <div class="out-item"><span class="out-code yj-code">B4</span><div><span class="ot">유튜브 패키지</span><span class="od">쇼츠 제목+설명+태그 · 롱폼 챕터 구성</span></div></div>
+      <div class="out-item"><span class="out-code yj-code">B5</span><div><span class="ot">수익화 연결</span><span class="od">쿠팡파트너스 추천 상품 · 협찬 가능 카테고리 · 시리즈화 가능성</span></div></div>
+    </div>
+
+    <div class="card" style="margin-top:22px">
+      <h4 style="margin-top:0">육아 콘텐츠</h4>
+      <ul class="clean">
+        <li>레시피 카드 대신 <strong>"에피소드 카드"</strong> Input 사용 (에피소드 제목 · 아이 나이 · 상황 · 교훈/팁 · 감정 흐름 등)</li>
+        <li>Phase A/B 구조는 <strong>동일</strong>하되, Input 포맷만 다름</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===== 4. 영준 파이프라인 ===== -->
+  <section id="yo-pipeline">
+    <div class="sec-head"><span class="sec-num">04</span><h2 style="color:var(--text)">영준 파이프라인</h2></div>
+    <p class="sec-desc">퀀트앱 "오늘의 지침" 데이터를 Input으로 받아 5종 콘텐츠를 생성한다. 재테크/절세 콘텐츠도 동일한 Output 구조를 사용한다.</p>
+
+    <div class="phase-label yo">퀀트 지침 → 콘텐츠</div>
+    <p class="phase-cap">YJ-Quant 앱의 일일 매매 지침(JSON) + 화면 캡처를 입력받아 자동 변환.</p>
+    <div class="flow">
+      <div class="flow-box yo-box">
+        <div class="fb-head yo">INPUT</div>
+        <ul>
+          <li>오늘의 지침 (JSON): 날짜·시장요약·전략명·매매시그널(종목+비율+근거)·리스크·핵심지표(VIX, F&G)</li>
+          <li>퀀트앱 화면 캡처 (대시보드·레이더 차트)</li>
+          <li>(선택) 영준 코멘트</li>
+          <li>(선택) 시장 이슈 키워드</li>
+        </ul>
+      </div>
+      <div class="arrow">→</div>
+      <div class="flow-box yo-box">
+        <div class="fb-head yo">처리 · Claude</div>
+        <ul>
+          <li>지침 JSON 파싱</li>
+          <li>면책 조항 자동 삽입</li>
+          <li>5종 콘텐츠 생성</li>
+        </ul>
+      </div>
+      <div class="arrow">→</div>
+      <div class="flow-box yo-box">
+        <div class="fb-head yo">OUTPUT</div>
+        <ul>
+          <li>E1 유튜브 영상 대본</li>
+          <li>E2 영상 구성/설계 전략</li>
+          <li>E3 인스타 캐러셀</li>
+          <li>E4 블로그 분석 글</li>
+          <li>E5 쇼츠/릴스 스크립트</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="out-list">
+      <div class="out-item"><span class="out-code yo-code">E1</span><div><span class="ot">유튜브 영상 대본</span><span class="od">오프닝 후킹 · 시장 상황 · 전략 해설 · 근거 · 리스크 경고 · CTA</span></div></div>
+      <div class="out-item"><span class="out-code yo-code">E2</span><div><span class="ot">영상 구성/설계 전략</span><span class="od">화면 구조 · 차트 배치 · 자막 스타일 · 참고 영상 스타일</span></div></div>
+      <div class="out-item"><span class="out-code yo-code">E3</span><div><span class="ot">인스타 캐러셀</span><span class="od">5~7장 슬라이드 텍스트 · 후킹 표지 · 캡션+해시태그</span></div></div>
+      <div class="out-item"><span class="out-code yo-code">E4</span><div><span class="ot">블로그 분석 글</span><span class="od">시장 분석 · 전략 설명 · 차트 삽입 위치 · <b style="color:var(--warn)">면책 조항</b> · SEO 태그</span></div></div>
+      <div class="out-item"><span class="out-code yo-code">E5</span><div><span class="ot">쇼츠/릴스 스크립트</span><span class="od">60초 이내 대본</span></div></div>
+    </div>
+
+    <div class="card ch-yo" style="margin-top:22px">
+      <h4 style="margin-top:0;color:var(--yo-soft)">재테크 / 절세 콘텐츠</h4>
+      <ul class="clean">
+        <li>별도 Input 포맷: <strong>주제 · 핵심 포인트 · 타깃 · 참고 링크 · 영준 경험담</strong></li>
+        <li>Output은 <strong>E1~E5와 동일 구조</strong></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===== 5. 아키텍처 ===== -->
+  <section id="architecture">
+    <div class="sec-head"><span class="sec-num">05</span><h2>시스템 아키텍처</h2></div>
+    <p class="sec-desc">공통 엔진 + 파이프라인 라우터 구조. 윤진/영준 탭에서 Input을 받아 적절한 파이프라인으로 라우팅한다.</p>
+
+    <h3>공통 엔진</h3>
+    <div class="engine-grid">
+      <div class="engine-card"><div class="en">ContextBuilder</div><div class="ed">채널 프로필 + Input → 프롬프트 조립</div></div>
+      <div class="engine-card"><div class="en">ContentGenerator</div><div class="ed">Claude API (Sonnet 4) 호출 + JSON 응답 파싱</div></div>
+      <div class="engine-card"><div class="en">OutputFormatter</div><div class="ed">각 플랫폼 포맷 변환 + Markdown 저장</div></div>
+      <div class="engine-card"><div class="en">VideoAnalyzer</div><div class="ed">Whisper STT + FFmpeg + OpenCV (Phase B 전용)</div></div>
+    </div>
+
+    <h3>파이프라인 라우터</h3>
+    <div class="flow" style="grid-template-columns:1fr auto 1fr auto 1fr">
+      <div class="flow-box">
+        <div class="fb-head fb-in">Streamlit UI</div>
+        <ul><li>윤진 탭 / 영준 탭 선택</li></ul>
+      </div>
+      <div class="arrow">→</div>
+      <div class="flow-box">
+        <div class="fb-head fb-proc">라우팅</div>
+        <ul><li>Input → 적절한 파이프라인</li></ul>
+      </div>
+      <div class="arrow">→</div>
+      <div class="flow-box">
+        <div class="fb-head fb-out">Output 표시</div>
+        <ul><li>플랫폼별 산출물 렌더링</li></ul>
+      </div>
+    </div>
+
+    <h3>기술 스택</h3>
+    <table>
+      <thead><tr><th style="width:22%">구분</th><th>기술</th><th style="width:18%">도입 Phase</th></tr></thead>
+      <tbody>
+        <tr><td>언어</td><td>Python 3.11+</td><td><span class="ph-tag ph1">Phase 1</span></td></tr>
+        <tr><td>AI 엔진</td><td>Claude API (Sonnet 4)</td><td><span class="ph-tag ph1">Phase 1</span></td></tr>
+        <tr><td>UI</td><td>Streamlit</td><td><span class="ph-tag ph1">Phase 1</span></td></tr>
+        <tr><td>데이터</td><td>JSON → SQLite</td><td><span class="ph-tag ph1">Phase 1→3</span></td></tr>
+        <tr><td>STT</td><td>Whisper (로컬 or API)</td><td><span class="ph-tag ph2">Phase 2</span></td></tr>
+        <tr><td>영상 처리</td><td>FFmpeg + OpenCV + PySceneDetect</td><td><span class="ph-tag ph2">Phase 2</span></td></tr>
+        <tr><td>영상 생성</td><td>Vix (AI 영상 생성)</td><td><span class="ph-tag ph3">Phase 3</span></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ===== 6. 로드맵 ===== -->
+  <section id="roadmap">
+    <div class="sec-head"><span class="sec-num">06</span><h2>개발 로드맵</h2></div>
+    <p class="sec-desc">텍스트 가이드 MVP → 영상 분석 → AI 영상 생성 → 완전 자동화의 4단계 진화.</p>
+
+    <div class="timeline">
+      <div class="tl-item p1">
+        <div class="tl-dot"></div>
+        <div class="tl-phase"><span class="pn">Phase 1 — MVP</span><span class="tl-dur">2주</span><span style="font-size:13px;color:var(--text-faint)">텍스트 Input → 촬영 전 가이드</span></div>
+        <ul class="clean">
+          <li>윤진 Phase A (레시피 → 시나리오+대본+구도+차별화+체크리스트)</li>
+          <li>영준 기본 (퀀트 지침 → 유튜브 대본+영상 전략)</li>
+          <li>Streamlit 2탭 UI</li>
+        </ul>
+      </div>
+      <div class="tl-item p2">
+        <div class="tl-dot"></div>
+        <div class="tl-phase"><span class="pn">Phase 2 — 영상 분석 + 멀티 플랫폼</span><span class="tl-dur">3주</span></div>
+        <ul class="clean">
+          <li>윤진 Phase B (영상 분석 → 편집 가이드+인스타+블로그+유튜브)</li>
+          <li>영준 확장 (인스타 캐러셀+블로그+쇼츠)</li>
+          <li>육아 콘텐츠 에피소드 카드 추가</li>
+        </ul>
+      </div>
+      <div class="tl-item p3">
+        <div class="tl-dot"></div>
+        <div class="tl-phase"><span class="pn">Phase 3 — Vix 영상 자동 생성</span><span class="tl-dur">4주</span></div>
+        <ul class="clean">
+          <li>산출물(대본+구도+자막+이미지) → Vix API → 완성 영상(.mp4) 자동 생성</li>
+          <li>직접 촬영 vs AI 생성 하이브리드 전략</li>
+        </ul>
+      </div>
+      <div class="tl-item p4">
+        <div class="tl-dot"></div>
+        <div class="tl-phase"><span class="pn">Phase 4 — 완전 자동화 + 시너지</span><span class="tl-dur">장기</span></div>
+        <ul class="clean">
+          <li>인스타/유튜브 성과 데이터 연동 → 프롬프트 자동 최적화</li>
+          <li>부부 콜라보 콘텐츠 자동 제안</li>
+          <li>예약 발행 API 연동</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 7. 미결 사항 ===== -->
+  <section id="open">
+    <div class="sec-head"><span class="sec-num">07</span><h2>미결 사항</h2></div>
+    <p class="sec-desc">아래 항목은 아직 <strong style="color:var(--warn)">미정</strong> 상태다. 확정될 때마다 이 문서를 업데이트한다.</p>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--ok)"></span>확정 — 채널 구성, 파이프라인 구조</span>
+      <span><span class="sw" style="background:var(--warn)"></span>미결 — 아래 항목</span>
+    </div>
+    <div class="open-grid">
+      <div class="open-item"><span class="q">?</span><span class="ot">윤진 채널명</span><span class="tbd">TBD</span></div>
+      <div class="open-item"><span class="q">?</span><span class="ot">영준 채널명</span><span class="tbd">TBD</span></div>
+      <div class="open-item"><span class="q">?</span><span class="ot">윤진 채널 톤앤무드 (반말/해요체/따뜻한 언니 등)</span><span class="tbd">TBD</span></div>
+      <div class="open-item"><span class="q">?</span><span class="ot">영준 채널 톤앤무드 (전문적/친근한/데이터 중심 등)</span><span class="tbd">TBD</span></div>
+      <div class="open-item"><span class="q">?</span><span class="ot">타깃 시청자 구체화 (각 채널 페르소나)</span><span class="tbd">TBD</span></div>
+      <div class="open-item"><span class="q">?</span><span class="ot">퀀트앱 지침 JSON 스키마 최종 확정</span><span class="tbd">TBD</span></div>
+      <div class="open-item"><span class="q">?</span><span class="ot">Vix API 스펙/가격/한국어 지원 사전 조사</span><span class="tbd">TBD</span></div>
+      <div class="open-item"><span class="q">?</span><span class="ot">수익화 전략 우선순위</span><span class="tbd">TBD</span></div>
+      <div class="open-item"><span class="q">?</span><span class="ot">GitHub 레포 구조</span><span class="tbd">TBD</span></div>
+    </div>
+  </section>
+
+  <!-- ===== 변경 이력 ===== -->
+  <section id="changelog" style="border-bottom:none">
+    <div class="sec-head"><span class="sec-num">08</span><h2>변경 이력 (Version Log)</h2></div>
+    <p class="sec-desc">이 문서는 Living Document로서 지속적으로 수정·보완된다. 주요 변경은 아래에 기록한다.</p>
+    <div class="card">
+      <div class="log-item">
+        <span class="log-ver">v0.1</span>
+        <span class="log-date">2026-05-29</span>
+        <span class="log-desc"><b>초안 작성</b> — 요구사항 명세서 최초 생성. 채널 구성·파이프라인(윤진 A/B, 영준)·아키텍처·로드맵·미결 사항 정의.</span>
+      </div>
+      <div class="log-item">
+        <span class="log-ver" style="color:var(--text-faint)">v0.2</span>
+        <span class="log-date">예정</span>
+        <span class="log-desc" style="color:var(--text-faint)">미결 사항(채널명·톤앤무드·JSON 스키마 등) 확정 시 반영 예정</span>
+      </div>
+    </div>
+    <div class="status-line">
+      <span class="pulse" style="width:7px;height:7px;border-radius:50%;background:var(--ok);display:inline-block"></span>
+      현재 상태: <strong style="color:var(--text)">Draft</strong> · 다음 단계는 미결 사항 확정 후 Phase 1 MVP 착수
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="ft-title">YJ-Content Factory · SW 요구사항 명세서</div>
+  <div>Living Document · 부부 크리에이터 윤진 + 영준 · Built with Claude Code</div>
+</footer>
+
+</body>
+</html>
