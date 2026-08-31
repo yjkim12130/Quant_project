@@ -433,20 +433,28 @@ with tabA:
 
 # ---------------------------------------------------------------- TabR 급지 비교
 
-REGION_LEVELS = {"구 단위 (시군구 68개)": "sgg", "동 단위 (법정동 928개)": "dong"}
+REGION_LEVELS = {"구 단위": "sgg", "동 단위": "dong"}
 
 
 @st.cache_data(ttl=3600, show_spinner="지역 가격지수 계산 중 (최초 1회, 30초 내외)...")
 def load_region_index(level):
+    """trades_sale 테이블이 아직 없는 중간 상태에서만 빈 프레임으로 넘어가고, 그 외
+    예외(스키마 변경, pandas 업그레이드 등)는 그대로 올려 tabR 바깥 except가 실제
+    트레이스백을 보여주게 한다 - 무엇이든 삼켜서 "데이터 없음"으로 보이면 원인을 엉뚱한
+    곳(실거래 적재)에서 찾게 만든다."""
     import sqlite3
     from scoring.engine import DB_PATH
     from scoring.region_rv import region_price_index
+    empty = pd.DataFrame(columns=["month", "region_key", "price", "w_valid",
+                                  "n_trades", "region_label"])
     conn = sqlite3.connect(DB_PATH)
     try:
+        has_table = pd.read_sql_query(
+            "SELECT COUNT(*) n FROM sqlite_master WHERE type='table' AND name='trades_sale'",
+            conn).iat[0, 0]
+        if not has_table:
+            return empty
         return region_price_index(conn, level)
-    except Exception:  # noqa: BLE001 - 테이블 부재 등 중간 상태에서도 앱이 죽지 않게
-        return pd.DataFrame(columns=["month", "region_key", "price", "w_valid",
-                                     "n_trades", "region_label"])
     finally:
         conn.close()
 
@@ -481,9 +489,10 @@ def load_region_jeonse(level):
         return pd.DataFrame(columns=["region_key", "month", "jeonse_price", "jeonse_ratio"])
     conn = sqlite3.connect(DB_PATH)
     try:
+        # region_jeonse_ratio가 trades_jeonse 부재를 자체적으로 sqlite_master 프로브로
+        # 처리하므로(scoring/region_rv.py) 여기서 다시 감쌀 필요가 없다 - 감싸면 다른
+        # 실제 오류까지 "데이터 없음"으로 둔갑한다.
         return region_jeonse_ratio(conn, idx, level)
-    except Exception:  # noqa: BLE001
-        return pd.DataFrame(columns=["region_key", "month", "jeonse_price", "jeonse_ratio"])
     finally:
         conn.close()
 
@@ -504,12 +513,20 @@ with tabR:
         else:
             r_tiers = assign_tiers(r_idx, n_tiers=n_tiers)
             total = load_region_universe(level)
-            st.caption(f"{level_label.split()[0]} 단위: 전체 {total}개 중 **{len(r_tiers)}개** "
-                       f"랭킹 가능 (거래가 희소해 대표가를 못 만드는 지역은 제외됩니다)")
 
             rv = compute_region_rv(r_idx, r_tiers)
             latest = rv["month"].max()
             snap = rv[rv["month"] == latest].copy()
+
+            # len(r_tiers) = min_months 게이트 통과 지역(랭킹 "가능"). snap의 지역 수는
+            # 그중 기준월(latest)에 실제로 값을 가진 지역만 - ffill 한도(6개월)를 넘겨 결측인
+            # 지역은 "랭킹 가능"으로 세어지고도 이번 달 표에는 안 뜬다. 두 숫자를 다 보여줘야
+            # "빠진 지역 = 저평가 아님"으로 오해하지 않는다(스펙 §5).
+            n_shown = snap["region_key"].nunique()
+            st.caption(f"{level_label.split()[0]} 단위: 전체 {total}개 중 랭킹 가능 "
+                       f"**{len(r_tiers)}개** · {latest} 기준 표시 **{n_shown}개** "
+                       f"(거래가 희소해 대표가를 못 만드는 지역, 또는 최근 6개월 넘게 관측이 "
+                       f"끊긴 지역은 이번 달 표에서 빠집니다)")
 
             # 12개월 모멘텀 - 표시 전용
             mom = (r_idx.sort_values("month").groupby("region_key")["price"]
@@ -567,15 +584,30 @@ with tabR:
             if len(pr) < 13:
                 st.info("두 지역이 겹치는 기간이 짧아 비교 차트를 그릴 수 없습니다.")
             else:
-                mu, sd = pr["ratio"].mean(), pr["ratio"].std()
+                # 카드에 찍히는 z는 _trailing_z(shift(1) 롤링)에서 나온다 - 밴드도 같은
+                # 창으로 그려야 차트와 카드 문장이 어긋나지 않는다(전체기간 밴드였던 이전
+                # 버전은 카드의 z와 부호가 어긋나는 사례가 실측 18.3%에 달했다).
+                rv_params = Params()
+                roll_m = (pr["ratio"].shift(1)
+                          .rolling(rv_params.lookback_months, min_periods=rv_params.min_group_z)
+                          .mean())
+                roll_s = (pr["ratio"].shift(1)
+                          .rolling(rv_params.lookback_months, min_periods=rv_params.min_group_z)
+                          .std())
                 x = pr["month"].dt.to_timestamp()
                 figp = go.Figure()
                 figp.add_trace(go.Scatter(x=x, y=pr["ratio"], name=f"{name_a} / {name_b}",
                                           line=dict(color=ACCENT, width=2.5)))
-                figp.add_hline(y=mu, line=dict(color="#888", dash="dash"),
-                               annotation_text=f"평균 {mu:.3f}배")
-                for k, dash in [(1, "dot"), (-1, "dot")]:
-                    figp.add_hline(y=mu + k * sd, line=dict(color="#bbb", dash=dash))
+                figp.add_trace(go.Scatter(
+                    x=x, y=roll_m + roll_s, name="±1σ 밴드", mode="lines",
+                    line=dict(color="rgba(160,160,160,0)", width=0), showlegend=True))
+                figp.add_trace(go.Scatter(
+                    x=x, y=roll_m - roll_s, name="-1σ", mode="lines",
+                    line=dict(color="rgba(160,160,160,0)", width=0),
+                    fill="tonexty", fillcolor="rgba(160,160,160,0.22)", showlegend=False))
+                figp.add_trace(go.Scatter(
+                    x=x, y=roll_m, name=f"최근 {rv_params.lookback_months}개월 평균",
+                    line=dict(color="#999", dash="dash", width=1.5)))
                 figp.update_layout(
                     title=f"{name_a} / {name_b} 대표가 배수", height=420,
                     margin=dict(t=110, b=0), yaxis=dict(title="배수"),
@@ -584,16 +616,21 @@ with tabR:
                 st.plotly_chart(figp, use_container_width=True)
 
                 cur, z = pr["ratio"].iloc[-1], pr["z"].iloc[-1]
-                if pd.isna(z):
+                mu_last, sd_last = roll_m.iloc[-1], roll_s.iloc[-1]
+                if pd.isna(z) or pd.isna(mu_last):
                     verdict = "관측 기간이 짧아 z를 낼 수 없습니다."
                 elif z > 0:
                     verdict = (f"<b>{name_a}</b>가 평소보다 비싸졌습니다 "
                                f"(뒤집어 보면 {name_b}가 상대적으로 싸진 것)")
                 else:
                     verdict = f"<b>{name_a}</b>가 {name_b} 대비 평소보다 싸졌습니다"
-                _ai_box(f"{name_a}/{name_b} 현재 <b>{cur:.3f}배</b>, 전체 기간 평균 "
-                        f"{mu:.3f}배 (±1σ = {mu - sd:.3f}~{mu + sd:.3f}). "
-                        f"z {z:+.2f} - {verdict}.")
+                if pd.isna(mu_last):
+                    _ai_box(f"{name_a}/{name_b} 현재 <b>{cur:.3f}배</b>. {verdict}")
+                else:
+                    _ai_box(f"{name_a}/{name_b} 현재 <b>{cur:.3f}배</b>, 최근 "
+                            f"{rv_params.lookback_months}개월 평균 {mu_last:.3f}배 "
+                            f"(±1σ = {mu_last - sd_last:.3f}~{mu_last + sd_last:.3f}). "
+                            f"z {z:+.2f} - {verdict}.")
 
             st.divider()
             st.markdown("##### 급지 지도 - 가격대와 저평가 정도를 한눈에")
@@ -641,6 +678,11 @@ with tabR:
 - **랭킹에서 빠지는 지역**: 9칸 중 절반 이상이 거래된 달이 24개월 이상이어야 랭킹에 오릅니다.
   동 단위는 거래가 희소해 3분의 1가량이 빠집니다. **빠졌다는 건 "저평가가 아니다"가 아니라
   "판단할 데이터가 없다"는 뜻입니다.**
+- **"랭킹 가능"과 "이번 달 표시"가 다른 이유**: 위 캡션의 두 숫자 중 "랭킹 가능"은 과거를 통틀어
+  24개월 이상 대표가를 낸 적 있는 지역 수이고, "표시" 개수는 그중 **이번 달 기준월에도 값이 살아
+  있는** 지역 수입니다. 어떤 지역은 예전엔 기준을 통과했지만 최근 6개월 넘게 거래가 끊겨(이월
+  한도 초과) 표에서 조용히 빠질 수 있습니다 — 이 역시 "저평가 아님"이 아니라 "최근 데이터 없음"
+  입니다.
 - **전세가율**: 같은 고정 바스켓을 전세 보증금에 적용한 값 ÷ 매매 대표가. 순수 전세(월세 0)만
   씁니다. 전세 실거래는 2011년부터라 그 이전은 비어 있습니다.
 - **데이터**: 국토교통부 실거래가 - 매매 2006-01~, 전세 2011-01~ (해제 거래 제외).
