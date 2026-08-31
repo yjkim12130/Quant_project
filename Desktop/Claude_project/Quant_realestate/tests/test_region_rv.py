@@ -174,6 +174,41 @@ def test_assign_tiers_empty_input_returns_empty():
     assert R.assign_tiers(idx, n_tiers=3, min_months=24).empty
 
 
+def test_assign_tiers_is_neutral_to_observation_window():
+    """실측 부작용(Important 4): 나라 전체 명목가가 전 기간에 걸쳐 크게 오르면, 관측이
+    늦게 시작된 지역은 "전 기간 평균 명목가"만으로 정렬할 경우 실제 가격 수준이 같아도
+    더 비싼 시기만 평균해 더 비싼 티어로 밀려 올라간다. 같은 실질 수준(월별 전지역
+    중위가 대비 배수가 항상 같음)을 유지하는 두 지역이 관측 기간만 다를 때 같은 티어에
+    들어가야 한다 - 디플레이션 없이는 실패하는 케이스임을 avg_price 비교로 함께 확인한다."""
+    months = pd.period_range("2006-01", "2025-12", freq="M")
+    trend = np.geomspace(1.0, 3.0, len(months))     # 명목 수준이 전 구간에 걸쳐 3배
+
+    levels = np.geomspace(500, 5000, 41)            # 촘촘한 배경 지역 41개
+    rows = []
+    for i, base in enumerate(levels):
+        for m, tr in zip(months, trend):
+            rows.append({"region_key": f"R{i:02d}", "region_label": f"R{i:02d}",
+                         "month": m, "price": base * tr})
+
+    real_level = (levels[20] + levels[21]) / 2 * 1.0001   # 앵커 동률 방지
+    for m, tr in zip(months, trend):
+        rows.append({"region_key": "X_full", "region_label": "X_full",
+                     "month": m, "price": real_level * tr})
+    late = months[-30:]                                    # min_months(24) 이상 확보
+    for m, tr in zip(late, trend[-30:]):
+        rows.append({"region_key": "Y_late", "region_label": "Y_late",
+                     "month": m, "price": real_level * tr})
+
+    idx = pd.DataFrame(rows)
+    tiers = R.assign_tiers(idx, n_tiers=5, min_months=24).set_index("region_key")
+
+    # 왜곡이 실재함을 함께 확인: 늦게 관측된 지역은 더 비싼 시기만 평균해 명목평균이
+    # 훨씬 높게 찍힌다(실질 수준은 두 지역이 완전히 같은데도).
+    assert tiers.loc["Y_late", "avg_price"] > tiers.loc["X_full", "avg_price"] * 1.3
+    # 그럼에도 같은 실질 수준이므로 디플레이션 보정 후에는 같은 티어에 들어가야 한다.
+    assert tiers.loc["X_full", "tier"] == tiers.loc["Y_late", "tier"]
+
+
 def _naive_loo_median(s):
     v = s.to_numpy(dtype=float)
     return pd.Series([np.median(np.delete(v, i)) for i in range(len(v))], index=s.index)
@@ -276,6 +311,53 @@ def test_region_jeonse_ratio_excludes_monthly_rent():
                                                                 index=False)
     out = R.region_jeonse_ratio(conn, R.region_price_index(conn, "sgg"), "sgg")
     assert out["jeonse_ratio"].isna().all()
+    conn.close()
+
+
+def test_region_jeonse_ratio_uses_sale_weights_not_jeonse_weights():
+    """Important 3: 전세가율은 매매와 같은 고정 바스켓(가중치)을 써야 한다. 매매·전세의
+    셀별 거래 건수 구성을 서로 다르게 하고, 셀마다 다른 전세가율을 줘서 "가중치를 어느
+    쪽에서 가져오느냐"가 결과에 실제로 드러나게 한다 - 기존 테스트들은 전 셀에 균일한
+    0.6을 써서 이 문제를 가릴 수 없었다(스펙 §8.3-1과 같은 원리의 구성효과 함정)."""
+    months = pd.period_range("2020-01", "2020-06", freq="M")
+    region, region_name, dong = "11470", "양천구", "목동"
+
+    # 매매: 9셀 전부 (㎡당) 1000원 고정 - 가격 자체는 가중치와 무관하게 만들고, 건수만
+    # 비대칭으로 줘서 매매 셀 비중을 강하게 편향시킨다. (50,OLD)="~60|25y~" 40건,
+    # (100,NEW)="85~|~10y" 5건, 나머지 7셀은 10건씩.
+    sale_counts = {(50, NEW): 10, (70, NEW): 10, (100, NEW): 5,
+                   (50, MID): 10, (70, MID): 10, (100, MID): 10,
+                   (50, OLD): 40, (70, OLD): 10, (100, OLD): 10}
+    sale_spec = [(a, b, 1000, sale_counts[(a, b)]) for a, b, _ in NINE]
+    sale = make_trades(sale_spec, months, region, region_name, dong)
+    conn = _memory_db(sale, "trades_sale")
+
+    # 전세: 셀별 건수는 균일(9셀 x 10건) - 매매와 다른 구성이라, 전세 자체 거래로
+    # 가중치를 다시 계산하면(버그) 매매 가중치를 썼을 때와 다른 답이 나온다. 셀별
+    # 전세가율은 (50,OLD)=0.7, (100,NEW)=0.5, 나머지 7셀은 0.6.
+    ratio = {(50, NEW): 0.6, (70, NEW): 0.6, (100, NEW): 0.5,
+             (50, MID): 0.6, (70, MID): 0.6, (100, MID): 0.6,
+             (50, OLD): 0.7, (70, OLD): 0.6, (100, OLD): 0.6}
+    rows = []
+    for m in months:
+        for a, b, _ in NINE:
+            for _ in range(10):
+                rows.append({"region_code": region, "region_name": region_name,
+                             "dong_name": dong, "exclusive_area": a, "build_year": b,
+                             "contract_date": m.to_timestamp().strftime("%Y-%m-15"),
+                             "deposit": 1000 * a * ratio[(a, b)], "monthly_rent": 0})
+    pd.DataFrame(rows).to_sql("trades_jeonse", conn, index=False)
+
+    sale_index = R.region_price_index(conn, "sgg")
+    out = R.region_jeonse_ratio(conn, sale_index, "sgg")
+    got = out["jeonse_ratio"].dropna().iloc[-1]
+
+    total = sum(sale_counts.values())
+    expected_sale_weighted = sum(sale_counts[k] * ratio[k] for k in ratio) / total
+    naive_jeonse_weighted = np.mean(list(ratio.values()))
+
+    assert got == pytest.approx(expected_sale_weighted, abs=1e-6)
+    assert got != pytest.approx(naive_jeonse_weighted, abs=1e-3)
     conn.close()
 
 

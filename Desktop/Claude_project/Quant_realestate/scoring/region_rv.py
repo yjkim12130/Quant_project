@@ -12,7 +12,7 @@
 import numpy as np
 import pandas as pd
 
-from scoring.engine import AGE_BAND_LABELS, DB_PATH, Params, _trailing_z, area_band
+from scoring.engine import AGE_BAND_LABELS, AREA_BAND_LABELS, DB_PATH, Params, _trailing_z, area_band
 
 LEVELS = ("sgg", "dong")
 CELL_SEP = "|"
@@ -53,7 +53,7 @@ def _cell_labels(trades: pd.DataFrame, params: Params) -> pd.Series:
     return ab + CELL_SEP + gb
 
 
-def _basket_index(trades, amount_col, params, min_weight=0.5):
+def _basket_index(trades, amount_col, params, min_weight=0.5, weights=None):
     """고정 바스켓 지역 대표가 (스펙 §2.2).
 
     연산 순서가 중요하다: 셀 집계 -> 셀 단위 롤링/이월 -> 게이트 -> 가중합.
@@ -61,16 +61,24 @@ def _basket_index(trades, amount_col, params, min_weight=0.5):
     평활하게 된다.
 
     trades에는 region_key 컬럼이 이미 있어야 한다.
+    weights: 미리 계산된 셀 가중치(Series, index="면적밴드|연식밴드"). None이면
+    전달받은 trades 자체에서 계산한다(매매 기본 동작). 전세가율처럼 "매매와 같은
+    바스켓"을 다른 표본(전세)에 적용해야 할 때는 반드시 지정해야 한다 - 지정하지
+    않으면 전세 거래 구성으로 가중치를 다시 계산해버려서, 매매와 다른 바스켓이 되고
+    "같은 고정 바스켓" 전제가 깨진다.
     반환: month, region_key, price(만원/㎡), w_valid, n_trades
     """
     t = trades.copy()
     t["sqm_price"] = t[amount_col] / t["exclusive_area"]
     t["cell"] = _cell_labels(t, params)
 
-    # 가중치는 전 지역 공통 상수여야 한다 - 지역마다 다른 구성에서 오는 왜곡을
-    # 없애는 것이 목적이므로 지역별/월별로 다시 계산하면 안 된다.
-    w = t.groupby("cell").size()
-    w = w / w.sum()
+    if weights is not None:
+        w = weights
+    else:
+        # 가중치는 전 지역 공통 상수여야 한다 - 지역마다 다른 구성에서 오는 왜곡을
+        # 없애는 것이 목적이므로 지역별/월별로 다시 계산하면 안 된다.
+        w = t.groupby("cell").size()
+        w = w / w.sum()
 
     cell = (t.groupby(["region_key", "month", "cell"], observed=True)
               .agg(p=("sqm_price", "median"), n=("sqm_price", "size")).reset_index())
@@ -94,6 +102,47 @@ def _basket_index(trades, amount_col, params, min_weight=0.5):
                      n_trades.stack(future_stack=True).rename("n_trades")], axis=1)
     return (out.reset_index(names=["month", "region_key"])
                .dropna(subset=["price"]).reset_index(drop=True))
+
+
+def _sale_cell_weights(conn, params):
+    """매매 셀 가중치 벡터를 trades_sale에서 직접 집계한다 (region_jeonse_ratio가
+    "매매와 같은 고정 바스켓"을 전세에 적용하려 빌려온다).
+
+    9행짜리 SQL GROUP BY라 매매 전체(400만+행)를 다시 DataFrame으로 읽어 들이지
+    않고도 정확한 가중치를 얻는다. area_band()/age_band_at()와 똑같은 경계
+    (area_bounds, age_bounds)를 SQL CASE로 재현하고, 연식은 _cell_labels와 동일하게
+    "계약월 연도 - 건축연도"로 계산한다(trades_sale.contract_date는 SQLite가 그대로
+    파싱하는 ISO 포맷이라 strftime으로 연도만 뽑으면 된다).
+
+    반환: Series, index="면적밴드|연식밴드"(CELL_SEP), 합계 1. trades_sale에 유효한
+    행이 하나도 없으면 None(호출부가 자체 계산으로 폴백).
+    """
+    a_lo, a_hi = params.area_bounds
+    g_lo, g_hi = params.age_bounds
+    al, am, ah = AREA_BAND_LABELS
+    gl, gm, gh = AGE_BAND_LABELS
+    q = f"""
+        SELECT
+          CASE WHEN exclusive_area < {a_lo} THEN '{al}'
+               WHEN exclusive_area < {a_hi} THEN '{am}'
+               ELSE '{ah}' END AS area_band,
+          CASE WHEN (CAST(strftime('%Y', contract_date) AS INTEGER) - build_year) < {g_lo}
+                 THEN '{gl}'
+               WHEN (CAST(strftime('%Y', contract_date) AS INTEGER) - build_year) < {g_hi}
+                 THEN '{gm}'
+               ELSE '{gh}' END AS age_band,
+          COUNT(*) AS n
+        FROM trades_sale
+        WHERE cancelled = 0 AND exclusive_area > 0
+          AND build_year IS NOT NULL AND contract_date IS NOT NULL
+        GROUP BY area_band, age_band
+    """
+    df = pd.read_sql_query(q, conn)
+    if df.empty or df["n"].sum() == 0:
+        return None
+    w = pd.Series(df["n"].to_numpy(dtype=float),
+                 index=(df["area_band"] + CELL_SEP + df["age_band"]).to_numpy())
+    return w / w.sum()
 
 
 def _load_trades(conn, table, amount_col, extra_where=""):
@@ -123,27 +172,41 @@ def region_price_index(conn, level="sgg", params=None, min_weight=0.5):
 
 
 def assign_tiers(index, n_tiers=5, min_months=24):
-    """전 기간 평균 대표가로 지역을 n_tiers 분위로 나눈다 (스펙 §3).
+    """지역을 n_tiers 분위로 나눈다 (스펙 §3).
 
     티어는 시점 고정이다 - 월마다 다시 매기면 지역이 티어를 넘나들면서 비율 z가
     무의미해진다. tier=1이 최상위 가격대.
+
+    분위를 나누는 기준은 "전 기간 평균 명목가"가 아니라 "월별 전지역 중위가 대비 상대
+    수준의 전 기간 평균"이다(디플레이션). 명목가를 그대로 쓰면 관측 시작월이 늦은 지역
+    (예: 2015년 이후 최초 거래된 신도시)은 그 구간의 전국 명목가 수준이 이미 높아진
+    뒤라서, 실제 가격 수준과 무관하게 더 비싼 티어로 밀려 올라간다(나라 전체 ㎡당가가
+    2006년 대비 2026년에 약 3배가 됐으므로 이 효과가 작지 않다). avg_price 컬럼 자체는
+    화면에 그대로 노출되는 실제 만원/㎡ 값이라 디플레이션하지 않고 그대로 둔다 - 분위
+    산정에만 디플레이션 평균을 쓴다.
     """
-    agg = (index.groupby("region_key")
-                .agg(avg_price=("price", "mean"), n_months=("price", "size")).reset_index())
+    idx = index.copy()
+    idx["deflated"] = idx["price"] / idx.groupby("month")["price"].transform("median")
+    agg = (idx.groupby("region_key")
+              .agg(avg_price=("price", "mean"), avg_deflated=("deflated", "mean"),
+                   n_months=("price", "size")).reset_index())
     if "region_label" in index.columns:
         agg = agg.merge(index[["region_key", "region_label"]].drop_duplicates("region_key"),
                         on="region_key", how="left")
     agg = agg[agg["n_months"] >= min_months].reset_index(drop=True)
     if agg.empty:
-        return agg.assign(tier=pd.Series(dtype="int64"))
+        agg["tier"] = pd.Series(dtype="int64")
+        return agg.drop(columns=["avg_deflated"])
 
     n_eff = min(int(n_tiers), agg["region_key"].nunique())
     if n_eff <= 1:
-        return agg.assign(tier=1)
+        agg["tier"] = 1
+        return agg.drop(columns=["avg_deflated"])
     # rank(first)로 동률을 풀어 분위 경계가 터지지 않게 한 뒤, qcut 방향을 뒤집어
     # 1이 최상위 가격대가 되게 한다.
-    q = pd.qcut(agg["avg_price"].rank(method="first"), n_eff, labels=False, duplicates="drop")
-    return agg.assign(tier=(q.max() - q + 1).astype(int))
+    q = pd.qcut(agg["avg_deflated"].rank(method="first"), n_eff, labels=False, duplicates="drop")
+    agg["tier"] = (q.max() - q + 1).astype(int)
+    return agg.drop(columns=["avg_deflated"])
 
 
 def _loo_median(s: pd.Series) -> pd.Series:
@@ -231,7 +294,8 @@ def region_jeonse_ratio(conn, sale_index, level="sgg", params=None, min_weight=0
                            jeonse_ratio=np.nan)[["region_key", "month",
                                                  "jeonse_price", "jeonse_ratio"]]
     tr["region_key"] = _region_key(tr, level)
-    jeonse = (_basket_index(tr, "deposit", params, min_weight)
+    sale_w = _sale_cell_weights(conn, params)
+    jeonse = (_basket_index(tr, "deposit", params, min_weight, weights=sale_w)
               .rename(columns={"price": "jeonse_price"})[["region_key", "month",
                                                           "jeonse_price"]])
     out = base.merge(jeonse, on=["region_key", "month"], how="left")
