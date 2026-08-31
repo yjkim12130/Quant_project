@@ -1,0 +1,681 @@
+<title>자문역 인사이트 기능 명세</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap">
+
+<style>
+  /* ── 토큰: 기본(라이트). 모든 색은 여기서만 정의한다 ───────────── */
+  :root {
+    --ground:      #f5f7f9;
+    --surface:     #ffffff;
+    --surface-2:   #eef1f5;
+    --ink:         #131a24;
+    --ink-soft:    #495768;
+    --muted:       #6b7889;
+    --rule:        #dbe1e9;
+    --rule-strong: #c3ccd8;
+    --accent:      #1d5a8c;
+    --accent-soft: #e7eff6;
+    --up:          #0b7a4b;
+    --down:        #b3261e;
+    --warn:        #9a6100;
+    --code-bg:     #eef1f5;
+    --shadow:      0 1px 2px rgba(19,26,36,.06), 0 8px 24px -16px rgba(19,26,36,.24);
+  }
+  /* 시스템 다크(스탬프 없음) — 명시적 라이트 선택은 이기게 한다 */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #10141b;
+      --surface:     #161c25;
+      --surface-2:   #1d2532;
+      --ink:         #e3e9f1;
+      --ink-soft:    #a9b4c2;
+      --muted:       #8391a3;
+      --rule:        #26303d;
+      --rule-strong: #374455;
+      --accent:      #74aede;
+      --accent-soft: #1a2836;
+      --up:          #45cf92;
+      --down:        #ff7b72;
+      --warn:        #d9a441;
+      --code-bg:     #1b2430;
+      --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+    }
+  }
+  /* 명시적 다크 선택 */
+  :root[data-theme="dark"] {
+    --ground:      #10141b;
+    --surface:     #161c25;
+    --surface-2:   #1d2532;
+    --ink:         #e3e9f1;
+    --ink-soft:    #a9b4c2;
+    --muted:       #8391a3;
+    --rule:        #26303d;
+    --rule-strong: #374455;
+    --accent:      #74aede;
+    --accent-soft: #1a2836;
+    --up:          #45cf92;
+    --down:        #ff7b72;
+    --warn:        #d9a441;
+    --code-bg:     #1b2430;
+    --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans KR", system-ui, -apple-system, "Malgun Gothic", sans-serif;
+    font-weight: 400;
+    font-size: 16px;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .shell {
+    display: grid;
+    grid-template-columns: 232px minmax(0, 1fr);
+    gap: 56px;
+    max-width: 1140px;
+    margin: 0 auto;
+    padding: 0 32px 120px;
+  }
+  @media (max-width: 900px) {
+    .shell { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 0 20px 80px; }
+    .rail { position: static; height: auto; padding-top: 0; border-right: 0; margin-bottom: 40px; }
+  }
+
+  /* ── 좌측 고정 목차 ────────────────────────────────────────── */
+  .rail {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    padding: 56px 24px 40px 0;
+    border-right: 1px solid var(--rule);
+    overflow-y: auto;
+  }
+  .rail-mark {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+  .rail a {
+    display: block;
+    padding: 5px 0;
+    font-size: 14px;
+    color: var(--ink-soft);
+    text-decoration: none;
+    border-left: 2px solid transparent;
+    padding-left: 12px;
+    margin-left: -14px;
+    transition: color .15s, border-color .15s;
+  }
+  .rail a:hover, .rail a:focus-visible { color: var(--accent); border-left-color: var(--accent); }
+  .rail a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .rail .sub { padding-left: 26px; font-size: 13px; color: var(--muted); }
+
+  /* ── 헤더 ──────────────────────────────────────────────────── */
+  header { padding: 72px 0 44px; border-bottom: 2px solid var(--ink); margin-bottom: 52px; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 18px;
+  }
+  h1 {
+    font-family: "Gowun Batang", Georgia, serif;
+    font-weight: 700;
+    font-size: clamp(38px, 5.4vw, 58px);
+    line-height: 1.12;
+    letter-spacing: -.015em;
+    margin: 0 0 20px;
+    text-wrap: balance;
+  }
+  .lede {
+    font-size: 18px;
+    line-height: 1.72;
+    color: var(--ink-soft);
+    max-width: 62ch;
+    margin: 0 0 28px;
+  }
+  .facts { display: flex; flex-wrap: wrap; gap: 10px 32px; }
+  .fact { display: flex; flex-direction: column; gap: 2px; }
+  .fact dt {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+  }
+  .fact dd {
+    margin: 0; font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink);
+  }
+
+  /* ── 섹션 ──────────────────────────────────────────────────── */
+  section { margin-bottom: 68px; scroll-margin-top: 24px; }
+  h2 {
+    font-family: "Gowun Batang", Georgia, serif;
+    font-weight: 700;
+    font-size: 29px;
+    line-height: 1.25;
+    letter-spacing: -.01em;
+    margin: 0 0 6px;
+    text-wrap: balance;
+    display: flex; align-items: baseline; gap: 14px;
+  }
+  h2 .num {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 14px; font-weight: 500; color: var(--accent);
+    letter-spacing: 0; flex: none;
+  }
+  .sec-note { color: var(--muted); font-size: 14.5px; margin: 0 0 26px; max-width: 62ch; }
+  h3 {
+    font-size: 17px; font-weight: 600; margin: 34px 0 10px;
+    letter-spacing: -.005em; color: var(--ink);
+  }
+  h4 {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); margin: 26px 0 8px;
+  }
+  p { margin: 0 0 14px; max-width: 68ch; }
+  ul, ol { margin: 0 0 16px; padding-left: 20px; max-width: 68ch; }
+  li { margin-bottom: 7px; }
+  li::marker { color: var(--muted); }
+  strong { font-weight: 600; }
+  a { color: var(--accent); }
+
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .88em;
+    background: var(--code-bg);
+    padding: .12em .38em;
+    border-radius: 3px;
+    color: var(--ink);
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    margin: 0 0 18px;
+  }
+  pre code { background: none; padding: 0; font-size: 13px; line-height: 1.65; }
+
+  /* ── 표 ────────────────────────────────────────────────────── */
+  .tw { overflow-x: auto; margin: 0 0 20px; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  thead th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 10.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); background: var(--surface-2); white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.n, th.n { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td code { white-space: nowrap; }
+
+  /* ── 파이프라인 스트립 ─────────────────────────────────────── */
+  .pipe { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 0 0 22px; }
+  .pipe-step {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 6px;
+    padding: 14px 16px; box-shadow: var(--shadow);
+  }
+  .pipe-step .k {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px;
+  }
+  .pipe-step .v { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+  .pipe-step .d { font-size: 13px; color: var(--muted); line-height: 1.55; }
+
+  /* ── 콜아웃 ────────────────────────────────────────────────── */
+  .note {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    padding: 13px 18px;
+    border-radius: 0 5px 5px 0;
+    margin: 0 0 20px;
+    font-size: 14.5px;
+    max-width: 68ch;
+  }
+  .note.warn { border-left-color: var(--warn); background: color-mix(in srgb, var(--warn) 9%, var(--surface)); }
+  .note p:last-child { margin-bottom: 0; }
+  .note .lbl {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); display: block; margin-bottom: 5px;
+  }
+
+  /* ── 상태 칩 ───────────────────────────────────────────────── */
+  .chip {
+    display: inline-block;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 10.5px; font-weight: 600; letter-spacing: .06em;
+    padding: 2px 7px; border-radius: 3px; white-space: nowrap;
+    border: 1px solid currentColor;
+  }
+  .chip.live { color: var(--up); }
+  .chip.key  { color: var(--warn); }
+  .chip.man  { color: var(--muted); }
+
+  footer {
+    border-top: 1px solid var(--rule);
+    padding-top: 22px;
+    color: var(--muted);
+    font-size: 13.5px;
+  }
+  footer p { max-width: 68ch; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+
+<div class="shell">
+
+<nav class="rail" aria-label="목차">
+  <div class="rail-mark">목차</div>
+  <a href="#overview">개요</a>
+  <a href="#arch">아키텍처</a>
+  <a href="#tab1">1 · 종목 분석</a>
+  <a href="#tab2">2 · 시황 브리핑</a>
+  <a href="#tab3">3 · 증시·정책</a>
+  <a href="#tab4">4 · 재정·통화</a>
+  <a href="#config">설정 파일</a>
+  <a href="#sources">데이터 소스</a>
+  <a href="#ops">운영</a>
+  <a href="#principles">설계 원칙</a>
+</nav>
+
+<main>
+
+<header>
+  <div class="eyebrow">Clone_Advisor · Streamlit</div>
+  <h1>자문역 인사이트</h1>
+  <p class="lede">
+    개별 종목을 두 명의 자문역 관점으로 뜯어보고, 미국·한국 시장과 그 배경인 재정·통화
+    상태까지 한 화면에서 확인하는 개인용 투자 대시보드. 네 개의 탭이 각각 독립된
+    데이터 파이프라인을 가진다.
+  </p>
+  <dl class="facts">
+    <div class="fact"><dt>탭</dt><dd>4</dd></div>
+    <div class="fact"><dt>파이썬 모듈</dt><dd>11 / 4,273줄</dd></div>
+    <div class="fact"><dt>설정 JSON</dt><dd>7</dd></div>
+    <div class="fact"><dt>테스트</dt><dd>65</dd></div>
+    <div class="fact"><dt>접근</dt><dd>100.107.38.73:8501</dd></div>
+  </dl>
+</header>
+
+<section id="overview">
+  <h2><span class="num">§0</span>개요</h2>
+  <p class="sec-note">무엇을 하는 앱이고, 어떻게 띄우는가.</p>
+
+  <p>
+    <code>advisor_app.py</code>가 진입점이다. 로컬에서는 <code>run_advisor.bat</code>으로,
+    상시 접근은 Tailscale 테일넷 IP에 바인딩된 백그라운드 프로세스로 돌아간다.
+    모든 탭은 <strong>온디맨드 버튼</strong>으로 동작한다 — 화면을 열어두는 것만으로는
+    외부 API를 호출하지 않는다.
+  </p>
+
+  <div class="tw"><table>
+    <thead><tr><th>탭</th><th>이름</th><th>다루는 것</th><th>주 데이터원</th></tr></thead>
+    <tbody>
+      <tr><td class="n">1</td><td>🧮 종목 분석</td><td>개별 종목 — 기술적 타이밍 + 펀더멘탈</td><td>yfinance · DART · 네이버</td></tr>
+      <tr><td class="n">2</td><td>📰 시황 브리핑</td><td>해외 시장 일간 대시보드 10섹션</td><td>yfinance · RSS</td></tr>
+      <tr><td class="n">3</td><td>🏦 증시·정책 브리핑</td><td>한국 증시 마감 + 미·한 정책 카드</td><td>키움 REST API · Google News</td></tr>
+      <tr><td class="n">4</td><td>🇺🇸 재정·통화</td><td>미국 신용·통화·재정·금리 14지표</td><td>FRED · 미 재무부</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note">
+    <span class="lbl">읽는 순서</span>
+    <p>2 → 4 → 3 → 1 순으로 보면 맥락이 이어진다. 오늘 시장이 어떻게 움직였는지(2),
+    그 배경에 유동성·신용이 어떤 상태인지(4), 한국 시장은 어떻게 받았는지(3),
+    그래서 이 종목을 지금 사도 되는지(1).</p>
+  </div>
+</section>
+
+<section id="arch">
+  <h2><span class="num">§1</span>아키텍처</h2>
+  <p class="sec-note">네 탭 중 셋이 같은 3단 구조를 반복한다. 의도된 반복이다 — 한 계열이
+  깨져도 나머지가 살아남고, 새 계열을 붙일 때 참고할 형판이 된다.</p>
+
+  <div class="pipe">
+    <div class="pipe-step">
+      <div class="k">1 · 수집</div>
+      <div class="v">데이터 레이어</div>
+      <div class="d">외부 API 원본만 가져온다. 계산·해석 없음. 실패는 예외가 아니라 <code>_status</code> 문자열.</div>
+    </div>
+    <div class="pipe-step">
+      <div class="k">2 · 조립</div>
+      <div class="v">대시보드 레이어</div>
+      <div class="d">파생 지표 계산, 룰 템플릿으로 문장 조립. 판정·해설이 여기서 나온다.</div>
+    </div>
+    <div class="pipe-step">
+      <div class="k">3 · 렌더</div>
+      <div class="v">렌더러 2종</div>
+      <div class="d">같은 dict를 Streamlit 화면과 자립형 HTML 리포트가 각각 소비한다.</div>
+    </div>
+  </div>
+
+  <div class="tw"><table>
+    <thead><tr><th>계열</th><th>수집</th><th>조립</th><th>렌더</th><th class="n">줄</th></tr></thead>
+    <tbody>
+      <tr><td>A · 해외 시황</td><td><code>advisor_news.py</code></td><td><code>advisor_dashboard.py</code></td><td>tab2 + <code>render_html()</code></td><td class="n">547</td></tr>
+      <tr><td>B · 한국 증시</td><td><code>kiwoom_data.py</code></td><td><code>advisor_dashboard_kr.py</code></td><td>tab3 + <code>render_html_kr()</code></td><td class="n">589</td></tr>
+      <tr><td>E · 재정·통화</td><td><code>advisor_macro.py</code></td><td><code>advisor_dashboard_us.py</code></td><td>tab4 + <code>render_html_us()</code></td><td class="n">652</td></tr>
+      <tr><td>— · 종목 분석</td><td colspan="2"><code>advisor_data.py</code> (수집·계산 통합)</td><td>tab1</td><td class="n">677</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note warn">
+    <span class="lbl">건드리면 안 되는 것</span>
+    <p><code>with tab4:</code> 블록은 반드시 <code>with tab1:</code> <strong>앞</strong>에 와야 한다.
+    tab1은 입력이 없으면 <code>st.stop()</code>으로 스크립트 실행을 통째로 중단시키므로,
+    뒤에 놓인 탭은 영원히 빈 화면이 된다. 과거에 한 번 발생한 버그다.</p>
+  </div>
+</section>
+
+<section id="tab1">
+  <h2><span class="num">§2</span>탭 1 · 종목 분석</h2>
+  <p class="sec-note">종목명 하나를 넣으면 기술적 타이밍과 펀더멘탈을 각각 다른 자문역
+  관점으로 평가한다. 두 룰북은 사람이 쓴 판단 기준을 JSON으로 증류한 것이다.</p>
+
+  <h3>① 정량 데이터 <span class="chip live">LIVE</span></h3>
+  <p>현재가·등락률, 2년 종가 시계열, ATR(14일 절대 변동폭), 베타(시장 대비 민감도).
+  <strong>ATR과 베타는 다른 개념이다</strong> — ATR은 이 종목이 하루에 몇 원 움직이는지,
+  베타는 시장이 1% 움직일 때 이 종목이 몇 % 움직이는지.</p>
+
+  <h3>② 정량 신호</h3>
+  <p>종가 차트 위에 <strong>오재승 그물망</strong>(20~75일 12개 이동평균 리본)과 200일선을
+  겹쳐 그린다. 리본 색이 정배열이면 붉게, 역배열이면 푸르게 바뀐다. RSI(14), MACD,
+  200일선 이격도, 간이 레짐 판정을 함께 계산한다.</p>
+
+  <h3>③ 오재승 타이밍 — 8룰 자동 매칭 <span class="chip man">룰북</span></h3>
+  <p>기술적 매매·타이밍 콜 관점. 핵심 철학은 <em>“바닥·꼭지는 신기루지만 무릎·어깨는
+  연구로 승률을 높인다”</em>, 그리고 <em>“개인은 손절을 못한다”</em>는 전제 아래
+  손절 대신 분할 매수로 기댓값을 옮기는 것.</p>
+  <div class="tw"><table>
+    <thead><tr><th>룰</th><th>내용</th></tr></thead>
+    <tbody>
+      <tr><td><code>OJS-CASH-01</code></td><td>피라미딩 5분할 (마틴게일)</td></tr>
+      <tr><td><code>OJS-LINE-01</code></td><td>밸류 라인 × MACD 트리거</td></tr>
+      <tr><td><code>OJS-NET-01</code></td><td>12 MA 리본 색전환</td></tr>
+      <tr><td><code>OJS-MACD-01</code></td><td>오실레이터 첫 반전 이후 그 방향만</td></tr>
+      <tr><td><code>OJS-LEAD-01</code></td><td>PSR × PER (10배 종목 출발점)</td></tr>
+      <tr><td><code>OJS-MA-01</code></td><td>200일선 돌파 후 눌림 재돌파 매수</td></tr>
+      <tr><td><code>OJS-SEASON-01</code></td><td>1월효과 · 벚꽃매도</td></tr>
+      <tr><td><code>OJS-DCA-01</code></td><td>기간분할 매집 (시간축 DCA)</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>④ 빈규리 펀더멘탈 — 14룰 / 8카테고리 <span class="chip key">DART</span></h3>
+  <p>CPA 관점의 스몰캡 개별기업 분석. 분석 순서가 고정되어 있다 —
+  <strong>사업 → 시장/촉매 → 해자 → 재무 → 리스크 → 결론</strong>.
+  테마 편승과 실질 수혜를 가려내는 데 무게를 둔다.</p>
+  <div class="tw"><table>
+    <thead><tr><th>카테고리</th><th class="n">룰</th><th>대표 항목</th></tr></thead>
+    <tbody>
+      <tr><td>해자</td><td class="n">5</td><td>톱티어 고객사 = 신뢰의 해자 · 국내 유일/독점 라이선스 · 전환비용 락인</td></tr>
+      <tr><td>진위판별</td><td class="n">2</td><td>직접 공급 vs 중간벤더 · 테마 동반상승의 인과 규명</td></tr>
+      <tr><td>성장</td><td class="n">2</td><td>TAM + 외부 권위 전망 · 촉매(정책·법안·이벤트)</td></tr>
+      <tr><td>사업구조</td><td class="n">1</td><td>사업부문 역할 3분류</td></tr>
+      <tr><td>재무</td><td class="n">1</td><td>분기 모멘텀 + 미반영 = 저평가</td></tr>
+      <tr><td>리스크</td><td class="n">1</td><td>리스크 균형 명시 (강점만 나열 금지)</td></tr>
+      <tr><td>스타일</td><td class="n">1</td><td>종목소개 ≠ 투자의견 디스클레이머</td></tr>
+      <tr><td>확신도</td><td class="n">1</td><td>정책테마 스크리닝 기반 저확신 편향 경고</td></tr>
+    </tbody>
+  </table></div>
+  <p>재무 항목은 DART 전자공시 API로 실제 재무제표를 끌어와 평가한다.
+  DART 키가 없으면 이 부분만 접히고 나머지는 그대로 동작한다.</p>
+</section>
+
+<section id="tab2">
+  <h2><span class="num">§3</span>탭 2 · 시황 브리핑</h2>
+  <p class="sec-note">해외 시장 일간 대시보드. 10개 섹션 구조가 고정되어 있고 데이터와
+  테마만 매일 바뀐다. 서술형 문장은 LLM이 아니라 룰 템플릿이 만든다.</p>
+
+  <h3>Tech Dashboard — 지표 9종</h3>
+  <p>S&amp;P 500 · Nasdaq · Dow · SOX(반도체) · VIX · <strong>美 10년물</strong> ·
+  <strong>美 30년물</strong> · DXY · USD/KRW. 이 중 변동폭 상위 3개가
+  “오늘 반드시 알아야 할 3가지”로 자동 승격된다.</p>
+
+  <h3>③-1 미국 국채 금리 곡선</h3>
+  <p>장단기 스프레드 2종을 1년 추세 차트로 그린다. 0bp 기준선을 빨간 점선으로 깔아
+  <strong>역전 구간이 시각적으로 드러나게</strong> 했다.</p>
+  <div class="tw"><table>
+    <thead><tr><th>스프레드</th><th>계산</th><th>의미</th></tr></thead>
+    <tbody>
+      <tr><td>10년 − 3개월</td><td class="n">(^TNX − ^IRX) × 100</td><td>뉴욕연준 침체확률 모형이 쓰는 공식 스프레드</td></tr>
+      <tr><td>30년 − 10년</td><td class="n">(^TYX − ^TNX) × 100</td><td>장기구간 기울기 (텀 프리미엄)</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note">
+    <span class="lbl">왜 10Y−2Y가 아닌가</span>
+    <p>야후 파이낸스에 미국 2년물 <em>인덱스</em> 티커가 없다. 교과서적 10Y−2Y 대신
+    뉴욕연준이 실제로 침체확률 모형에 쓰는 10Y−3M 조합을 택했다.</p>
+  </div>
+
+  <h3>나머지 섹션</h3>
+  <ul>
+    <li><strong>Today's Summary / 3가지</strong> — 변동폭 상위 지표를 문장 카드로</li>
+    <li><strong>Today's Action</strong> — 그물망 배열 + MACD + VIX 레벨로 행동 제안</li>
+    <li><strong>TOP NEWS</strong> — Yahoo Finance RSS(1차) → Investing.com(폴백)</li>
+    <li><strong>Global → Korea Impact Flow</strong> — 변동폭 최대 드라이버 1개를 골라 4단계 전달 경로로 전개</li>
+    <li><strong>오늘 시나리오</strong> — BULL / BASE / BEAR 중 유력 1개 표시</li>
+    <li><strong>오늘·이번주 일정</strong> — 수기 관리 JSON에서 향후 7일 필터</li>
+    <li><strong>Fact / Impact</strong> — 상위 4개 드라이버를 사실·영향 표로</li>
+    <li><strong>수혜 카테고리 TOP10</strong> — 오늘 헤드라인 키워드 매칭으로 시드 순위 재정렬</li>
+    <li><strong>빈규리 해설</strong> — 한국어 헤드라인에서 관찰 종목이 걸리면 펀더멘탈 코멘트</li>
+  </ul>
+</section>
+
+<section id="tab3">
+  <h2><span class="num">§4</span>탭 3 · 증시·정책 브리핑</h2>
+  <p class="sec-note">한국 증시 마감 기준 뉴스보드와 미·한 정책 카드 비교. 키움증권 REST
+  API 실계좌 연동으로 실측 데이터를 쓴다.</p>
+
+  <h3>PAGE 1 · 한국 증시 마감</h3>
+  <ul>
+    <li><strong>마감 KPI 6개</strong> — KOSPI · KOSDAQ · 삼성전자 · SK하이닉스 · 외국인 순매수 · USD/KRW</li>
+    <li><strong>시장 변동성</strong> — ADR(등락비율), 지수 ATR, 투자자별 수급 해부</li>
+    <li><strong>업종·종목 리더십</strong> — 상승·하락 업종 각 3개, 등락 상위 종목 각 3개</li>
+    <li><strong>가격 → 수급 → 촉발요인 → 지속성</strong> — 지수 등락과 외국인 수급 조합 4가지를 룰로 매칭</li>
+    <li><strong>시나리오 + 하루 코멘트</strong></li>
+  </ul>
+  <div class="note">
+    <span class="lbl">구축 중 확인된 것</span>
+    <p>지수 시세·등락종목수·업종수익률 셋이 <strong>단일 엔드포인트</strong>(ka20003)에 함께
+    들어있다. 외국인 수급 단위는 공식 문서에 없어 크기 비교로 “억원”으로 추정했다 —
+    틀렸다면 <code>unit</code> 필드만 고치면 되도록 설계했다.</p>
+  </div>
+
+  <h3>PAGE 2 · 정책 뉴스보드</h3>
+  <p>미국·한국 정책 카드를 나란히 놓고 비교한다. 각 카드는
+  <strong>사실상태 · 향후방향 · 한국시장영향 · 극성 · 정확도 · 연결경로 · 체크포인트</strong>로
+  구성된다.</p>
+  <p><code>🔄 정책 뉴스 새로고침</code> 버튼은 카드별 검색어로 Google News를 조회해
+  <strong>사실상태와 출처 링크만</strong> 갱신한다. 향후방향·한국영향 등 판단이 필요한
+  필드는 사용자가 직접 관리하는 값이라 건드리지 않는다.</p>
+</section>
+
+<section id="tab4">
+  <h2><span class="num">§5</span>탭 4 · 재정·통화</h2>
+  <p class="sec-note">시장 <em>가격</em>이 아니라 그 배경을 본다 — 돈이 풀리는가 조여지는가,
+  신용이 벌어지는가, 재정이 버틸 만한가. 지표 14종을 4그룹으로 묶는다.</p>
+
+  <h3>종합 판정 3줄</h3>
+  <p>맨 위에 유동성·신용·재정을 각각 한 줄로 요약한다. 전부 룰 템플릿이며,
+  근거 데이터가 없으면 “판정 불가”로 정직하게 표시한다.</p>
+  <div class="tw"><table>
+    <thead><tr><th>축</th><th>판정 근거</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td>유동성</td><td>순유동성 3개월 변화 <em>+</em> M2 전년비 부호</td><td>완화 / 중립 / 긴축</td></tr>
+      <tr><td>신용</td><td>하이일드 OAS의 3년 백분위</td><td>안정(&lt;33) / 경계 / 스트레스(≥66)</td></tr>
+      <tr><td>재정</td><td>부채/GDP 1년 변화 <em>+</em> 이자지급 증감</td><td>지속가능 / 부담 가중</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>지표 14종</h3>
+  <div class="tw"><table>
+    <thead><tr><th>그룹</th><th>지표</th><th>시리즈</th><th>주기</th></tr></thead>
+    <tbody>
+      <tr><td rowspan="2">기업 신용</td><td>하이일드 OAS</td><td><code>BAMLH0A0HYM2</code></td><td>일간</td></tr>
+      <tr><td>투자등급 OAS</td><td><code>BAMLC0A0CM</code></td><td>일간</td></tr>
+      <tr><td rowspan="5">통화·유동성</td><td>M2 통화량</td><td><code>M2SL</code></td><td>월간</td></tr>
+      <tr><td>연준 총자산</td><td><code>WALCL</code></td><td>주간</td></tr>
+      <tr><td>역레포 잔액</td><td><code>RRPONTSYD</code></td><td>일간</td></tr>
+      <tr><td>지급준비금</td><td><code>WRESBAL</code></td><td>주간</td></tr>
+      <tr><td>재무부 일반계정</td><td><code>WTREGEN</code></td><td>주간</td></tr>
+      <tr><td rowspan="4">연방 재정</td><td>연방 총부채</td><td><code>debt_to_penny</code> <span class="chip live">재무부</span></td><td>일간</td></tr>
+      <tr><td>부채/GDP</td><td><code>GFDEGDQ188S</code></td><td>분기</td></tr>
+      <tr><td>월간 재정수지</td><td><code>MTSDS133FMS</code></td><td>월간</td></tr>
+      <tr><td>연방 이자지급</td><td><code>A091RC1Q027SBEA</code></td><td>분기</td></tr>
+      <tr><td rowspan="3">정책·실질금리</td><td>실효 연방기금금리</td><td><code>DFF</code></td><td>일간</td></tr>
+      <tr><td>5년 기대인플레이션</td><td><code>T5YIE</code></td><td>일간</td></tr>
+      <tr><td>10년 실질금리</td><td><code>DFII10</code></td><td>일간</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>파생 계산</h3>
+  <p>원시값만으로는 “$40조”가 큰지 작은지 알 수 없다. 각 카드에 최근 3년 백분위와
+  “역사적 고점권” 판정을 붙이고, 아래를 따로 계산한다.</p>
+  <div class="tw"><table>
+    <thead><tr><th>파생</th><th>산식</th><th>읽는 법</th></tr></thead>
+    <tbody>
+      <tr><td>순유동성</td><td class="n">연준자산 − 역레포×1000 − TGA</td><td>실제로 시장에 남는 돈</td></tr>
+      <tr><td>M2 전년비</td><td class="n">(M2 ÷ 1년전 − 1) × 100</td><td>잔액보다 증감이 의미 있다</td></tr>
+      <tr><td>QT 진행도</td><td class="n">피크 대비 감축액 ÷ 피크</td><td>양적긴축이 어디까지 왔나</td></tr>
+      <tr><td>HY − IG</td><td class="n">(하이일드 − 투자등급) × 100</td><td>신용 차별화 정도(bp)</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note warn">
+    <span class="lbl">이 기능의 핵심 함정</span>
+    <p>FRED는 시리즈마다 <strong>단위가 다르다</strong>. 연준자산·지준·TGA는 백만달러,
+    역레포와 M2는 십억달러, 재무부 부채는 원단위 달러다. 순유동성처럼 이들을
+    빼는 계산에서 정규화를 빠뜨리면 <strong>결과가 1000배 틀어진다</strong>.
+    <code>to_musd()</code>가 FRED의 단위 문자열을 배율로 매핑해 처리하며,
+    회귀 테스트가 이를 고정한다.</p>
+    <p style="margin-top:10px">QT 진행도에도 같은 종류의 함정이 있었다. 3년치만 받아오면
+    2022년 실제 피크를 보지 못해 감축률이 <strong>17.1%</strong>로 나온다 — 실제는
+    <strong>24.9%</strong>. 이 지표만 조회 기간을 8년으로 늘리되, 백분위는 3년 기준을
+    유지하도록 따로 막았다.</p>
+  </div>
+</section>
+
+<section id="config">
+  <h2><span class="num">§6</span>설정 파일</h2>
+  <p class="sec-note">코드를 고치지 않고 손댈 수 있는 것들. 전부 <code>Clone_Advisor/</code>
+  루트에 있다.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th>파일</th><th>담는 것</th><th>갱신</th></tr></thead>
+    <tbody>
+      <tr><td><code>macro_series.json</code></td><td>재정·통화 지표 14종 레지스트리 (그룹·시리즈ID·단위·해석방향)</td><td><span class="chip man">수기</span> 줄 추가로 지표 확장</td></tr>
+      <tr><td><code>policy_cards.json</code></td><td>미·한 정책 카드 8종</td><td><span class="chip man">수기</span> + 뉴스 자동 갱신</td></tr>
+      <tr><td><code>econ_calendar.json</code></td><td>CPI·FOMC 등 경제 일정</td><td><span class="chip man">수기</span> 무료 실시간 API 없음</td></tr>
+      <tr><td><code>impact_rules.json</code></td><td>드라이버 → 한국 영향 매핑 룰</td><td><span class="chip man">수기</span></td></tr>
+      <tr><td><code>theme_watchlist.json</code></td><td>수혜 카테고리·관찰기업 시드</td><td><span class="chip man">수기</span> 순위는 자동 재정렬</td></tr>
+      <tr><td><code>ojs_rulebook.json</code></td><td>오재승 8룰 + 철학</td><td><span class="chip man">고정</span></td></tr>
+      <tr><td><code>binkyuri_rulebook.json</code></td><td>빈규리 14룰 / 8카테고리 + 철학</td><td><span class="chip man">고정</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note">
+    <span class="lbl">지표를 늘리고 싶다면</span>
+    <p><code>macro_series.json</code>의 해당 그룹에 항목 한 줄을 추가하면 끝난다.
+    <code>unit</code>은 FRED가 주는 단위 문자열을 <strong>그대로</strong> 적어야 한다 —
+    <code>"Mil. of U.S. $"</code>와 <code>"Mil. of $"</code>는 서로 다른 문자열이고,
+    오타 하나가 조용히 금액 계산을 망가뜨린다. 계약 테스트가 이를 잡아준다.</p>
+  </div>
+</section>
+
+<section id="sources">
+  <h2><span class="num">§7</span>데이터 소스와 키</h2>
+
+  <div class="tw"><table>
+    <thead><tr><th>소스</th><th>쓰는 곳</th><th>키</th><th>비고</th></tr></thead>
+    <tbody>
+      <tr><td>yfinance</td><td>탭 1·2</td><td><span class="chip live">불필요</span></td><td>지수·종목 시세, 국채 금리</td></tr>
+      <tr><td>미 재무부 FiscalData</td><td>탭 4</td><td><span class="chip live">불필요</span></td><td>일간 총부채 — FRED 분기보다 정확</td></tr>
+      <tr><td>Yahoo / Investing RSS</td><td>탭 2</td><td><span class="chip live">불필요</span></td><td>1차 실패 시 자동 폴백</td></tr>
+      <tr><td>Google News RSS</td><td>탭 3</td><td><span class="chip live">불필요</span></td><td>정책 카드 사실상태 갱신</td></tr>
+      <tr><td>FRED</td><td>탭 4</td><td><span class="chip key">.fred_api_key</span></td><td>무료·즉시발급. 13개 시리즈</td></tr>
+      <tr><td>DART 전자공시</td><td>탭 1</td><td><span class="chip key">.dart_api_key</span></td><td>재무제표</td></tr>
+      <tr><td>키움증권 REST</td><td>탭 3</td><td><span class="chip key">별도 폴더</span></td><td>실계좌 연동</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>키 파일은 전부 <code>.gitignore</code> 처리되어 있다. 각 키 로더는
+  <strong>환경변수 → 파일</strong> 순으로 찾고, 없으면 해당 기능만 접히고 나머지는
+  정상 동작한다. FRED 키가 없어도 탭 4는 뜨고 재무부 총부채 카드는 살아 있다.</p>
+</section>
+
+<section id="ops">
+  <h2><span class="num">§8</span>운영</h2>
+
+  <h4>접근</h4>
+  <p>폰·PC 모두 <code>http://100.107.38.73:8501</code> (Tailscale 테일넷).
+  <strong><code>localhost:8501</code>은 응답하지 않는다</strong> — 집 Wi-Fi 노출을 막으려고
+  테일넷 IP에만 바인딩했다. 로그온 30초 후 작업 스케줄러가 자동 기동한다.</p>
+
+  <h4>캐시</h4>
+  <div class="tw"><table>
+    <thead><tr><th>탭</th><th>TTL</th><th>이유</th></tr></thead>
+    <tbody>
+      <tr><td>2 · 시황</td><td class="n">30분</td><td>일간 시세 — 장중 갱신 필요</td></tr>
+      <tr><td>3 · 증시·정책</td><td class="n">30분</td><td>마감 데이터</td></tr>
+      <tr><td>4 · 재정·통화</td><td class="n">6시간</td><td>월간·분기 시리즈. 새로고침 1회당 외부 API 14회 호출</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note warn">
+    <span class="lbl">코드를 고쳤는데 화면이 그대로라면</span>
+    <p>8501 프로세스는 한 번 뜨면 계속 살아 있고, 자동시작 스크립트는
+    <strong>이미 리스닝 중인 포트를 건너뛴다</strong>. 그래서 구버전이 떠 있는 한
+    새 버전이 절대 뜨지 않는다. 재부팅하거나, 아래를 실행할 것.</p>
+    <pre><code>netstat -ano | grep LISTENING | grep ":8501"   # PID 확인
+taskkill //F //PID &lt;PID&gt;
+powershell -ExecutionPolicy Bypass -File C:/Users/yjkim/bin/start-dashboards.ps1</code></pre>
+    <p>포트가 열려 있다는 것만으로 최신 코드라는 증거가 되지 않는다.
+    프로세스의 <code>CreationDate</code>를 확인할 것.</p>
+  </div>
+</section>
+
+<section id="principles">
+  <h2><span class="num">§9</span>설계 원칙</h2>
+  <p class="sec-note">네 계열 전체를 관통하는 규칙. 새 기능을 붙일 때도 지킨다.</p>
+
+  <h3>서술형 문장에 LLM을 쓰지 않는다</h3>
+  <p>숫자는 코드가 계산하고, 문장은 룰 템플릿이 조립한다. 해설 깊이는 얕아지지만
+  <strong>같은 입력이면 같은 출력</strong>이 나오고, 틀렸을 때 어느 룰이 틀렸는지
+  추적할 수 있다. 투자 판단에 쓰는 도구라 재현성을 택했다.</p>
+
+  <h3>실패는 예외가 아니라 상태다</h3>
+  <p>데이터 레이어의 어떤 함수도 예외를 밖으로 던지지 않는다. 모든 실패는
+  <code>_status</code> 문자열이 되고, 지표 하나가 죽어도 그룹이, 그룹이 죽어도 탭이,
+  탭이 죽어도 나머지 세 탭이 살아남는다.</p>
+
+  <h3>금액은 반드시 단위를 맞춘 뒤 계산한다</h3>
+  <p>이 코드베이스에서 가장 조용하고 위험한 버그가 단위 혼동이다. 표시만 할 때는
+  원래 단위 그대로, <strong>서로 빼거나 더할 때는 반드시 정규화</strong>한다.</p>
+
+  <h3>사용자가 판단하는 필드는 자동 갱신하지 않는다</h3>
+  <p>정책 카드의 사실상태·출처는 뉴스에서 자동으로 채우지만, 향후방향·한국영향·정확도는
+  건드리지 않는다. 기계가 채울 수 있는 것과 사람이 판단해야 하는 것을 구분한다.</p>
+</section>
+
+<footer>
+  <p>Clone_Advisor · <code>advisor_app.py</code> 외 10개 모듈 · 테스트 65건 ·
+  설계 문서는 <code>docs/superpowers/specs/</code>에 있다.</p>
+</footer>
+
+</main>
+</div>
