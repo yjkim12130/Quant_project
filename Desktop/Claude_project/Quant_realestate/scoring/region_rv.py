@@ -171,7 +171,7 @@ def region_price_index(conn, level="sgg", params=None, min_weight=0.5):
     return idx.merge(_region_labels(trades, level), on="region_key", how="left")
 
 
-def assign_tiers(index, n_tiers=5, min_months=24):
+def assign_tiers(index, n_tiers=5, min_months=24, as_of=None):
     """지역을 n_tiers 분위로 나눈다 (스펙 §3).
 
     티어는 시점 고정이다 - 월마다 다시 매기면 지역이 티어를 넘나들면서 비율 z가
@@ -184,8 +184,18 @@ def assign_tiers(index, n_tiers=5, min_months=24):
     2006년 대비 2026년에 약 3배가 됐으므로 이 효과가 작지 않다). avg_price 컬럼 자체는
     화면에 그대로 노출되는 실제 만원/㎡ 값이라 디플레이션하지 않고 그대로 둔다 - 분위
     산정에만 디플레이션 평균을 쓴다.
+
+    as_of를 주면 그 월까지의 관측만으로 티어를 정한다. 라이브 화면은 as_of=None(전 기간)을
+    쓰지만, 백테스트에서 전 기간 티어를 쓰면 "2010년 시그널을 2026년 가격으로 만든 급지로
+    평가하는" look-ahead가 된다. rv_z 자체는 _trailing_z의 shift(1) 덕에 누수가 없으므로
+    티어 배정이 유일한 오염원이고, 이 인자가 그걸 막는다.
     """
     idx = index.copy()
+    if as_of is not None:
+        idx = idx[idx["month"] <= pd.Period(as_of, freq="M")]
+        if idx.empty:
+            empty = pd.DataFrame(columns=["region_key", "avg_price", "n_months", "tier"])
+            return empty.astype({"tier": "int64"})
     idx["deflated"] = idx["price"] / idx.groupby("month")["price"].transform("median")
     agg = (idx.groupby("region_key")
               .agg(avg_price=("price", "mean"), avg_deflated=("deflated", "mean"),

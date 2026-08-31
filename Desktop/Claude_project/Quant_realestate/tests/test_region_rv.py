@@ -371,3 +371,39 @@ def test_region_jeonse_ratio_survives_missing_table():
     assert out["jeonse_ratio"].isna().all()
     assert list(out.columns) == ["region_key", "month", "jeonse_price", "jeonse_ratio"]
     conn.close()
+
+
+def test_assign_tiers_as_of_ignores_later_months():
+    """as_of를 주면 그 이후 월은 티어 산정에서 빠진다 (백테스트 look-ahead 차단)."""
+    months = pd.period_range("2018-01", "2024-12", freq="M")
+    idx = _fake_index({"A": 1000, "B": 900, "C": 800}, months)
+    # 컷오프 이후 A의 가격을 폭등시켜도 as_of 티어는 변하지 않아야 한다
+    spiked = idx.copy()
+    late = spiked["month"] > pd.Period("2020-12", freq="M")
+    spiked.loc[(spiked["region_key"] == "A") & late, "price"] *= 20
+
+    base = R.assign_tiers(idx, n_tiers=3, min_months=24, as_of="2020-12")
+    after = R.assign_tiers(spiked, n_tiers=3, min_months=24, as_of="2020-12")
+    assert base.set_index("region_key")["tier"].to_dict() == \
+           after.set_index("region_key")["tier"].to_dict()
+
+    # as_of 없이는 같은 폭등이 실제로 영향을 준다(= 위 테스트가 무의미하지 않다는 증거)
+    assert R.assign_tiers(spiked, n_tiers=3, min_months=24)["avg_price"].max() > \
+           R.assign_tiers(idx, n_tiers=3, min_months=24)["avg_price"].max() * 5
+
+
+def test_assign_tiers_as_of_counts_only_pre_cutoff_months():
+    """min_months도 컷오프 이전 관측만으로 센다."""
+    months = pd.period_range("2018-01", "2024-12", freq="M")
+    idx = _fake_index({"A": 1000, "B": 900, "C": 800}, months)
+    # 컷오프까지 12개월뿐이면 min_months=24를 못 넘어 전부 탈락
+    assert R.assign_tiers(idx, n_tiers=3, min_months=24, as_of="2018-12").empty
+    assert not R.assign_tiers(idx, n_tiers=3, min_months=24, as_of="2020-12").empty
+
+
+def test_assign_tiers_as_of_none_matches_full_history():
+    months = pd.period_range("2018-01", "2024-12", freq="M")
+    idx = _fake_index({"A": 1000, "B": 900, "C": 800}, months)
+    a = R.assign_tiers(idx, n_tiers=3)
+    b = R.assign_tiers(idx, n_tiers=3, as_of=None)
+    pd.testing.assert_frame_equal(a, b)
