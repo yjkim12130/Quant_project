@@ -1,0 +1,221 @@
+<title>Quant_lotto 알고리즘 설계도</title>
+<style>
+  :root {
+    --bg: #FAFAF7;
+    --surface: #FFFFFF;
+    --ink: #20261F;
+    --muted: #68716A;
+    --line: #E2E4DC;
+    --accent: #0E7A5F;
+    --accent-soft: #E4F1EB;
+    --note: #8A6A1F;
+    --note-bg: #F7F0DD;
+    --code-bg: #F1F2EC;
+    --bad: #A8443C;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #151815;
+      --surface: #1C201C;
+      --ink: #E6EAE4;
+      --muted: #9AA69C;
+      --line: #2C312B;
+      --accent: #4CC29A;
+      --accent-soft: #1E2E27;
+      --note: #D9B45C;
+      --note-bg: #2A2617;
+      --code-bg: #20241F;
+      --bad: #E08A82;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #151815;
+    --surface: #1C201C;
+    --ink: #E6EAE4;
+    --muted: #9AA69C;
+    --line: #2C312B;
+    --accent: #4CC29A;
+    --accent-soft: #1E2E27;
+    --note: #D9B45C;
+    --note-bg: #2A2617;
+    --code-bg: #20241F;
+    --bad: #E08A82;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", "Segoe UI", sans-serif;
+    line-height: 1.7;
+    margin: 0;
+    padding: 3rem 1.25rem 5rem;
+  }
+  main { max-width: 760px; margin: 0 auto; }
+  .eyebrow { font-size: .78rem; letter-spacing: .12em; color: var(--accent); font-weight: 700; text-transform: uppercase; }
+  h1 { font-size: 2rem; line-height: 1.25; margin: .3rem 0 .4rem; letter-spacing: -.02em; text-wrap: balance; }
+  .sub { color: var(--muted); margin: 0 0 1.2rem; }
+  .meta { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 2.2rem; }
+  .chip { font-size: .78rem; padding: .15rem .65rem; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); background: var(--surface); }
+  h2 { font-size: 1.2rem; margin: 2.8rem 0 .8rem; padding-top: 1.6rem; border-top: 1px solid var(--line); letter-spacing: -.01em; }
+  h2 .num { color: var(--accent); font-weight: 800; margin-right: .5rem; font-variant-numeric: tabular-nums; }
+  h3 { font-size: 1rem; margin: 1.6rem 0 .5rem; }
+  p { margin: .6rem 0; }
+  ul { margin: .5rem 0; padding-left: 1.3rem; }
+  li { margin: .3rem 0; }
+  .note { background: var(--note-bg); color: var(--note); border-radius: 8px; padding: .7rem 1rem; font-size: .92rem; margin: 1rem 0; }
+  .tablewrap { overflow-x: auto; margin: 1rem 0; }
+  table { border-collapse: collapse; width: 100%; font-size: .92rem; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+  th, td { padding: .5rem .8rem; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+  th { font-size: .8rem; letter-spacing: .05em; color: var(--muted); }
+  td.n { font-variant-numeric: tabular-nums; }
+  tr:last-child td { border-bottom: none; }
+  tr.hl td { background: var(--accent-soft); }
+  td.bad { color: var(--bad); font-weight: 700; }
+  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 1rem 1.2rem; overflow-x: auto; font-family: "Cascadia Mono", Consolas, monospace; font-size: .85rem; line-height: 1.6; }
+  code { font-family: "Cascadia Mono", Consolas, monospace; font-size: .9em; }
+  .formula { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; padding: .7rem 1rem; margin: .8rem 0; font-family: "Cascadia Mono", Consolas, monospace; font-size: .88rem; overflow-x: auto; }
+  .algo { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: .9rem 1.1rem; margin: .75rem 0; }
+  .algo b.t { color: var(--accent); }
+  .flow { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: 1rem 0; }
+  .flow .box { background: var(--surface); border: 1px solid var(--accent); border-radius: 8px; padding: .45rem .8rem; font-size: .88rem; }
+  .flow .arr { color: var(--muted); }
+  footer { color: var(--muted); font-size: .82rem; margin-top: 3rem; }
+</style>
+<main>
+  <div class="eyebrow">알고리즘 설계도 · 2026-08-15 기준</div>
+  <h1>Quant_lotto 알고리즘 설계도</h1>
+  <p class="sub">앱에 구현된 알고리즘 전체와 그 검증 근거를 한 페이지로 정리한 문서.</p>
+  <div class="meta">
+    <span class="chip">데이터: 1~1,236회 (2002-12 ~ 2026-08)</span>
+    <span class="chip">Streamlit 4탭</span>
+    <span class="chip">테스트 16개 통과</span>
+  </div>
+
+  <h2><span class="num">1</span>시스템 구조와 데이터 흐름</h2>
+  <div class="flow">
+    <span class="box">GitHub smok95/lotto<br><small>회차별 JSON</small></span>
+    <span class="arr">→</span>
+    <span class="box">lotto_data.py<br><small>수집·캐시·증분 병합</small></span>
+    <span class="arr">→</span>
+    <span class="box">data\history.csv</span>
+    <span class="arr">→</span>
+    <span class="box">lotto_logic.py<br><small>모든 알고리즘 (UI 무관)</small></span>
+    <span class="arr">→</span>
+    <span class="box">app.py<br><small>4탭 UI</small></span>
+  </div>
+  <ul>
+    <li>회차 t 계산에는 t 이전 데이터만 사용 (미래정보 누출 차단) — 모든 알고리즘 공통 원칙</li>
+    <li>로직은 <code>lotto_logic.py</code>에 격리되어 <code>pytest tests\</code>로 단독 검증 (16개 테스트)</li>
+    <li>증분 업데이트: 캐시 마지막 회차+1부터 404까지만 요청, 회차 기준 중복 제거 병합</li>
+  </ul>
+
+  <h2><span class="num">2</span>등수 판정 (rank_of)</h2>
+  <div class="tablewrap">
+    <table>
+      <tr><th>본번호 일치</th><th>보너스</th><th>판정</th></tr>
+      <tr><td class="n">6개</td><td>—</td><td>1등</td></tr>
+      <tr><td class="n">5개</td><td>일치</td><td>2등</td></tr>
+      <tr><td class="n">5개</td><td>불일치</td><td>3등</td></tr>
+      <tr><td class="n">4개</td><td>—</td><td>4등</td></tr>
+      <tr><td class="n">3개</td><td>—</td><td>5등</td></tr>
+      <tr><td class="n">0~2개</td><td>—</td><td>낙첨</td></tr>
+    </table>
+  </div>
+  <p>검증기 탭에서 "이 조합을 매회 샀다면" 시뮬레이션의 기반. 입력은 1~45 범위·중복 검사를 거친다.</p>
+
+  <h2><span class="num">3</span>EV 독식 점수 (0~100)</h2>
+  <p>당첨 확률과 무관하게, <b>당첨됐을 때 다른 당첨자와 나눠 가질 리스크</b>만 점수화한다.
+  가중치는 전 회차 실증 데이터에서 유의했던 신호만 반영:</p>
+  <div class="formula">score = 연속수포함×30 + round((6 − 생일범위개수)/6×30) + 40번대포함×20 + 합계비인기구간×20</div>
+  <div class="tablewrap">
+    <table>
+      <tr><th>요소</th><th>배점</th><th>실증 근거 (1~1,236회)</th></tr>
+      <tr class="hl"><td>연속수(예: 21,22) 포함</td><td class="n">+30</td><td>유일한 통계적 유의 신호 — 연속수 조합은 1등 당첨자 수가 유의하게 적음 (Spearman ρ=−0.089, p=0.004)</td></tr>
+      <tr><td>생일범위(≤31) 비중 낮음</td><td class="n">최대 +30</td><td>전부 31 이하인 회차의 당첨자 1.07배 vs 3개 이하 0.95배 (~12% 차이)</td></tr>
+      <tr><td>40번대(≥40) 포함</td><td class="n">+20</td><td>생일 기반 수동 선택에서 소외되는 구간</td></tr>
+      <tr><td>번호 합계가 100~170 밖</td><td class="n">+20</td><td>수동 선택 합계가 몰리는 인기 구간 회피</td></tr>
+    </table>
+  </div>
+
+  <h2><span class="num">4</span>EV 조합 생성기</h2>
+  <div class="flow">
+    <span class="box">균등 랜덤 6개 추출</span>
+    <span class="arr">→</span>
+    <span class="box">중복 조합 제거</span>
+    <span class="arr">→</span>
+    <span class="box">EV 점수 계산</span>
+    <span class="arr">→</span>
+    <span class="box">min_score 미달 기각</span>
+    <span class="arr">→</span>
+    <span class="box">n게임 채우면 종료</span>
+  </div>
+  <p>생성 자체가 순수 균등 랜덤(rejection sampling)이므로 <b>어떤 조합이 나와도 당첨 확률은 동일</b>하다.
+  필터는 확률이 아니라 "겹칠 사람 수"만 바꾼다. 최대 시도 횟수(20,000회) 초과 시 찾은 만큼만 반환.</p>
+
+  <h2><span class="num">5</span>예측 실험실 알고리즘 (7종)</h2>
+  <p>모든 알고리즘은 예측 시점 이전 데이터만으로 번호별 점수를 만들고 상위 6개를 출력한다.</p>
+  <div class="algo"><b class="t">① 콜드 (장기미출현)</b><br>
+    score(n) = 번호 n이 마지막으로 나온 뒤 지난 회차 수(gap). 오래 안 나온 순 top6.</div>
+  <div class="algo"><b class="t">② 핫넘버 (윈도우 빈도)</b><br>
+    score(n) = 최근 W회 출현 횟수. W ∈ {10, 26, 52, 104} 로 튜닝. 전체 회차 빈도 버전도 별도 후보.</div>
+  <div class="algo"><b class="t">③ EWMA (지수가중 빈도)</b><br>
+    <span class="formula" style="display:block;margin:.4rem 0 0">e(n) ← (1−α)·e(n) + α·1{n 출현}, α ∈ {0.02, 0.05, 0.1}</span>
+    최근 회차일수록 가중치를 크게 주는 빈도. α가 클수록 단기 반응형.</div>
+  <div class="algo"><b class="t">④ 동시출현 마르코프</b><br>
+    전이행렬 C[m][n] = "m이 t−1회차에 나왔을 때 n이 t회차에 나온 횟수" (라플라스 스무딩 +1).
+    직전 회차 6개 번호 m 각각에 대해 P(n|m)을 평균한 값이 score(n).</div>
+  <div class="algo"><b class="t">⑤ 종합점수 (2단계)</b><br>
+    score(n) = z(최근52 빈도) + z(gap) + z(동시출현). 각 신호를 표준화(z-score) 후 합산 —
+    "후보군 확률 계산 → top-N 추출"이라는 사용자 제안 방식의 구현.</div>
+  <div class="algo"><b class="t">⑥ ML (RandomForest)</b><br>
+    번호별 이진 분류: "다음 회차에 나올까?" 특징 10개(윈도우 빈도 4종, 전체 빈도, gap, EWMA 3종, 동시출현).
+    학습 표본 = 과거 회차 × 45개 번호. 100트리·깊이 6, 20회차마다 재학습(walk-forward). 출현 확률 top6.</div>
+  <div class="algo"><b class="t">⑦ 랜덤 (기준선)</b><br>
+    회차당 균등 랜덤 100장 시뮬레이션 평균. 모든 알고리즘이 이겨야 하는 기준.</div>
+
+  <h2><span class="num">6</span>검증 프로토콜 — 과적합 방지 설계</h2>
+  <div class="flow">
+    <span class="box">Validation 600~936회<br><small>12개 후보 전부 평가·튜닝</small></span>
+    <span class="arr">→</span>
+    <span class="box">1위 1개만 선정</span>
+    <span class="arr">→</span>
+    <span class="box">Test 937~1,236회<br><small>승자만 단 한 번 평가</small></span>
+    <span class="arr">→</span>
+    <span class="box">Bonferroni ×12 보정</span>
+  </div>
+  <ul>
+    <li>선정과 검증을 분리: "여러 개 돌려서 최고를 고르면 노이즈에 과적합된 운을 고른다"를 차단</li>
+    <li>귀무가설: 평균 적중 = 0.800개 (초기하분포, 분산 0.6145). 단측 정규근사 검정</li>
+  </ul>
+
+  <h3>실측 결과 (2026-08-14 실행)</h3>
+  <div class="tablewrap">
+    <table>
+      <tr><th>알고리즘</th><th>Validation 평균적중</th><th>Test 평균적중</th></tr>
+      <tr class="hl"><td>콜드(장기미출현) — validation 1위</td><td class="n">0.869</td><td class="n bad">0.760 (랜덤 이하)</td></tr>
+      <tr><td>핫넘버(최근52)</td><td class="n">0.840</td><td>미평가 (프로토콜상 승자만)</td></tr>
+      <tr><td>EWMA(α=0.1) / 종합점수(2단계)</td><td class="n">0.831</td><td>미평가</td></tr>
+      <tr><td>ML(RandomForest)</td><td class="n">0.816</td><td>미평가</td></tr>
+      <tr><td>핫넘버(전체빈도) — 꼴찌</td><td class="n">0.709</td><td>미평가</td></tr>
+      <tr><td>랜덤(기준선)</td><td class="n">0.797</td><td class="n">기대 0.800</td></tr>
+    </table>
+  </div>
+  <p><b>판정:</b> validation 1위(+9%로 보였던 콜드)가 test에서 랜덤 이하로 추락 (보정 p=1.000).
+  번호별 출현빈도 자체도 균등분포와 구분 불가(카이제곱 p=0.957).
+  "직전 회차 번호는 연속으로 안 나온다"는 속설도 기각 — 61.3% 회차에서 1개 이상 재출현.</p>
+  <div class="note">결론: 과거 데이터에 예측력은 없다. 예측 실험실 탭은 이 판정을 화면에 함께 표시한 채 재미용으로 제공하며,
+  실질적 우위는 EV 독식 점수(3장)에서만 나온다.</div>
+
+  <h2><span class="num">7</span>파일 맵</h2>
+  <pre>Quant_lotto\
+├── app.py                        # 4탭 UI (통계 / EV 생성기 / 검증기 / 예측 실험실)
+├── lotto_data.py                 # 수집·캐시·증분 병합
+├── lotto_logic.py                # 2~5장의 모든 알고리즘
+├── experiments\predict_lab.py    # 6장 검증 프로토콜 (재실행 가능)
+├── experiments\results_20260814.txt
+├── tests\test_logic.py           # 16개 테스트
+├── docs\specs\2026-08-14-lotto-ev-dashboard-design.md
+└── run_app.bat                   # 앱 실행</pre>
+
+  <footer>Quant_lotto · 검증 데이터 1~1,236회 · 실험 재실행: <code>python experiments/predict_lab.py</code></footer>
+</main>
