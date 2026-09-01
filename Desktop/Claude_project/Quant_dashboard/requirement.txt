@@ -1,0 +1,14 @@
+아래 핵심 알고리즘들 및 서비스 아키텍처를 파악해서  
+
+로컬의 3개 알고리즘(YJalgo_v7.1, Simulation(alpha,beta),YJalgo_v8.0)을 단일 엔진으로 통합하고, yj-wade-quant 서비스 아키텍처를 통해 지수 선택 - 백테스트 - WFV 검증 - 실전 지침까지 이어지는 전 과정을 자동화하는 범용 퀀트 대시보드를 구축해줘. 
+
+
+[핵심 알고리즘]
+1. C:\Users\yjkim\Desktop\Claude_project\Quant_dashboard\YJalgo_v7.1: 지수 추종 매수
+
+2. C:\Users\yjkim\Desktop\Claude_project\Quant_dashboard\Simulation(alpha,beta): 지수 추종 매수 + panic 장에서  시가총액 상위 개별주 저가 매수 전략
+
+3. C:\Users\yjkim\Desktop\Claude_project\Quant_dashboard\YJalgo_v8.0: 전체 알고리즘 추가 고도화, 검증 고도화
+
+[서비스 아키텍처]
+1. C:\Users\yjkim\Desktop\Claude_project\Quant_dashboard\yj-wade-quant: 전체 서비스 아키텍처
