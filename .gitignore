@@ -25,6 +25,8 @@
 # (추적하면 gitlink(서브모듈 껍데기)만 커밋되어 내용이 백업되지 않는다)
 #   Dating_app        : 로컬 전용 저장소, 원격 없음 — 2026-09-01 확인
 #   Ledger/my-ledger  : github.com/yjkim12130/my-ledger 에 백업됨
+#   yj-wade-quant_Hyunwoo : 타인 저장소(github.com/bnabis93/yj-wade-quant) 클론
 # ─────────────────────────────────────────────────────────────────────
 Desktop/Claude_project/Dating_app/
 Desktop/Claude_project/Ledger/my-ledger/
+Desktop/Claude_project/Quant_dashboard/yj-wade-quant_Hyunwoo/

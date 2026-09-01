@@ -1,2 +1,5 @@
 # ── API 키 (절대 커밋 금지) ─────────────────────────────────
 kiwoom_api_key/
+
+# Claude Code 로컬 도구 설정 — 개인 환경 값이라 공유하지 않는다
+**/.claude/settings.local.json
