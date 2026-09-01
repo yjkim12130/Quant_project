@@ -17,7 +17,10 @@ load_dotenv(ROOT / ".env")
 
 st.set_page_config(page_title="윤진 Studio", page_icon="🍳", layout="wide")
 st.title("🍳 윤진 Studio")
-st.caption("레시피 텍스트 하나로 촬영 가이드 · 인스타 · 블로그를 만듭니다.")
+st.caption(
+    "레시피 텍스트 하나로 촬영 가이드 · 인스타 · 블로그를 만듭니다. "
+    "생성 버튼을 누르면 **6분쯤** 걸려요 — 눌러두고 다른 일 하셔도 됩니다."
+)
 
 profile, warnings = load_profile()
 for warning in warnings:
@@ -41,13 +44,13 @@ if st.button("생성", type="primary"):
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # 호출①의 결과를 먼저 디스크에 남긴다. 호출②가 실패해도 살아남게 하기 위함(스펙 §12).
-    with st.spinner("① 촬영 가이드를 만드는 중… (1~2분)"):
+    with st.spinner("① 촬영 가이드를 만드는 중… 3분쯤 걸려요. 창을 닫지 마세요."):
         shooting = generate_shooting(profile, recipe, duration_sec=duration)
     (out_dir / "_raw_shooting.json").write_text(
         json.dumps(shooting, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
-    with st.spinner("② 인스타·블로그를 만드는 중… (1~2분)"):
+    with st.spinner("② 인스타·블로그를 만드는 중… 3분쯤 더 걸려요."):
         publish = generate_publish(profile, shooting.get("recipe_card") or {})
     (out_dir / "_raw_publish.json").write_text(
         json.dumps(publish, ensure_ascii=False, indent=2), encoding="utf-8"
