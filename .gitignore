@@ -30,3 +30,9 @@
 Desktop/Claude_project/Dating_app/
 Desktop/Claude_project/Ledger/my-ledger/
 Desktop/Claude_project/Quant_dashboard/yj-wade-quant_Hyunwoo/
+
+# ─────────────────────────────────────────────────────────────────────
+# Claude Code 로컬 도구 설정 — 개인 PC 경로·권한 목록이라 공유하지 않는다.
+# .claude/ 안의 skill·command·agent 는 공유 대상이므로 이 파일만 콕 집어 제외한다.
+# ─────────────────────────────────────────────────────────────────────
+**/.claude/settings.local.json
