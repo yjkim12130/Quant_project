@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 크롤링 결과 DB — 재생성 가능
+data/
+*.db
