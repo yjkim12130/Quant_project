@@ -15,3 +15,12 @@
 
 !Desktop/
 !Desktop/**
+
+# ─────────────────────────────────────────────────────────────────────
+# 자체 git 저장소를 가진 프로젝트 — 이 저장소에서는 추적하지 않는다.
+# (추적하면 gitlink(서브모듈 껍데기)만 커밋되어 내용이 백업되지 않는다)
+#   Dating_app        : 로컬 전용 저장소, 원격 없음 — 2026-09-01 확인
+#   Ledger/my-ledger  : github.com/yjkim12130/my-ledger 에 백업됨
+# ─────────────────────────────────────────────────────────────────────
+Desktop/Claude_project/Dating_app/
+Desktop/Claude_project/Ledger/my-ledger/
