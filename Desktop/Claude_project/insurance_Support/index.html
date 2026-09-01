@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InsureCompare — 보험 상품 비교 플랫폼</title>
+  <style>
+    /* ===== Reset & Base ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --primary: #1a4fa0;
+      --primary-light: #2d6fd4;
+      --accent: #e85d04;
+      --bg: #f4f7fc;
+      --card: #ffffff;
+      --text: #1e2b3c;
+      --muted: #6b7a8d;
+      --border: #d8e2f0;
+      --green: #16a34a;
+      --red: #dc2626;
+      --yellow: #d97706;
+      --radius: 12px;
+      --shadow: 0 2px 12px rgba(26,79,160,.10);
+    }
+    body { font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* ===== Top Nav ===== */
+    header {
+      background: var(--primary);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      padding: 0 32px;
+      height: 60px;
+      gap: 40px;
+      position: sticky; top: 0; z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,.2);
+    }
+    .logo { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; white-space: nowrap; }
+    .logo span { color: #f9c74f; }
+    nav { display: flex; gap: 6px; flex: 1; }
+    nav button {
+      background: transparent; border: none; color: rgba(255,255,255,.75);
+      padding: 6px 14px; border-radius: 20px; cursor: pointer; font-size: 14px; font-weight: 500;
+      transition: all .2s;
+    }
+    nav button.active, nav button:hover { background: rgba(255,255,255,.18); color: #fff; }
+    .header-badge {
+      background: var(--accent); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;
+    }
+
+    /* ===== Layout ===== */
+    main { max-width: 1280px; margin: 0 auto; padding: 28px 24px; }
+    .section { display: none; }
+    .section.active { display: block; }
+
+    /* ===== Page Title ===== */
+    .page-title { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+    .page-sub { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+
+    /* ===== Cards ===== */
+    .card {
+      background: var(--card); border-radius: var(--radius); padding: 24px;
+      box-shadow: var(--shadow); border: 1px solid var(--border); margin-bottom: 20px;
+    }
+    .card-title { font-size: 15px; font-weight: 700; margin-bottom: 16px; color: var(--primary); }
+
+    /* ===== Compare Section ===== */
+    .compare-controls { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; align-items: flex-end; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    select, input[type="number"], input[type="text"] {
+      border: 1.5px solid var(--border); border-radius: 8px; padding: 9px 14px;
+      font-size: 14px; background: #fff; color: var(--text); min-width: 160px;
+      transition: border-color .2s;
+    }
+    select:focus, input:focus { outline: none; border-color: var(--primary-light); }
+    .btn {
+      padding: 10px 22px; border-radius: 8px; font-size: 14px; font-weight: 600;
+      cursor: pointer; border: none; transition: all .2s;
+    }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-light); }
+    .btn-outline { background: transparent; color: var(--primary); border: 2px solid var(--primary); }
+    .btn-outline:hover { background: var(--primary); color: #fff; }
+    .btn-accent { background: var(--accent); color: #fff; }
+    .btn-accent:hover { opacity: .85; }
+
+    /* ===== Comparison Table ===== */
+    .compare-grid {
+      display: grid; grid-template-columns: 180px repeat(4, 1fr); gap: 0;
+      border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border);
+    }
+    .compare-grid .col-header {
+      background: var(--primary); color: #fff; padding: 16px 12px;
+      font-size: 13px; font-weight: 700; text-align: center;
+    }
+    .compare-grid .row-label {
+      background: #f0f4fb; padding: 14px 16px; font-size: 13px; font-weight: 600;
+      border-bottom: 1px solid var(--border); color: var(--text);
+      display: flex; align-items: center;
+    }
+    .compare-grid .cell {
+      padding: 14px 12px; border-bottom: 1px solid var(--border); border-left: 1px solid var(--border);
+      font-size: 13px; text-align: center; display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 4px;
+    }
+    .compare-grid .cell.best { background: #f0fdf4; }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+    .tag-green { background: #dcfce7; color: var(--green); }
+    .tag-red { background: #fee2e2; color: var(--red); }
+    .tag-yellow { background: #fef9c3; color: var(--yellow); }
+    .tag-blue { background: #dbeafe; color: #1d4ed8; }
+    .stars { color: #f59e0b; letter-spacing: -2px; }
+
+    /* ===== Scenario Cards ===== */
+    .scenario-tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+    .scenario-tab {
+      padding: 8px 18px; border-radius: 20px; border: 2px solid var(--border);
+      background: #fff; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--muted);
+      transition: all .2s;
+    }
+    .scenario-tab.active { border-color: var(--primary); color: var(--primary); background: #eef3fc; }
+    .scenario-content { display: none; }
+    .scenario-content.active { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .benefit-block { padding: 18px; border-radius: 10px; border: 1px solid var(--border); }
+    .benefit-block.economic { background: linear-gradient(135deg,#f0fdf4,#dcfce7); border-color: #bbf7d0; }
+    .benefit-block.psychological { background: linear-gradient(135deg,#eff6ff,#dbeafe); border-color: #bfdbfe; }
+    .benefit-icon { font-size: 28px; margin-bottom: 8px; }
+    .benefit-title { font-size: 14px; font-weight: 700; margin-bottom: 10px; }
+    .benefit-list { list-style: none; }
+    .benefit-list li { font-size: 13px; padding: 5px 0; border-bottom: 1px dashed #d1fae5; color: #374151; }
+    .benefit-list li::before { content: "✓ "; color: var(--green); font-weight: 700; }
+    .benefit-block.psychological .benefit-list li::before { content: "◆ "; color: #3b82f6; }
+    .benefit-block.psychological .benefit-list li { border-bottom-color: #bfdbfe; }
+
+    /* ===== Persona Cards ===== */
+    .persona-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+    .persona-card {
+      background: var(--card); border-radius: var(--radius); padding: 20px;
+      box-shadow: var(--shadow); border: 2px solid transparent;
+      cursor: pointer; transition: all .2s;
+    }
+    .persona-card:hover, .persona-card.selected { border-color: var(--primary); }
+    .persona-avatar { font-size: 40px; margin-bottom: 12px; }
+    .persona-name { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+    .persona-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
+    .persona-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
+
+    /* ===== Pitch Script ===== */
+    .pitch-box {
+      background: linear-gradient(135deg,#1a4fa0,#2d6fd4); color: #fff;
+      border-radius: var(--radius); padding: 28px; position: relative; overflow: hidden;
+    }
+    .pitch-box::before {
+      content: '"'; position: absolute; font-size: 180px; color: rgba(255,255,255,.08);
+      top: -20px; left: 10px; font-family: Georgia; line-height: 1;
+    }
+    .pitch-box h3 { font-size: 14px; text-transform: uppercase; letter-spacing: 1px; opacity: .75; margin-bottom: 10px; }
+    .pitch-box p { font-size: 15px; line-height: 1.9; position: relative; }
+    .pitch-highlight { background: rgba(255,255,255,.2); padding: 2px 6px; border-radius: 4px; font-weight: 700; }
+
+    /* ===== Calculator ===== */
+    .calc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .calc-input-group { margin-bottom: 16px; }
+    .calc-input-group label { font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block; }
+    .calc-input-group input { width: 100%; }
+    .calc-result {
+      background: linear-gradient(135deg,#fef3c7,#fde68a); border-radius: 10px; padding: 20px;
+      text-align: center; margin-top: 8px;
+    }
+    .calc-result .result-label { font-size: 12px; color: #78350f; font-weight: 600; margin-bottom: 4px; }
+    .calc-result .result-value { font-size: 28px; font-weight: 800; color: #92400e; }
+    .calc-result .result-sub { font-size: 12px; color: #a16207; margin-top: 4px; }
+    .result-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .result-row:last-child { border: none; }
+    .result-row .key { color: var(--muted); }
+    .result-row .val { font-weight: 700; }
+    .val.positive { color: var(--green); }
+    .val.negative { color: var(--red); }
+
+    /* ===== FAQ / Objection Handler ===== */
+    .objection-list { list-style: none; }
+    .objection-item {
+      border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; overflow: hidden;
+    }
+    .objection-q {
+      padding: 14px 18px; cursor: pointer; font-size: 14px; font-weight: 600;
+      background: #fff; display: flex; justify-content: space-between; align-items: center;
+      transition: background .2s;
+    }
+    .objection-q:hover { background: #f0f4fb; }
+    .objection-q::after { content: "▼"; font-size: 11px; color: var(--muted); transition: transform .2s; }
+    .objection-item.open .objection-q::after { transform: rotate(180deg); }
+    .objection-a {
+      display: none; padding: 14px 18px; background: #f8faff; font-size: 13px; line-height: 1.8; color: #374151;
+      border-top: 1px solid var(--border);
+    }
+    .objection-item.open .objection-a { display: block; }
+
+    /* ===== Dashboard Summary ===== */
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+    .kpi-card {
+      background: var(--card); border-radius: var(--radius); padding: 20px;
+      box-shadow: var(--shadow); border-left: 4px solid var(--primary);
+    }
+    .kpi-card:nth-child(2) { border-left-color: var(--green); }
+    .kpi-card:nth-child(3) { border-left-color: var(--accent); }
+    .kpi-card:nth-child(4) { border-left-color: #8b5cf6; }
+    .kpi-label { font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+    .kpi-value { font-size: 26px; font-weight: 800; }
+    .kpi-change { font-size: 12px; margin-top: 4px; }
+    .kpi-change.up { color: var(--green); }
+    .kpi-change.down { color: var(--red); }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 768px) {
+      .compare-grid { grid-template-columns: 120px repeat(2, 1fr); }
+      .compare-grid .cell:nth-child(n+4) { display: none; }
+      .compare-grid .col-header:nth-child(n+4) { display: none; }
+      .scenario-content.active { grid-template-columns: 1fr; }
+      .calc-grid { grid-template-columns: 1fr; }
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Insure<span>Compare</span></div>
+  <nav>
+    <button class="active" onclick="showSection('dashboard')">홈</button>
+    <button onclick="showSection('compare')">상품 비교</button>
+    <button onclick="showSection('scenario')">시나리오 분석</button>
+    <button onclick="showSection('persona')">고객 페르소나</button>
+    <button onclick="showSection('calculator')">혜택 계산기</button>
+    <button onclick="showSection('objections')">고객 반론 대응</button>
+  </nav>
+  <div class="header-badge">BETA</div>
+</header>
+
+<main>
+
+  <!-- ========== DASHBOARD ========== -->
+  <section id="dashboard" class="section active">
+    <div class="page-title">영업지원 대시보드</div>
+    <div class="page-sub">오늘도 성공적인 영업 활동을 응원합니다. 빠른 비교와 맞춤 스크립트로 계약을 성사시키세요.</div>
+
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">비교 가능한 상품 수</div>
+        <div class="kpi-value">42</div>
+        <div class="kpi-change up">▲ 5개사 수록</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">최고 환급률 상품</div>
+        <div class="kpi-value">127%</div>
+        <div class="kpi-change up">▲ 삼성생명 CI종신</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">이달 신규 상품</div>
+        <div class="kpi-value">3</div>
+        <div class="kpi-change">이번 달 업데이트</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">고객 시나리오</div>
+        <div class="kpi-value">8</div>
+        <div class="kpi-change up">▲ 케이스 수록</div>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+      <div class="card">
+        <div class="card-title">빠른 비교 시작</div>
+        <p style="font-size:14px;color:var(--muted);margin-bottom:16px;">고객 상황에 맞는 상품을 30초 안에 비교하세요.</p>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <button class="btn btn-primary" onclick="showSection('compare')" style="text-align:left;display:flex;align-items:center;gap:10px;">
+            <span style="font-size:20px;">📊</span>
+            <span>종신보험 4사 비교하기</span>
+          </button>
+          <button class="btn btn-outline" onclick="showSection('scenario')" style="text-align:left;display:flex;align-items:center;gap:10px;">
+            <span style="font-size:20px;">🎯</span>
+            <span>시나리오별 추천 상품 확인</span>
+          </button>
+          <button class="btn btn-outline" onclick="showSection('calculator')" style="text-align:left;display:flex;align-items:center;gap:10px;">
+            <span style="font-size:20px;">🧮</span>
+            <span>고객 혜택 금액 계산하기</span>
+          </button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">오늘의 영업 TIP</div>
+        <div class="pitch-box">
+          <h3>핵심 어필 포인트</h3>
+          <p>"보험은 <span class="pitch-highlight">필요할 때</span> 없으면 안 됩니다. 지금 건강하실 때 가입하시는 게 <span class="pitch-highlight">가장 저렴한 보험료</span>로 최대 보장을 받으시는 방법입니다."</p>
+        </div>
+        <div style="margin-top:14px;font-size:13px;color:var(--muted);">
+          고객이 "지금은 건강하니까 괜찮다"고 할 때 사용하세요.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== COMPARE ========== -->
+  <section id="compare" class="section">
+    <div class="page-title">보험 상품 비교</div>
+    <div class="page-sub">보험 종류와 조건을 선택하면 주요 회사 상품을 한눈에 비교합니다.</div>
+
+    <div class="card">
+      <div class="compare-controls">
+        <div class="form-group">
+          <label>보험 종류</label>
+          <select id="insType" onchange="renderCompareTable()">
+            <option value="term">종신보험</option>
+            <option value="health">건강보험(실손)</option>
+            <option value="cancer">암보험</option>
+            <option value="annuity">연금보험</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>가입자 나이</label>
+          <input type="number" id="age" value="40" min="20" max="65" style="width:100px;" onchange="renderCompareTable()" />
+        </div>
+        <div class="form-group">
+          <label>성별</label>
+          <select id="gender" onchange="renderCompareTable()">
+            <option value="m">남성</option>
+            <option value="f">여성</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>보험금</label>
+          <select id="coverage" onchange="renderCompareTable()">
+            <option value="1">1억</option>
+            <option value="2">2억</option>
+            <option value="3">3억</option>
+          </select>
+        </div>
+        <button class="btn btn-accent" onclick="renderCompareTable()">비교하기</button>
+      </div>
+    </div>
+
+    <div class="card" id="compareTableWrap">
+      <div class="card-title">4개사 상품 비교표 — <span id="compareTitle">종신보험 (40세 남성, 1억)</span></div>
+      <div class="compare-grid" id="compareGrid"></div>
+      <div style="margin-top:16px;font-size:12px;color:var(--muted);">
+        ※ 위 정보는 예시 데이터입니다. 실제 가입 전 각 보험사 상품설명서를 반드시 확인하세요.
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== SCENARIO ========== -->
+  <section id="scenario" class="section">
+    <div class="page-title">시나리오별 혜택 분석</div>
+    <div class="page-sub">고객의 상황과 니즈에 맞는 경제적·심리적 혜택을 시나리오로 확인하세요.</div>
+
+    <div class="scenario-tabs">
+      <button class="scenario-tab active" onclick="showScenario('s1', this)">🏥 암 진단 시</button>
+      <button class="scenario-tab" onclick="showScenario('s2', this)">🧓 은퇴 준비</button>
+      <button class="scenario-tab" onclick="showScenario('s3', this)">👨‍👩‍👧 가장의 사망</button>
+      <button class="scenario-tab" onclick="showScenario('s4', this)">🏠 주택 구입</button>
+      <button class="scenario-tab" onclick="showScenario('s5', this)">💰 세금 절약</button>
+    </div>
+
+    <!-- 시나리오 1: 암 진단 -->
+    <div class="scenario-content active" id="s1">
+      <div class="card">
+        <div class="card-title">📋 시나리오 설정</div>
+        <p style="font-size:14px;line-height:1.8;color:#374151;">
+          <strong>고객:</strong> 45세 직장인 남성, 월 소득 500만원<br>
+          <strong>상황:</strong> 대장암 3기 진단, 치료비 약 3,500만원 예상<br>
+          <strong>보험 가입:</strong> 암보험 (진단금 3,000만원) + 실손보험
+        </p>
+        <div style="margin-top:16px;padding:14px;background:#fef2f2;border-radius:8px;border-left:4px solid var(--red);">
+          <strong style="color:var(--red);">미가입 시:</strong>
+          <span style="font-size:13px;color:#374151;"> 치료비 3,500만원 전액 자비 부담 + 소득 단절 6개월 = 약 <strong>6,500만원</strong> 손실</span>
+        </div>
+      </div>
+      <div>
+        <div class="benefit-block economic">
+          <div class="benefit-icon">💰</div>
+          <div class="benefit-title">경제적 혜택</div>
+          <ul class="benefit-list">
+            <li>암 진단금 즉시 수령: <strong>3,000만원</strong></li>
+            <li>실손 청구로 치료비 환급: <strong>2,800만원</strong></li>
+            <li>입원일당 (90일): <strong>270만원</strong></li>
+            <li>소득보상보험 (6개월): <strong>1,200만원</strong></li>
+            <li>총 수령 예상액: <strong>7,270만원</strong></li>
+            <li>순 경제적 이익: <strong style="color:var(--green);">+770만원</strong></li>
+          </ul>
+        </div>
+        <div class="benefit-block psychological" style="margin-top:16px;">
+          <div class="benefit-icon">🧠</div>
+          <div class="benefit-title">심리적 혜택</div>
+          <ul class="benefit-list">
+            <li>치료에만 집중할 수 있는 <strong>재정적 안도감</strong></li>
+            <li>가족에게 부담 주지 않는다는 <strong>죄책감 해소</strong></li>
+            <li>치료 선택권 확대 — 최신 치료법 선택 가능</li>
+            <li>빠른 사회 복귀로 <strong>자존감 유지</strong></li>
+            <li>가족의 생활수준 유지 — <strong>아이 교육 연속성</strong></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- 시나리오 2: 은퇴 준비 -->
+    <div class="scenario-content" id="s2">
+      <div class="card">
+        <div class="card-title">📋 시나리오 설정</div>
+        <p style="font-size:14px;line-height:1.8;color:#374151;">
+          <strong>고객:</strong> 50세 자영업자, 월 소득 700만원<br>
+          <strong>상황:</strong> 60세 은퇴 예정, 국민연금 월 80만원 예상<br>
+          <strong>보험 가입:</strong> 변액연금보험 (월 30만원, 10년 납)
+        </p>
+        <div style="margin-top:16px;padding:14px;background:#fef9c3;border-radius:8px;border-left:4px solid var(--yellow);">
+          <strong style="color:var(--yellow);">현재 상황:</strong>
+          <span style="font-size:13px;color:#374151;"> 은퇴 후 필요 생활비 월 250만원, 부족분 <strong>170만원/월</strong></span>
+        </div>
+      </div>
+      <div>
+        <div class="benefit-block economic">
+          <div class="benefit-icon">💰</div>
+          <div class="benefit-title">경제적 혜택 (60세 수령 시)</div>
+          <ul class="benefit-list">
+            <li>납입 총액: <strong>3,600만원</strong></li>
+            <li>예상 연금 수령 (월): <strong>약 95만원</strong></li>
+            <li>국민연금 합산: <strong>175만원/월</strong></li>
+            <li>20년 총 수령: <strong>2억 2,800만원</strong></li>
+            <li>환급률: <strong style="color:var(--green);">약 533%</strong></li>
+            <li>비과세 혜택 (10년 유지 시) 적용</li>
+          </ul>
+        </div>
+        <div class="benefit-block psychological" style="margin-top:16px;">
+          <div class="benefit-icon">🧠</div>
+          <div class="benefit-title">심리적 혜택</div>
+          <ul class="benefit-list">
+            <li>노후 빈곤에 대한 <strong>불안감 해소</strong></li>
+            <li>자녀에게 의존하지 않는 <strong>독립적 노후</strong></li>
+            <li>취미·여행 등 <strong>삶의 질 유지</strong> 가능</li>
+            <li>배우자와의 안정적 노후 <strong>공동계획</strong></li>
+            <li>일하지 않아도 되는 <strong>선택의 자유</strong></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- 시나리오 3: 가장의 사망 -->
+    <div class="scenario-content" id="s3">
+      <div class="card">
+        <div class="card-title">📋 시나리오 설정</div>
+        <p style="font-size:14px;line-height:1.8;color:#374151;">
+          <strong>고객:</strong> 38세 남성, 배우자 + 자녀 2명<br>
+          <strong>상황:</strong> 교통사고로 사망, 주택담보대출 2억 잔액<br>
+          <strong>보험 가입:</strong> 종신보험 3억 + 재해사망특약 1억
+        </p>
+      </div>
+      <div>
+        <div class="benefit-block economic">
+          <div class="benefit-icon">💰</div>
+          <div class="benefit-title">경제적 혜택</div>
+          <ul class="benefit-list">
+            <li>종신보험 사망보험금: <strong>3억원</strong></li>
+            <li>재해사망특약: <strong>1억원</strong></li>
+            <li>총 수령: <strong>4억원</strong></li>
+            <li>대출 상환 후 잔액: <strong>2억원</strong></li>
+            <li>자녀 교육비 (2명, 대학까지): <strong>충당 가능</strong></li>
+            <li>배우자 생활비 20년치: <strong>확보</strong></li>
+          </ul>
+        </div>
+        <div class="benefit-block psychological" style="margin-top:16px;">
+          <div class="benefit-icon">🧠</div>
+          <div class="benefit-title">심리적 혜택</div>
+          <ul class="benefit-list">
+            <li>가족의 <strong>생활수준 유지</strong> — 이사, 전학 없이</li>
+            <li>배우자가 <strong>즉시 취업을 강요받지 않음</strong></li>
+            <li>자녀의 <strong>교육 계획 유지</strong></li>
+            <li>본인의 책임감과 <strong>가장으로서의 역할 완수</strong></li>
+            <li>유족의 <strong>심리적 회복</strong>에 집중 가능</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- 시나리오 4,5 생략 - 탭은 UI로 표시 -->
+    <div class="scenario-content" id="s4">
+      <div class="card" style="grid-column:1/-1;">
+        <div class="card-title">🏠 주택 구입 연계 보장 플랜</div>
+        <p style="font-size:14px;color:var(--muted);">주택담보대출 실행 시 CI보험 + 채무면제서비스 연계 설계 시나리오입니다.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;">
+          <div class="benefit-block economic">
+            <div class="benefit-title">경제적 혜택</div>
+            <ul class="benefit-list">
+              <li>CI 진단 시 대출 잔액 상환</li>
+              <li>금리우대 연동 상품 활용</li>
+              <li>대출이자 절감 효과</li>
+            </ul>
+          </div>
+          <div class="benefit-block psychological">
+            <div class="benefit-title">심리적 혜택</div>
+            <ul class="benefit-list">
+              <li>내 집이 압류되지 않는다는 안심</li>
+              <li>가족의 주거 안정성 보장</li>
+              <li>부채 부담 없는 노후 설계</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="scenario-content" id="s5">
+      <div class="card" style="grid-column:1/-1;">
+        <div class="card-title">💰 절세 연계 보험 플랜 (고소득자)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;">
+          <div class="benefit-block economic">
+            <div class="benefit-title">경제적 혜택</div>
+            <ul class="benefit-list">
+              <li>연금저축보험 세액공제 최대 <strong>66만원/년</strong></li>
+              <li>저축성보험 10년 유지 시 이자 비과세</li>
+              <li>법인 보험료 손금 처리 가능</li>
+            </ul>
+          </div>
+          <div class="benefit-block psychological">
+            <div class="benefit-title">심리적 혜택</div>
+            <ul class="benefit-list">
+              <li>합법적 절세로 <strong>심리적 만족</strong></li>
+              <li>세금 걱정 없는 자산 이전</li>
+              <li>국가 제도 활용 극대화 성취감</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== PERSONA ========== -->
+  <section id="persona" class="section">
+    <div class="page-title">고객 페르소나별 맞춤 전략</div>
+    <div class="page-sub">고객 유형을 선택하면 맞춤 어필 포인트와 추천 상품을 제시합니다.</div>
+
+    <div class="persona-grid" id="personaGrid">
+      <!-- JS로 렌더링 -->
+    </div>
+    <div id="personaDetail" style="margin-top:20px;display:none;">
+      <div class="card">
+        <div class="card-title" id="personaDetailTitle"></div>
+        <div id="personaDetailBody"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== CALCULATOR ========== -->
+  <section id="calculator" class="section">
+    <div class="page-title">보험 혜택 계산기</div>
+    <div class="page-sub">예상 보험료와 예상 혜택을 입력하면 고객에게 보여줄 수 있는 경제적 가치를 계산합니다.</div>
+
+    <div class="calc-grid">
+      <div class="card">
+        <div class="card-title">조건 입력</div>
+        <div class="calc-input-group">
+          <label>월 납입 보험료 (만원)</label>
+          <input type="number" id="cPremium" value="20" oninput="calcResult()" />
+        </div>
+        <div class="calc-input-group">
+          <label>납입 기간 (년)</label>
+          <input type="number" id="cYears" value="20" oninput="calcResult()" />
+        </div>
+        <div class="calc-input-group">
+          <label>주요 진단금 (만원)</label>
+          <input type="number" id="cDiagnosis" value="3000" oninput="calcResult()" />
+        </div>
+        <div class="calc-input-group">
+          <label>예상 보장 기간 (년)</label>
+          <input type="number" id="cCovYears" value="30" oninput="calcResult()" />
+        </div>
+        <div class="calc-input-group">
+          <label>상품 환급률 (%)</label>
+          <input type="number" id="cReturn" value="100" oninput="calcResult()" />
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <div class="card-title">계산 결과</div>
+          <div id="calcResultBox"></div>
+          <div class="calc-result" id="calcMainResult" style="margin-top:16px;">
+            <div class="result-label">예상 혜택 / 납입 보험료</div>
+            <div class="result-value" id="calcROI">0%</div>
+            <div class="result-sub" id="calcROISub"></div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:16px;">
+          <div class="card-title">고객 설명용 한 줄 요약</div>
+          <div id="calcPitch" style="font-size:14px;line-height:1.9;color:#374151;padding:12px;background:#f8faff;border-radius:8px;"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== OBJECTIONS ========== -->
+  <section id="objections" class="section">
+    <div class="page-title">고객 반론 대응 스크립트</div>
+    <div class="page-sub">고객이 자주 하는 반론에 대한 효과적인 답변을 준비했습니다.</div>
+
+    <div class="card">
+      <ul class="objection-list" id="objectionList"></ul>
+    </div>
+  </section>
+
+</main>
+
+<script>
+// ===== Navigation =====
+function showSection(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  const navBtns = document.querySelectorAll('nav button');
+  const map = {dashboard:0,compare:1,scenario:2,persona:3,calculator:4,objections:5};
+  navBtns[map[id]].classList.add('active');
+}
+
+// ===== Compare Table =====
+const insData = {
+  term: {
+    companies: ['삼성생명','한화생명','교보생명','DB손해보험'],
+    rows: [
+      { label: '월 보험료', vals: ['28.5만원','27.2만원','29.1만원','26.8만원'], best: 3 },
+      { label: '사망 보험금', vals: ['1억','1억','1억','1억'], best: -1 },
+      { label: '환급률 (20년)', vals: ['105%','100%','107%','98%'], best: 2 },
+      { label: 'CI 특약', vals: ['○ 포함','○ 포함','○ 포함','✗ 별도'], best: -1 },
+      { label: '납입면제 조건', vals: ['장해 50%↑','장해 50%↑','장해 80%↑','장해 50%↑'], best: -1 },
+      { label: '고객 만족도', vals: ['★★★★★','★★★★','★★★★','★★★☆'], best: 0 },
+      { label: '추천 포인트', vals: [
+          '<span class="tag tag-green">환급 우수</span>',
+          '<span class="tag tag-blue">가격 경쟁</span>',
+          '<span class="tag tag-green">특약 다양</span>',
+          '<span class="tag tag-yellow">실속형</span>'
+        ], best: -1
+      },
+    ]
+  },
+  health: {
+    companies: ['현대해상','KB손해보험','메리츠화재','삼성화재'],
+    rows: [
+      { label: '월 보험료', vals: ['8.2만원','7.9만원','8.5만원','8.1만원'], best: 1 },
+      { label: '자기부담금', vals: ['20%','20%','20%','20%'], best: -1 },
+      { label: '입원 한도/년', vals: ['5,000만','5,000만','5,000만','5,000만'], best: -1 },
+      { label: '통원 한도/회', vals: ['20만원','25만원','20만원','25만원'], best: -1 },
+      { label: '재가입 가능', vals: ['○ 15년','○ 15년','○ 15년','○ 15년'], best: -1 },
+      { label: '고객 만족도', vals: ['★★★★★','★★★★','★★★★☆','★★★★★'], best: 0 },
+      { label: '추천 포인트', vals: [
+          '<span class="tag tag-green">청구 간편</span>',
+          '<span class="tag tag-blue">통원 우수</span>',
+          '<span class="tag tag-yellow">가성비</span>',
+          '<span class="tag tag-green">서비스 최상</span>'
+        ], best: -1
+      },
+    ]
+  },
+  cancer: {
+    companies: ['흥국생명','동양생명','푸본현대생명','BNP파리바카디프'],
+    rows: [
+      { label: '월 보험료', vals: ['4.5만원','4.8만원','4.2만원','5.1만원'], best: 2 },
+      { label: '일반암 진단금', vals: ['3,000만','3,000만','3,000만','3,000만'], best: -1 },
+      { label: '소액암 진단금', vals: ['300만','500만','300만','600만'], best: 3 },
+      { label: '항암치료비', vals: ['○','○','✗','○'], best: -1 },
+      { label: '입원일당', vals: ['3만원','3만원','2만원','3만원'], best: -1 },
+      { label: '고객 만족도', vals: ['★★★★','★★★★','★★★★☆','★★★★'], best: -1 },
+      { label: '추천 포인트', vals: [
+          '<span class="tag tag-blue">안정적</span>',
+          '<span class="tag tag-green">소액암 강점</span>',
+          '<span class="tag tag-yellow">저렴</span>',
+          '<span class="tag tag-green">소액암 최강</span>'
+        ], best: -1
+      },
+    ]
+  },
+  annuity: {
+    companies: ['미래에셋생명','한국투자증권생명','신한라이프','AIA생명'],
+    rows: [
+      { label: '월 납입', vals: ['30만원','30만원','30만원','30만원'], best: -1 },
+      { label: '예상 연금(월,60세)', vals: ['95만원','98만원','92만원','101만원'], best: 3 },
+      { label: '20년 환급률', vals: ['520%','540%','505%','560%'], best: 3 },
+      { label: '최저보증이율', vals: ['1.5%','1.0%','1.5%','1.0%'], best: -1 },
+      { label: '수익공시이율', vals: ['3.8%','4.1%','3.6%','4.3%'], best: 3 },
+      { label: '고객 만족도', vals: ['★★★★','★★★★☆','★★★★','★★★★★'], best: 3 },
+      { label: '추천 포인트', vals: [
+          '<span class="tag tag-blue">브랜드 신뢰</span>',
+          '<span class="tag tag-green">수익률 우수</span>',
+          '<span class="tag tag-yellow">안전 중시</span>',
+          '<span class="tag tag-green">수익 최강</span>'
+        ], best: -1
+      },
+    ]
+  }
+};
+
+function renderCompareTable() {
+  const type = document.getElementById('insType').value;
+  const age = document.getElementById('age').value;
+  const gender = document.getElementById('gender').value === 'm' ? '남성' : '여성';
+  const cov = document.getElementById('coverage').value + '억';
+  const typeNames = { term:'종신보험', health:'건강보험(실손)', cancer:'암보험', annuity:'연금보험' };
+  document.getElementById('compareTitle').textContent = `${typeNames[type]} (${age}세 ${gender}, ${cov})`;
+
+  const d = insData[type];
+  const grid = document.getElementById('compareGrid');
+  grid.innerHTML = '';
+
+  // Header
+  grid.innerHTML += '<div class="col-header" style="background:#0f3270;">구분</div>';
+  d.companies.forEach(c => { grid.innerHTML += `<div class="col-header">${c}</div>`; });
+
+  // Rows
+  d.rows.forEach(row => {
+    grid.innerHTML += `<div class="row-label">${row.label}</div>`;
+    row.vals.forEach((v, i) => {
+      const isBest = row.best === i;
+      grid.innerHTML += `<div class="cell${isBest ? ' best' : ''}">
+        ${v}${isBest ? ' <span class="tag tag-green">최우수</span>' : ''}
+      </div>`;
+    });
+  });
+}
+renderCompareTable();
+
+// ===== Scenario Tabs =====
+function showScenario(id, btn) {
+  document.querySelectorAll('.scenario-content').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.scenario-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ===== Persona =====
+const personas = [
+  { emoji:'👨‍💼', name:'30대 직장인 가장', tags:['사망보장','가족보호'], desc:'대출이 있고 자녀가 어림. 소득 단절 시 가족 보호가 최우선.', pitch:'가장님이 안계실 때 가족이 지금 생활을 유지할 수 있는지 생각해 보신 적 있으세요?', products:['종신보험','CI보험','실손보험'] },
+  { emoji:'👩‍💻', name:'40대 전문직 여성', tags:['암보험','연금'], desc:'고소득이지만 과로. 암 위험과 노후 준비에 동시 관심.', pitch:'지금 버시는 만큼 지켜드리는 게 진짜 재테크입니다.', products:['암보험','연금저축보험','실손보험'] },
+  { emoji:'👴', name:'50대 자영업자', tags:['절세','연금'], desc:'국민연금 외 노후 준비 부족. 절세에 민감.', pitch:'세금도 아끼고 노후도 준비하는 방법, 보험이 답입니다.', products:['연금보험','저축성보험','건강보험'] },
+  { emoji:'👩‍🍼', name:'신혼부부', tags:['태아보험','종신'], desc:'첫 아이 출산 예정. 아이 보장과 가족 보호 동시 관심.', pitch:'아이가 태어나기 전이 가장 좋은 가입 시기입니다.', products:['태아보험','종신보험','실손보험'] },
+  { emoji:'🏢', name:'중소기업 CEO', tags:['법인보험','상속'], desc:'법인 명의 보험으로 절세와 상속 플랜 필요.', pitch:'개인 재산과 법인 재산을 분리해서 보호하는 전략이 필요합니다.', products:['법인보험','CI보험','연금보험'] },
+  { emoji:'🎓', name:'20대 사회초년생', tags:['실손','저렴'], desc:'첫 직장, 보험 처음. 가성비와 이해하기 쉬운 설명 필요.', pitch:'지금 건강할 때 가입하면 평생 보험료가 가장 저렴합니다.', products:['실손보험','암보험','연금저축보험'] },
+];
+
+function renderPersonas() {
+  const grid = document.getElementById('personaGrid');
+  grid.innerHTML = '';
+  personas.forEach((p, i) => {
+    grid.innerHTML += `<div class="persona-card" onclick="showPersonaDetail(${i})">
+      <div class="persona-avatar">${p.emoji}</div>
+      <div class="persona-name">${p.name}</div>
+      <div class="persona-desc">${p.desc}</div>
+      <div class="persona-tags">${p.tags.map(t=>`<span class="tag tag-blue">${t}</span>`).join('')}</div>
+    </div>`;
+  });
+}
+function showPersonaDetail(i) {
+  const p = personas[i];
+  document.getElementById('personaDetailTitle').textContent = `${p.emoji} ${p.name} — 맞춤 영업 전략`;
+  document.getElementById('personaDetailBody').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:8px;">핵심 어필 멘트</div>
+        <div style="background:#f0f4fb;padding:14px;border-radius:8px;font-size:14px;line-height:1.8;border-left:4px solid var(--primary);">"${p.pitch}"</div>
+        <div style="margin-top:14px;font-size:13px;font-weight:700;margin-bottom:8px;">추천 상품</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">${p.products.map(pr=>`<span class="tag tag-green">${pr}</span>`).join('')}</div>
+      </div>
+      <div class="benefit-block psychological">
+        <div class="benefit-title">이 고객의 핵심 니즈</div>
+        <ul class="benefit-list">
+          ${p.tags.map(t=>`<li>${t} 관련 보장 강조</li>`).join('')}
+          <li>신뢰감 있는 상담 태도 중요</li>
+          <li>복잡한 설명보다 핵심 한 가지</li>
+        </ul>
+      </div>
+    </div>`;
+  document.getElementById('personaDetail').style.display = 'block';
+  document.getElementById('personaDetail').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+renderPersonas();
+
+// ===== Calculator =====
+function calcResult() {
+  const premium = parseFloat(document.getElementById('cPremium').value) || 0;
+  const years = parseFloat(document.getElementById('cYears').value) || 0;
+  const diagnosis = parseFloat(document.getElementById('cDiagnosis').value) || 0;
+  const covYears = parseFloat(document.getElementById('cCovYears').value) || 0;
+  const returnRate = parseFloat(document.getElementById('cReturn').value) || 0;
+
+  const totalPaid = premium * 12 * years;
+  const refund = totalPaid * (returnRate / 100);
+  const netCost = totalPaid - refund;
+  const monthlyProtection = (diagnosis + refund) / (covYears * 12) || 0;
+  const roi = totalPaid > 0 ? ((diagnosis + refund) / totalPaid * 100).toFixed(0) : 0;
+
+  document.getElementById('calcResultBox').innerHTML = `
+    <div class="result-row"><span class="key">총 납입 보험료</span><span class="val">${totalPaid.toLocaleString()}만원</span></div>
+    <div class="result-row"><span class="key">만기 환급 예상</span><span class="val positive">${refund.toLocaleString()}만원</span></div>
+    <div class="result-row"><span class="key">실질 부담 비용</span><span class="val">${netCost.toLocaleString()}만원</span></div>
+    <div class="result-row"><span class="key">주요 진단금</span><span class="val positive">${diagnosis.toLocaleString()}만원</span></div>
+    <div class="result-row"><span class="key">월간 보호 환산</span><span class="val positive">약 ${monthlyProtection.toFixed(1)}만원/월</span></div>
+  `;
+  document.getElementById('calcROI').textContent = roi + '%';
+  document.getElementById('calcROISub').textContent = `납입 ${totalPaid.toLocaleString()}만원으로 최대 ${(diagnosis + refund).toLocaleString()}만원 혜택`;
+
+  document.getElementById('calcPitch').innerHTML =
+    `"월 <strong>${premium}만원</strong>으로 ${covYears}년간 <strong>${diagnosis.toLocaleString()}만원</strong> 보장을 받으시고,` +
+    ` 만기 시 <strong>${refund.toLocaleString()}만원</strong>을 돌려받으십니다. 실질적으로 커피 한 잔 값으로 든든한 보장을 유지하시는 겁니다."`;
+}
+calcResult();
+
+// ===== Objections =====
+const objections = [
+  { q: '"나는 건강하니까 보험 필요 없어요."', a: '네, 지금 건강하시기 때문에 오히려 지금이 최적의 가입 시기입니다. 보험은 아프고 나서는 가입이 어렵거나 보험료가 크게 올라갑니다. 지금 건강하실 때 가장 저렴한 보험료로 최대 보장을 확보해 두시는 것이 현명한 선택입니다.' },
+  { q: '"보험료가 너무 비싸요."', a: '월 납입액만 보면 부담스러울 수 있지만, 실제로 사용하게 될 때의 혜택과 비교해 보시면 어떨까요? 예를 들어 암 진단 시 수천만원의 치료비를 대비하는 것에 비해, 하루 커피 한 잔 값 수준의 보험료로 가족의 생활을 지킬 수 있습니다.' },
+  { q: '"국민건강보험으로 충분하지 않나요?"', a: '국민건강보험은 훌륭한 기본 보장이지만 본인부담금과 비급여 항목은 커버되지 않습니다. 특히 중증 질환 치료 시 비급여 의약품, 상급 병실료, 간병비 등 실질 부담은 수천만원에 달할 수 있습니다. 실손보험은 이 부분을 보완해 드립니다.' },
+  { q: '"지금 돈이 없어서요."', a: '이해합니다. 그래서 더욱 보험이 필요한 상황일 수 있습니다. 만약 갑자기 큰 병이나 사고가 생겼을 때, 준비된 자금이 없으시다면 보험이 유일한 안전망이 될 수 있습니다. 소액으로 시작하는 기본형 플랜도 준비되어 있습니다.' },
+  { q: '"나중에 가입해도 되지 않나요?"', a: '"나중에"는 보험료가 더 비싸지고, 건강 상태에 따라 가입 자체가 거절될 수도 있습니다. 시간이 지날수록 선택지가 줄어드는 상품이 바로 보험입니다. 오늘 결정이 가장 유리한 조건입니다.' },
+  { q: '"보험사가 실제로 보험금을 잘 안 준다고 들었어요."', a: '과거에 비해 보험금 지급률은 크게 개선되었습니다. 금융감독원 공시 기준 주요 보험사들의 지급률은 95% 이상입니다. 중요한 것은 가입 시 고지 의무를 잘 이행하고, 약관을 정확히 이해하는 것입니다. 제가 그 부분을 꼼꼼히 도와드리겠습니다.' },
+  { q: '"주변에서 보험은 손해라고 하더라고요."', a: '"손해 보지 않으려고" 보험에 안 드셨다가 정작 필요할 때 수천만원이 없어서 치료를 포기하거나 가족에게 부담을 주게 되는 상황, 그게 진짜 손해입니다. 보험은 위험 분산의 도구입니다. 운이 좋아서 안 쓰시면 가장 행복한 일이죠.' },
+];
+
+function renderObjections() {
+  const list = document.getElementById('objectionList');
+  list.innerHTML = '';
+  objections.forEach((o, i) => {
+    list.innerHTML += `<li class="objection-item" id="obj${i}">
+      <div class="objection-q" onclick="toggleObj(${i})">${o.q}</div>
+      <div class="objection-a">${o.a}</div>
+    </li>`;
+  });
+}
+function toggleObj(i) {
+  const item = document.getElementById('obj' + i);
+  item.classList.toggle('open');
+}
+renderObjections();
+</script>
+
+</body>
+</html>
