@@ -26,6 +26,7 @@
   },
   "model": {
     "id": "claude-opus-5",
-    "effort": "high"
+    "effort": "high",
+    "engine": "claude_code"
   }
 }
