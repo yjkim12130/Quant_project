@@ -1,0 +1,95 @@
+
+[System Specification: YJAlgo v8.0 Universal Engine]1. 전역 설정 및 인터페이스 (Config & Interface)Python# 
+
+[Config.yaml / Settings]
+# - TARGET_ASSETS: ["^IXIC", "^GSPC"]  # Nasdaq, S&P500
+# - PERIOD: {START: 2010, END: 2026}
+# - WFV_WINDOW: {IS: 4, OOS: 1} # 4년 학습, 1년 실전
+# - LEVERAGE_MAP: {Bull: 2.0, Bear: 1.0, Panic: 1.5}
+# - BUDGET: {ANNUAL: 40000000, CASH_RESERVE_RATIO: 0.15}
+2. 데이터 파이프라인 및 매크로 분류기 (Data & Macro Classifier)[Logical Flaw Warning]: 모든 지표 계산 시 당일 종가를 사용해 상태를 결정하고 당일 매수하는 로직은 불가능함. 반드시 T일 데이터로 결정하고 T+1일 시가 혹은 종가에 집행하는 지연 로직을 엄격히 준수할 것.Code snippetFUNCTION get_macro_score(market_data):
+    # 1. 장단기 금리차 (10Y - 3M)
+    yield_spread = market_data['10Y'] - market_data['3M']
+    score_yield = (yield_spread < 0) ? 1 : 0
+    
+    # 2. 유동성 모멘텀 (Net Liquidity - 추후 FRED API 연동)
+    # 현재는 대용치로 '전 세계 통화량(M2) 혹은 하이일드 스프레드' 사용 가능
+    score_liquidity = calculate_liquidity_trend(market_data)
+    
+    # 3. 변동성 정규화 (VIX Z-Score)
+    vix_z = (vix - rolling_mean(504)) / rolling_std(504)
+    score_vix = (vix_z > 1.5) ? 1 : 0
+    
+    # 종합 점수 (0~3점)
+    RETURN score_yield + score_liquidity + score_vix
+
+FUNCTION calculate_indicators(price_series):
+    # 기술적 지표 (지수별 변동성 고려)
+    mdd = (price / rolling_max(252)) - 1
+    cci = calculate_cci(price, window=200)
+    ma200_dist = (price - ma200) / ma200
+    RETURN mdd, cci, ma200_dist
+3. 상태 상속형 전진 분석 엔진 (WFV Engine with State Inheritance)이 엔진은 연도별로 파라미터를 갱신하되, **영준 님의 실제 계좌 잔고(주식 수, 현금)**가 끊기지 않고 흐르도록 관리합니다.Code snippetFUNCTION run_wfv_simulation(full_data, config):
+    oos_history = []
+    # 초기 상태 (최초 1회 설정)
+    inherited_state = {stock_qty: 0, cash: 0, total_principal: 0, last_regime: 'Bull'}
+    
+    FOR year FROM config.START TO config.END - 1:
+        is_period = [year, year + config.IS_WINDOW - 1]
+        oos_period = [year + config.IS_WINDOW]
+        
+        # [Step 1: In-Sample Optimization]
+        # IS 구간에서는 독립적인 시뮬레이션을 통해 최적 파라미터 도출
+        best_params = find_best_params_using_calmar(full_data[is_period])
+        
+        # [Step 2: Out-of-Sample Execution]
+        # 실전 구간에서는 '이전 연도에서 넘어온 잔고'를 가지고 최적 파라미터 적용
+        oos_data = full_data[oos_period]
+        oos_res, inherited_state = execute_strategy(oos_data, best_params, inherited_state)
+        
+        oos_history.APPEND(oos_res)
+        
+    RETURN concat(oos_history)
+4. 전략 실행 코어 (Strategy Execution Core)$$Calmar \ Ratio = \frac{Annualized \ Return}{Maximum \ Drawdown}$$Code snippetFUNCTION execute_strategy(data, params, state):
+    FOR EACH day IN data:
+        # 1. Regime Decision (Priority: Macro > Technical)
+        macro_score = get_macro_score(day)
+        
+        IF macro_score >= params.macro_threshold:
+            current_regime = 'Bear' # 매크로 위험 시 강제 방어
+        ELSE IF day.vix >= params.vix_panic AND day.mdd <= -0.15:
+            current_regime = 'Panic'
+        ELSE:
+            current_regime = technical_logic(day, params) # CCI, MA 기반
+            
+        # 2. Leverage & Asset Update
+        leverage = config.LEVERAGE_MAP[current_regime]
+        state.stock_value *= (1 + day.return * leverage - financing_cost)
+        state.cash *= (1 + cma_rate)
+        
+        # 3. DCA & Rebalancing
+        state.apply_daily_deposit(config.DAILY_BUDGET)
+        IF current_regime == 'Panic':
+            execute_panic_buy(state, params.panic_drain_ratio)
+            
+    RETURN daily_records, state
+5. 통계적 유의성 및 실전 지침 (Significance & Directive)전략의 수익률 $R_{strat}$이 운인지 실력인지 검증합니다.Code snippetFUNCTION run_permutation_test(oos_results, n_iterations=1000):
+    actual_ret = calculate_total_return(oos_results)
+    actual_lev_sequence = oos_results['Leverage'].values
+    
+    null_distribution = []
+    FOR i IN 1..n_iterations:
+        # 레버리지 결정 타이밍만 섞음 (시장 수익률의 시계열성은 보존)
+        shuffled_lev = random_permutation(actual_lev_sequence)
+        random_ret = calculate_return(market_rets, shuffled_lev)
+        null_distribution.APPEND(random_ret)
+    
+    p_value = COUNT(null_distribution >= actual_ret) / n_iterations
+    RETURN p_value
+
+FUNCTION print_daily_directive(latest_state, config):
+    # 내일 오전 9시에 해야 할 행동 출력
+    target_lev = config.LEVERAGE_MAP[latest_state.regime]
+    PRINT f"Target Leverage: {target_lev}x"
+    PRINT f"Action: {'Buy' if target_lev > current_lev else 'Sell'} {abs(target_lev - current_lev)} unit"
+[Claude에게 보낼 최종 프롬프트 가이드]"위 수도코드를 바탕으로 Python 클래스 기반의 YJAlgo v8.0을 작성해 줘.yfinance를 사용해 데이터를 수집하고, pandas로 모든 벡터 연산을 처리할 것.config 객체를 통해 나스닥(^IXIC)과 S&P500(^GSPC)을 스위칭하며 돌릴 수 있게 설계할 것.WFV 루프에서 **상태 상속(State Inheritance)**이 정확히 이루어져 복리 수익률이 왜곡되지 않게 할 것.시뮬레이션 종료 후 반드시 Permutation Test 기반의 p-value를 출력하여 전략의 유의성을 시각화할 것."
