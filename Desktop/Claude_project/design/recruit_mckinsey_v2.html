@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>다보험 GA · 보험설계사 모집 (V2)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Noto+Serif+KR:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     McKinsey-style Design System — V2
+     - Palette: Deep Navy + single Blue accent + neutral greys
+     - Generous whitespace, thin rules, serif headlines
+     ============================================================ */
+  :root{
+    --navy:        #051C2C;
+    --navy-2:      #0B2A40;
+    --blue:        #2251FF;
+    --cyan:        #00A9F4;
+    --gold:        #C8A24B;   /* income highlight accent */
+    --ink:         #051C2C;
+    --grey:        #5A6872;
+    --grey-2:      #8C99A3;
+    --line:        #D9DEE2;
+    --bg:          #FFFFFF;
+    --bg-soft:     #F4F6F8;
+    --page-w:      210mm;
+    --page-h:      297mm;
+  }
+
+  *{ margin:0; padding:0; box-sizing:border-box; }
+
+  html,body{
+    background:#E4E8EC;
+    font-family:'Noto Sans KR', sans-serif;
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .page{
+    position:relative;
+    width:var(--page-w);
+    height:var(--page-h);
+    margin:24px auto;
+    background:var(--bg);
+    box-shadow:0 10px 40px rgba(5,28,44,.18);
+    overflow:hidden;
+  }
+
+  /* ---------- shared type ---------- */
+  .eyebrow{
+    font-size:11px;
+    letter-spacing:.32em;
+    font-weight:700;
+    text-transform:uppercase;
+    color:var(--blue);
+  }
+  .serif{ font-family:'Noto Serif KR', serif; }
+  .rule{ height:1px; background:var(--line); border:0; }
+  .accent-bar{ width:46px; height:4px; background:var(--blue); }
+
+  /* ============================================================
+     PAGE 1 — COVER
+     ============================================================ */
+  .p1-header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16mm 18mm 0 18mm;
+  }
+  .brand{ display:flex; align-items:baseline; gap:12px; }
+  .brand .mark{
+    font-family:'Noto Serif KR', serif;
+    font-weight:900; font-size:22px; color:var(--navy);
+    letter-spacing:-.01em;
+  }
+  .brand .mark b{ color:var(--blue); }
+  .brand .sub{ font-size:12px; color:var(--grey); letter-spacing:.04em; }
+  .p1-header .year{
+    font-size:12px; letter-spacing:.3em; color:var(--grey-2); font-weight:500;
+  }
+
+  .p1-hero{ padding:12mm 18mm 0 18mm; }
+  .p1-hero .eyebrow{ margin-bottom:14px; }
+  .p1-hero h1{
+    font-family:'Noto Serif KR', serif;
+    font-weight:900;
+    font-size:54px;
+    line-height:1.16;
+    letter-spacing:-.02em;
+    color:var(--navy);
+  }
+  .p1-hero h1 .hl{
+    color:var(--blue);
+    border-bottom:5px solid var(--cyan);
+    padding-bottom:2px;
+  }
+  /* income line — requirement 1 */
+  .income-line{
+    margin-top:20px;
+    display:flex; align-items:center; gap:14px;
+  }
+  .income-line .badge{
+    display:inline-flex; align-items:baseline; gap:6px;
+    background:var(--navy); color:#fff;
+    padding:10px 18px; border-left:4px solid var(--gold);
+  }
+  .income-line .badge .pre{ font-size:13px; color:#9FB2C2; font-weight:500; }
+  .income-line .badge .amt{
+    font-family:'Noto Serif KR',serif; font-weight:900; font-size:30px; line-height:1;
+    color:#fff; letter-spacing:-.01em;
+  }
+  .income-line .badge .amt b{ color:var(--gold); }
+  .income-line .note{ font-size:13px; color:var(--grey); line-height:1.5; }
+  .income-line .note b{ color:var(--navy); font-weight:700; }
+
+  .p1-hero p.lead{
+    margin-top:18px;
+    font-size:15px; line-height:1.7; color:var(--grey);
+    max-width:152mm; font-weight:400;
+  }
+
+  /* stat exhibit */
+  .exhibit{ padding:12mm 18mm 0 18mm; }
+  .exhibit-label{
+    font-size:11px; letter-spacing:.18em; font-weight:700;
+    color:var(--grey-2); text-transform:uppercase; margin-bottom:10px;
+  }
+  .stats{
+    display:grid; grid-template-columns:1fr 1fr 1fr;
+    border-top:2px solid var(--navy);
+  }
+  .stat{ padding:20px 0 18px; border-right:1px solid var(--line); }
+  .stat:last-child{ border-right:0; }
+  .stat .num{
+    font-family:'Noto Serif KR', serif;
+    font-weight:900; font-size:48px; line-height:1; color:var(--navy);
+  }
+  .stat .num span{ font-size:24px; color:var(--blue); }
+  .stat .cap{ margin-top:10px; font-size:14px; font-weight:700; color:var(--ink); }
+  .stat .cap small{ display:block; font-weight:400; color:var(--grey-2); font-size:11.5px; margin-top:3px; letter-spacing:.02em;}
+
+  /* benefits row — requirement 3 (emphasized) */
+  .benefits{ padding:11mm 18mm 0 18mm; }
+  .benefits h3{
+    font-size:16px; font-weight:700; color:var(--navy);
+    margin-bottom:14px; display:flex; align-items:center; gap:10px;
+  }
+  .benefits h3::before{ content:""; width:18px; height:3px; background:var(--blue); }
+  .benefits h3 em{ font-style:normal; color:var(--blue); }
+  .ben-grid{ display:grid; grid-template-columns:repeat(5,1fr); gap:0; border-top:1px solid var(--line); }
+  .ben{ padding:16px 14px 0 0; border-right:1px solid var(--line); }
+  .ben:last-child{ border-right:0; padding-right:0; }
+  .ben .n{ font-size:11px; color:var(--blue); font-weight:700; letter-spacing:.06em; }
+  .ben .t{ margin-top:8px; font-size:14px; font-weight:700; color:var(--navy); line-height:1.35; }
+  .ben .d{ margin-top:6px; font-size:11.5px; color:var(--grey); line-height:1.5; }
+
+  /* contact band */
+  .p1-contact{
+    position:absolute; left:0; right:0; bottom:0;
+    background:var(--navy); color:#fff;
+    padding:18px 18mm; display:flex; align-items:center; justify-content:space-between;
+  }
+  .p1-contact .l{ display:flex; align-items:center; gap:16px; }
+  .p1-contact .l .cl{ font-size:12px; color:#9FB2C2; letter-spacing:.12em; }
+  .p1-contact .l .num{
+    font-family:'Noto Serif KR',serif; font-weight:700; font-size:26px; letter-spacing:.01em;
+  }
+  .p1-contact .l .num b{ color:var(--cyan); }
+  .p1-contact .r{ font-size:12.5px; color:#9FB2C2; }
+  .p1-contact .r b{ color:#fff; }
+
+  /* ============================================================
+     PAGE 2 — DETAIL
+     ============================================================ */
+  .p2-header{
+    background:var(--navy); color:#fff;
+    padding:14mm 18mm 12mm 18mm;
+    display:flex; align-items:flex-end; justify-content:space-between;
+  }
+  .p2-header .mark{ font-family:'Noto Serif KR',serif; font-weight:900; font-size:20px; }
+  .p2-header .mark b{ color:var(--cyan); }
+  .p2-header .mark span{ display:block; font-family:'Noto Sans KR'; font-weight:400; font-size:12px; color:#9FB2C2; margin-top:4px; letter-spacing:.04em;}
+  .p2-header .title{ text-align:right; }
+  .p2-header .title .eyebrow{ color:var(--cyan); }
+  .p2-header .title h2{ font-family:'Noto Serif KR',serif; font-weight:700; font-size:22px; margin-top:6px; }
+
+  .p2-body{ padding:12mm 18mm 0 18mm; }
+
+  .sec-head{ display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+  .sec-head .idx{
+    font-family:'Noto Serif KR',serif; font-weight:900; font-size:15px;
+    color:var(--blue); border:1.5px solid var(--blue); width:26px; height:26px;
+    display:flex; align-items:center; justify-content:center; border-radius:50%;
+  }
+  .sec-head h3{ font-size:17px; font-weight:700; color:var(--navy); }
+  .sec-head .tail{ flex:1; height:1px; background:var(--line); }
+
+  /* 5 benefits detailed — requirement 3 (emphasized card style) */
+  .b5{ display:grid; grid-template-columns:1fr 1fr; gap:14px 24px; }
+  .b5 .row{
+    display:flex; gap:14px; padding:16px 18px;
+    background:var(--bg-soft); border-left:3px solid var(--blue);
+  }
+  .b5 .row.full{ grid-column:1 / -1; background:var(--navy); border-left-color:var(--gold); }
+  .b5 .row .k{
+    font-family:'Noto Serif KR',serif; font-weight:900; font-size:22px;
+    color:var(--blue); min-width:30px; line-height:1.05;
+  }
+  .b5 .row.full .k{ color:var(--gold); }
+  .b5 .row .c .h{ font-size:14.5px; font-weight:700; color:var(--navy); }
+  .b5 .row .c .p{ margin-top:5px; font-size:12px; color:var(--grey); line-height:1.55; }
+  .b5 .row.full .c .h{ color:#fff; }
+  .b5 .row.full .c .p{ color:#9FB2C2; }
+
+  .mt{ margin-top:11mm; }
+
+  /* roadmap */
+  .road{ display:grid; grid-template-columns:repeat(4,1fr); gap:0; }
+  .road .step{ position:relative; padding-right:22px; }
+  .road .step:last-child{ padding-right:0; }
+  .road .step .stage{
+    font-size:11px; letter-spacing:.14em; color:var(--blue); font-weight:700; text-transform:uppercase;
+  }
+  .road .step .top{ height:3px; background:var(--navy); margin:10px 0 14px; }
+  .road .step .name{ font-size:15px; font-weight:700; color:var(--navy); }
+  .road .step .desc{ margin-top:6px; font-size:11.5px; color:var(--grey); line-height:1.5; }
+  .road .step .arrow{
+    position:absolute; right:6px; top:30px; color:var(--grey-2); font-size:16px;
+  }
+  .road .step:last-child .arrow{ display:none; }
+
+  /* insurers — simplified (requirement 2: detail removed, summary kept) */
+  .ins-summary{
+    display:grid; grid-template-columns:1fr 1fr 1fr; gap:0;
+    border-top:2px solid var(--navy);
+  }
+  .ins-summary .c{ padding:18px 0; border-right:1px solid var(--line); }
+  .ins-summary .c:last-child{ border-right:0; padding-left:20px; }
+  .ins-summary .c:first-child{ padding-left:0; }
+  .ins-summary .c:nth-child(2){ padding-left:20px;}
+  .ins-summary .big{ font-family:'Noto Serif KR',serif; font-weight:900; font-size:38px; color:var(--navy); line-height:1; }
+  .ins-summary .big span{ font-size:18px; color:var(--blue); }
+  .ins-summary .t{ margin-top:8px; font-size:12.5px; font-weight:700; color:var(--ink); }
+  .ins-summary .s{ font-size:11px; color:var(--grey-2); margin-top:3px; }
+  .ins-note{
+    margin-top:14px; font-size:12px; color:var(--grey); line-height:1.6;
+    padding-left:14px; border-left:3px solid var(--cyan);
+  }
+  .ins-note b{ color:var(--navy); font-weight:700; }
+
+  /* page2 CTA footer */
+  .p2-cta{
+    position:absolute; left:0; right:0; bottom:0;
+    border-top:2px solid var(--navy);
+    padding:16px 18mm; display:flex; align-items:center; justify-content:space-between;
+    background:#fff;
+  }
+  .p2-cta .l .small{ font-size:11px; letter-spacing:.2em; color:var(--grey-2); font-weight:700; }
+  .p2-cta .l .big{ font-size:18px; font-weight:700; color:var(--navy); margin-top:3px; }
+  .p2-cta .l .big b{ color:var(--blue); }
+  .p2-cta .num{ font-family:'Noto Serif KR',serif; font-weight:700; font-size:24px; color:var(--navy); }
+  .p2-cta .num b{ color:var(--blue); }
+
+  .foot-note{
+    position:absolute; left:18mm; bottom:4mm; font-size:9.5px; color:var(--grey-2);
+  }
+  .page-no{ position:absolute; right:18mm; bottom:4mm; font-size:9.5px; color:var(--grey-2); }
+
+  /* ---------- print ---------- */
+  @media print{
+    html,body{ background:#fff; }
+    .page{ margin:0; box-shadow:none; page-break-after:always; }
+    .page:last-child{ page-break-after:auto; }
+  }
+  @page{ size:A4; margin:0; }
+</style>
+</head>
+<body>
+
+<!-- ===================== PAGE 1 — COVER ===================== -->
+<section class="page" id="cover">
+  <div class="p1-header">
+    <div class="brand">
+      <span class="mark">다<b>보험</b></span>
+      <span class="sub">GA 종합 보험대리점</span>
+    </div>
+    <div class="year">RECRUITING&nbsp;&nbsp;2025</div>
+  </div>
+
+  <div class="p1-hero">
+    <div class="eyebrow">보험설계사 모집</div>
+    <h1>당신의 능력이<br><span class="hl">수입이 됩니다</span></h1>
+
+    <!-- requirement 1: 연봉 1억 가능 강조 -->
+    <div class="income-line">
+      <span class="badge">
+        <span class="pre">노력한 만큼,</span>
+        <span class="amt">연봉 <b>1억원</b>+</span>
+      </span>
+      <span class="note">정해진 한계 없는 성과 보상.<br><b>도전하는 만큼 수입이 올라갑니다.</b></span>
+    </div>
+
+    <p class="lead">
+      삼성·교보·한화 등 국내 주요 생·손해보험사를 한 곳에서 취급하는
+      GA(종합 보험대리점)입니다. 한 명의 설계사가 다수의 보험사를 비교·제안할 수 있어,
+      고객에게는 최적의 상품을, 설계사에게는 더 넓은 시장과 더 높은 소득 기회를 제공합니다.
+    </p>
+  </div>
+
+  <div class="exhibit">
+    <div class="exhibit-label">한눈에 보는 다보험 GA</div>
+    <div class="stats">
+      <div class="stat">
+        <div class="num">29<span>+</span></div>
+        <div class="cap">총 거래 보험사<small>한 곳에서 모두 취급</small></div>
+      </div>
+      <div class="stat">
+        <div class="num">1<span>억+</span></div>
+        <div class="cap">고소득 가능 연봉<small>성과 비례 무제한 보상</small></div>
+      </div>
+      <div class="stat">
+        <div class="num">5<span>대</span></div>
+        <div class="cap">핵심 지원 혜택<small>정착부터 성장까지</small></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- requirement 3: 5대 핵심 혜택 강조 -->
+  <div class="benefits">
+    <h3><em>왜 다보험인가</em> &nbsp;·&nbsp; 설계사를 위한 5대 핵심 혜택</h3>
+    <div class="ben-grid">
+      <div class="ben"><div class="n">01</div><div class="t">초기<br>정착지원비</div><div class="d">업계 최고 수준 지원</div></div>
+      <div class="ben"><div class="n">02</div><div class="t">성과<br>특별보너스</div><div class="d">실적만큼 더 보상</div></div>
+      <div class="ben"><div class="n">03</div><div class="t">출근우수<br>인센티브</div><div class="d">성실함에 보상</div></div>
+      <div class="ben"><div class="n">04</div><div class="t">연 1회<br>해외 관광</div><div class="d">우수자 전액 포상</div></div>
+      <div class="ben"><div class="n">05</div><div class="t">AI 판매<br>기법 지원</div><div class="d">스마트 영업 교육</div></div>
+    </div>
+  </div>
+
+  <div class="p1-contact">
+    <div class="l">
+      <span class="cl">전화·문자 상담</span>
+      <span class="num">010-<b>3114</b>-0812</span>
+    </div>
+    <div class="r">상세 안내는 <b>뒷면</b>에서 확인하세요 &nbsp;▶</div>
+  </div>
+</section>
+
+<!-- ===================== PAGE 2 — DETAIL ===================== -->
+<section class="page" id="detail">
+  <div class="p2-header">
+    <div class="mark">다보<b>험</b><span>GA 종합 보험대리점</span></div>
+    <div class="title">
+      <div class="eyebrow">RECRUITING 2025</div>
+      <h2>보험설계사 모집 상세 안내</h2>
+    </div>
+  </div>
+
+  <div class="p2-body">
+
+    <!-- Section 1 — 5대 핵심 혜택 (강조) -->
+    <div class="sec-head">
+      <div class="idx">1</div>
+      <h3>다보험 5대 핵심 혜택</h3>
+      <div class="tail"></div>
+    </div>
+    <div class="b5">
+      <div class="row">
+        <div class="k">01</div>
+        <div class="c">
+          <div class="h">업계 최고 수준 초기 정착지원비</div>
+          <div class="p">입사 초기 안정적인 정착을 위해 업계 최상위 수준의 정착지원비를 제공합니다. 경력자 별도 우대 적용.</div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="k">02</div>
+        <div class="c">
+          <div class="h">성과에 맞는 특별보너스 · 지원비</div>
+          <div class="p">월별·분기별 성과에 따라 특별보너스와 추가 지원비를 별도 지급합니다. 노력한 만큼 정직하게 돌아옵니다.</div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="k">03</div>
+        <div class="c">
+          <div class="h">출근 우수자 인센티브</div>
+          <div class="p">꾸준한 활동과 성실한 출근에 보상하는 전용 인센티브 프로그램을 운영합니다.</div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="k">04</div>
+        <div class="c">
+          <div class="h">연 1회 해외 관광 지원</div>
+          <div class="p">실적 우수 설계사에게 연 1회 해외 여행을 회사가 전액 지원합니다.</div>
+        </div>
+      </div>
+      <div class="row full">
+        <div class="k">05</div>
+        <div class="c">
+          <div class="h">체계적 교육 + AI 판매기법 지원</div>
+          <div class="p">신입~베테랑 단계별 맞춤 교육과 최신 AI 기술을 활용한 스마트 영업 기법을 함께 지원합니다. 미경험자도 빠르게 고소득 궤도에 오를 수 있습니다.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 2 — 성장 로드맵 (requirement 4: 순서 앞으로 이동) -->
+    <div class="sec-head mt">
+      <div class="idx">2</div>
+      <h3>성장 로드맵 — 연봉 1억으로 가는 길</h3>
+      <div class="tail"></div>
+    </div>
+    <div class="road">
+      <div class="step">
+        <div class="stage">STEP 01 · 입문</div>
+        <div class="top"></div>
+        <div class="name">기초 교육</div>
+        <div class="desc">자격증 취득 및<br>업무 기본기 확립</div>
+        <div class="arrow">→</div>
+      </div>
+      <div class="step">
+        <div class="stage">STEP 02 · 성장</div>
+        <div class="top"></div>
+        <div class="name">포트폴리오 다각화</div>
+        <div class="desc">취급 상품 확대,<br>고객 기반 구축</div>
+        <div class="arrow">→</div>
+      </div>
+      <div class="step">
+        <div class="stage">STEP 03 · 핵심</div>
+        <div class="top"></div>
+        <div class="name">전문 설계사</div>
+        <div class="desc">고액 수수료 구간,<br>전문 상담 역량</div>
+        <div class="arrow">→</div>
+      </div>
+      <div class="step">
+        <div class="stage">STEP 04 · 리더</div>
+        <div class="top"></div>
+        <div class="name">팀 리더</div>
+        <div class="desc">우수 관리자 과정,<br>조직 운영</div>
+        <div class="arrow">→</div>
+      </div>
+    </div>
+
+    <!-- Section 3 — 취급 보험사 현황 (requirement 4: 순서 뒤로 이동 / requirement 2: 상세 칩 삭제) -->
+    <div class="sec-head mt">
+      <div class="idx">3</div>
+      <h3>취급 보험사 현황</h3>
+      <div class="tail"></div>
+    </div>
+    <div class="ins-summary">
+      <div class="c">
+        <div class="big">18<span>개사</span></div>
+        <div class="t">거래 생명보험사</div>
+        <div class="s">업계 최다 수준</div>
+      </div>
+      <div class="c">
+        <div class="big">11<span>개사</span></div>
+        <div class="t">거래 손해보험사</div>
+        <div class="s">다양한 선택 가능</div>
+      </div>
+      <div class="c">
+        <div class="big">29<span>+</span></div>
+        <div class="t">총 거래 보험사</div>
+        <div class="s">한 곳에서 모두 취급</div>
+      </div>
+    </div>
+    <div class="ins-note">
+      국내 주요 생·손해보험사를 폭넓게 취급하여 <b>고객 니즈에 맞는 최적의 상품을 비교·설계</b>할 수 있습니다.
+      한 명의 설계사가 다수 보험사를 다루므로, <b>더 넓은 시장과 더 높은 수입 기회</b>로 이어집니다.
+    </div>
+  </div>
+
+  <div class="p2-cta">
+    <div class="l">
+      <div class="small">CONTACT NOW</div>
+      <div class="big">지금 바로 <b>상담하세요</b></div>
+    </div>
+    <div class="num">010-<b>3114</b>-0812</div>
+  </div>
+
+  <div class="foot-note">다보험 GA 종합 보험대리점 &nbsp;|&nbsp; 본 전단지는 채용 홍보용입니다</div>
+  <div class="page-no">2 / 2</div>
+</section>
+
+</body>
+</html>
