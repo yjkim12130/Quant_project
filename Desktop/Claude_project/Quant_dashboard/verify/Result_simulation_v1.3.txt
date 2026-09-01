@@ -1,0 +1,270 @@
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import warnings
+
+warnings.filterwarnings('ignore')
+
+# ==========================================
+# 0. 환경 설정 및 원칙 유지 (2026년 실시간성 반영)
+# ==========================================
+start_year = 2010
+end_date = "2026-04-12"
+annual_budget = 40000000
+daily_invest = annual_budget / 252
+lev_cost_annual = 0.045
+cma_interest_annual = 0.035
+
+best_p = {
+    'lev_bull': 2.0, 'lev_bear': 1.0, 'lev_panic': 1.5,
+    'vix_panic': 25, 'mdd_panic': -0.125,
+    'cci_bull': 30, 'cci_bear': -50,
+    'rsi_bull': 70, 'rsi_bear': 60,
+    'stock_ratio': 15, 'panic_period': 1, 'periodic_denom': 1,
+    'mdd_threshold_sets': (0.45, 0.30, 0.125),
+    'drain_sets': (1.0, 0.6, 0.4)
+}
+
+# Top 10 히스토리 데이터
+top10_history = {
+    1995: ['GE', 'T', 'XOM', 'KO', 'MRK', 'MO', 'SHEL', 'PG', 'JNJ', 'IBM'],
+    1996: ['GE', 'KO', 'XOM', 'MSFT', 'T', 'MRK', 'PG', 'JNJ', 'MO', 'IBM'],
+    1997: ['GE', 'MSFT', 'XOM', 'KO', 'INTC', 'MRK', 'T', 'PG', 'JNJ', 'WMT'],
+    1998: ['MSFT', 'GE', 'XOM', 'WMT', 'INTC', 'MRK', 'PFE', 'KO', 'PG', 'CSCO'],
+    1999: ['MSFT', 'GE', 'CSCO', 'WMT', 'XOM', 'INTC', 'PFE', 'IBM', 'ORCL', 'C'],
+    2000: ['GE', 'INTC', 'MSFT', 'CSCO', 'XOM', 'WMT', 'C', 'ORCL', 'PFE', 'IBM'],
+    2001: ['GE', 'MSFT', 'XOM', 'C', 'WMT', 'PFE', 'INTC', 'JNJ', 'BP', 'AIG'],
+    2002: ['GE', 'MSFT', 'XOM', 'WMT', 'C', 'PFE', 'JNJ', 'INTC', 'AIG', 'IBM'],
+    2003: ['GE', 'MSFT', 'XOM', 'WMT', 'PFE', 'C', 'JNJ', 'INTC', 'AIG', 'IBM'],
+    2004: ['GE', 'XOM', 'MSFT', 'WMT', 'C', 'PFE', 'JNJ', 'INTC', 'AIG', 'IBM'],
+    2005: ['GE', 'XOM', 'MSFT', 'C', 'WMT', 'BP', 'PFE', 'JNJ', 'IBM', 'AIG'],
+    2006: ['XOM', 'GE', 'MSFT', 'C', 'BAC', 'WMT', 'PFE', 'JNJ', 'BP', 'AIG'],
+    2007: ['XOM', 'GE', 'MSFT', 'WMT', 'C', 'BP', 'BAC', 'JNJ', 'PFE', 'AIG'],
+    2008: ['XOM', 'GE', 'MSFT', 'WMT', 'JNJ', 'PG', 'CVX', 'T', 'IBM', 'JPM'],
+    2009: ['XOM', 'WMT', 'MSFT', 'JNJ', 'PG', 'IBM', 'CVX', 'JPM', 'GE', 'AAPL'],
+    2010: ['XOM', 'AAPL', 'MSFT', 'BRK-B', 'GE', 'WMT', 'GOOGL', 'CVX', 'IBM', 'PG'],
+    2011: ['XOM', 'AAPL', 'MSFT', 'IBM', 'CVX', 'JNJ', 'WMT', 'GE', 'PG', 'GOOGL'],
+    2012: ['AAPL', 'XOM', 'MSFT', 'WMT', 'IBM', 'GE', 'CVX', 'BRK-B', 'GOOGL', 'JNJ'],
+    2013: ['AAPL', 'XOM', 'MSFT', 'GOOGL', 'BRK-B', 'GE', 'JNJ', 'WMT', 'CVX', 'PG'],
+    2014: ['AAPL', 'XOM', 'MSFT', 'GOOGL', 'BRK-B', 'JNJ', 'GE', 'WMT', 'CVX', 'PG'],
+    2015: ['AAPL', 'GOOGL', 'MSFT', 'BRK-B', 'XOM', 'AMZN', 'META', 'JNJ', 'GE', 'WMT'],
+    2016: ['AAPL', 'GOOGL', 'MSFT', 'BRK-B', 'AMZN', 'META', 'JNJ', 'XOM', 'JPM', 'WMT'],
+    2017: ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'BRK-B', 'META', 'JNJ', 'JPM', 'XOM', 'V'],
+    2018: ['AAPL', 'MSFT', 'AMZN', 'GOOGL', 'BRK-B', 'META', 'JNJ', 'JPM', 'V', 'WMT'],
+    2019: ['AAPL', 'MSFT', 'AMZN', 'GOOGL', 'BRK-B', 'META', 'JPM', 'JNJ', 'V', 'WMT'],
+    2020: ['AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'TSLA', 'BRK-B', 'V', 'JNJ', 'WMT'],
+    2021: ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'BRK-B', 'JPM', 'JNJ'],
+    2022: ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'BRK-B', 'TSLA', 'UNH', 'JNJ', 'V', 'NVDA'],
+    2023: ['AAPL', 'MSFT', 'AMZN', 'NVDA', 'GOOGL', 'META', 'TSLA', 'BRK-B', 'LLY', 'V'],
+    2024: ['MSFT', 'AAPL', 'NVDA', 'GOOGL', 'AMZN', 'META', 'BRK-B', 'LLY', 'TSLA', 'AVGO'],
+    2025: ['NVDA', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AVGO', 'LLY', 'BRK-B'],
+    2026: ['NVDA', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'AVGO', 'LLY', 'BRK-B']
+}
+
+all_tickers = list(set([t for yr in top10_history.values() for t in yr]))
+print(f"⏳ 데이터 로드 및 시뮬레이션 계산 중 (1995-2026)...")
+
+raw_data = yf.download(["SPY", "^GSPC", "^VIX"] + all_tickers, start=f"{start_year-1}-06-01", end=end_date, progress=False)['Close'].ffill()
+
+df = pd.DataFrame({'SPY': raw_data['SPY'], 'S&P500': raw_data['^GSPC'], 'VIX': raw_data['^VIX']}).dropna()
+
+# YJAlgo 보조 지표
+df['MA_200'] = df['S&P500'].rolling(200).mean()
+df['Disp'] = (df['S&P500'] - df['MA_200']) / df['MA_200'] * 100
+tp = df['S&P500']
+df['CCI'] = (tp - tp.rolling(200).mean()) / (0.015 * tp.rolling(200).apply(lambda x: np.abs(x - x.mean()).mean()))
+delta = df['S&P500'].diff()
+gain = (delta.where(delta > 0, 0)).rolling(14).mean()
+loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+df['RSI'] = 100 - (100 / (1 + (gain / loss)))
+df['MDD'] = (df['S&P500'] / df['S&P500'].rolling(252, min_periods=1).max()) - 1.0
+
+# 전략 세팅
+topN_returns_matrix = raw_data[all_tickers].pct_change().fillna(0)
+strategies_to_test = []
+for n in [10, 5, 3]:
+    strategies_to_test.extend([
+        f'Top{n}_Eq', f'Top{n}_Mom', f'Top{n}_Val',
+        f'Top{n}_Spread_H', f'Top{n}_Spread_L',
+        f'Top{n}_SP_Spread_H', f'Top{n}_SP_Spread_L'
+    ])
+for s in strategies_to_test: df[s] = 0.0
+
+def get_all_weights(tickers, prev_ret, prev_spy_ret):
+    n = len(tickers)
+    sum_ranks = sum(range(1, n + 1))
+    r_abs = prev_ret[tickers].sort_values(ascending=False)
+    w_mom = pd.Series([(n-i)/sum_ranks for i in range(n)], index=r_abs.index)
+    w_val = pd.Series([(n-i)/sum_ranks for i in range(n)], index=r_abs.sort_values().index)
+    spread = prev_ret[tickers] - prev_ret[tickers].mean()
+    r_spr = spread.sort_values(ascending=False)
+    w_spr_h = pd.Series([(n-i)/sum_ranks for i in range(n)], index=r_spr.index)
+    w_spr_l = pd.Series([(n-i)/sum_ranks for i in range(n)], index=r_spr.sort_values().index)
+    sp_spread = prev_ret[tickers] - prev_spy_ret
+    raw_w_sp_l = (sp_spread.max() - sp_spread) + 0.001
+    w_sp_l = raw_w_sp_l / raw_w_sp_l.sum()
+    raw_w_sp_h = (sp_spread - sp_spread.min()) + 0.001
+    w_sp_h = raw_w_sp_h / raw_w_sp_h.sum()
+    return w_mom[tickers], w_val[tickers], w_spr_h[tickers], w_spr_l[tickers], w_sp_h[tickers], w_sp_l[tickers]
+
+for year, tickers in top10_history.items():
+    mask_curr = df.index.year == year
+    mask_prev = df.index.year == (year - 1)
+    if mask_curr.any():
+        if mask_prev.any():
+            p_data = raw_data.loc[mask_prev, tickers]
+            prev_ret = p_data.ffill().iloc[-1] / p_data.bfill().iloc[0] - 1
+            p_spy = df.loc[mask_prev, 'SPY']
+            prev_spy_ret = p_spy.iloc[-1] / p_spy.iloc[0] - 1
+        else:
+            prev_ret = pd.Series(0, index=tickers)
+            prev_spy_ret = 0.0
+        ret_mat = topN_returns_matrix.loc[mask_curr]
+        for n in [10, 5, 3]:
+            sub_t = tickers[:n]
+            w_m, w_v, w_sh, w_sl, w_sph, w_spl = get_all_weights(sub_t, prev_ret, prev_spy_ret)
+            df.loc[mask_curr, f'Top{n}_Eq'] = ret_mat[sub_t].mean(axis=1)
+            df.loc[mask_curr, f'Top{n}_Mom'] = ret_mat[sub_t].dot(w_m)
+            df.loc[mask_curr, f'Top{n}_Val'] = ret_mat[sub_t].dot(w_v)
+            df.loc[mask_curr, f'Top{n}_Spread_H'] = ret_mat[sub_t].dot(w_sh)
+            df.loc[mask_curr, f'Top{n}_Spread_L'] = ret_mat[sub_t].dot(w_sl)
+            df.loc[mask_curr, f'Top{n}_SP_Spread_H'] = ret_mat[sub_t].dot(w_sph)
+            df.loc[mask_curr, f'Top{n}_SP_Spread_L'] = ret_mat[sub_t].dot(w_spl)
+
+df = df[df.index.year >= start_year]
+
+# ==========================================
+# 1. 시뮬레이션 루프 (YJAlgo Alpha 고도화 반영)
+# ==========================================
+all_cols = ['DCA_1x', 'DCA_2x'] + strategies_to_test + ['YJAlgo', 'YJAlgo_Alpha', 'Laure_Inf']
+states = {c: [0.0] for c in all_cols}
+history = []
+
+# YJAlgo 원본 변수
+yj_st, yj_cs, yj_prin, cur_s, p_buy_cnt = 0, 0, 0, 'Bull', 0
+# YJAlgo Alpha 전용 변수 (yj_a_alpha는 패닉 때 산 개별주 바스켓 자산)
+yj_a_st, yj_a_alpha, yj_a_cs = 0, 0, 0
+
+d_base_st = (annual_budget * (best_p['stock_ratio'] / 18)) / 252
+d_cma_sv = (annual_budget * ((18 - best_p['stock_ratio']) / 18)) / 252
+
+# Laure_Inf 초기 변수
+laure_cash, laure_shares, laure_avg_price, laure_cycle_day, laure_daily_amt = 0, 0, 0, 0, 0
+spy_3x_idx = 100.0
+
+for date, row in df.iterrows():
+    spy_ret = row['SPY'] / df['SPY'].shift(1).loc[date] - 1 if date in df.index[1:] else 0
+    alpha_ret = row['Top10_SP_Spread_L'] # 패닉 때 매집할 '낙폭과대 Top 10' 수익률
+
+    # 기본 전략들 업데이트
+    states['DCA_1x'][0] = (states['DCA_1x'][0] + daily_invest) * (1 + spy_ret)
+    states['DCA_2x'][0] = (states['DCA_2x'][0] + daily_invest) * (1 + (spy_ret * 2) - (lev_cost_annual / 252))
+    for s in strategies_to_test:
+        states[s][0] = (states[s][0] + daily_invest) * (1 + row[s])
+
+    # ----------------------------------------------------
+    # [1] YJAlgo Logic (원본 & Alpha)
+    # ----------------------------------------------------
+    v, m, r, c, ds = row['VIX'], row['MDD'], row['RSI'], row['CCI'], row['Disp']
+    if v >= best_p['vix_panic'] and m <= best_p['mdd_panic']: cur_s = 'Panic'
+    else:
+        if cur_s == 'Panic' and c > 0 and r > best_p['rsi_bear']: cur_s = 'Bear'
+        elif cur_s == 'Bear' and c > best_p['cci_bull'] and r > best_p['rsi_bull']: cur_s = 'Bull'
+        elif cur_s == 'Bull' and c < best_p['cci_bear'] and ds < -3.0: cur_s = 'Bear'
+
+    lev = best_p['lev_bull'] if cur_s == 'Bull' else (best_p['lev_panic'] if cur_s == 'Panic' else best_p['lev_bear'])
+
+    # 공통 원칙: 기본 적립
+    yj_prin += daily_invest
+
+    # (A) 원본 YJAlgo 업데이트
+    yj_st *= (1 + (spy_ret * lev) - max(0, lev - 1) * (lev_cost_annual / 252))
+    yj_cs *= (1 + cma_interest_annual / 252)
+    yj_st += d_base_st; yj_cs += d_cma_sv
+
+    # (B) YJAlgo Alpha 업데이트 (패닉 때 레버리지 대신 Alpha 매집)
+    yj_a_st *= (1 + (spy_ret * (lev if cur_s != 'Panic' else 1.0)) - max(0, (lev if cur_s != 'Panic' else 1.0) - 1) * (lev_cost_annual / 252))
+    yj_a_alpha *= (1 + alpha_ret) # 이미 산 알파 종목들의 수익률 반영
+    yj_a_cs *= (1 + cma_interest_annual / 252)
+    yj_a_st += d_base_st; yj_a_cs += d_cma_sv
+
+    # Panic Buy (CMA 자산 녹이기)
+    if cur_s == 'Panic' and p_buy_cnt % best_p['panic_period'] == 0:
+        dr = best_p['drain_sets'][0] if abs(m) >= best_p['mdd_threshold_sets'][0] else (best_p['drain_sets'][1] if abs(m) >= best_p['mdd_threshold_sets'][1] else (best_p['drain_sets'][2] if abs(m) >= best_p['mdd_threshold_sets'][2] else 0))
+
+        # 원본: 레버리지 SPY 매수
+        buy_yj = min((yj_cs * dr) / best_p['periodic_denom'], yj_cs)
+        yj_st += buy_yj; yj_cs -= buy_yj
+
+        # Alpha: 낙폭과대 Top 10 매수
+        buy_a = min((yj_a_cs * dr) / best_p['periodic_denom'], yj_a_cs)
+        yj_a_alpha += buy_a; yj_a_cs -= buy_a
+
+    p_buy_cnt = p_buy_cnt + 1 if cur_s == 'Panic' else 0
+    states['YJAlgo'][0] = yj_st + yj_cs
+    states['YJAlgo_Alpha'][0] = yj_a_st + yj_a_alpha + yj_a_cs
+
+    # ----------------------------------------------------
+    # [2] Laure_Inf (무한매수법) Logic
+    # ----------------------------------------------------
+    if date in df.index[1:]:
+        spy_3x_idx *= (1 + (spy_ret * 3) - (lev_cost_annual / 252))
+    laure_cash *= (1 + cma_interest_annual / 252); laure_cash += daily_invest
+    if laure_shares > 0 and spy_3x_idx >= laure_avg_price * 1.10:
+        laure_cash += laure_shares * spy_3x_idx; laure_shares = 0; laure_cycle_day = 0
+    if laure_shares == 0:
+        laure_daily_amt = laure_cash / 40; buy_amt = min(laure_daily_amt, laure_cash)
+        laure_shares += buy_amt / spy_3x_idx; laure_avg_price = spy_3x_idx; laure_cash -= buy_amt; laure_cycle_day = 1
+    else:
+        buy_amt = min(laure_daily_amt, laure_cash); new_shares = buy_amt / spy_3x_idx
+        laure_avg_price = (laure_shares * laure_avg_price + buy_amt) / (laure_shares + new_shares)
+        laure_shares += new_shares; laure_cash -= buy_amt; laure_cycle_day += 1
+        if laure_cycle_day >= 40:
+            laure_cash += laure_shares * spy_3x_idx; laure_shares = 0; laure_cycle_day = 0
+    states['Laure_Inf'][0] = laure_cash + laure_shares * spy_3x_idx
+
+    history.append([date] + [states[c][0] for c in all_cols] + [yj_prin])
+
+res = pd.DataFrame(history, columns=['Date'] + all_cols + ['Cum_Prin']).set_index('Date')
+
+# ==========================================
+# 2. 성과 보고서 및 연도별 수익률
+# ==========================================
+print(f"\n🏆 전략 전체 통합 성과 요약 ({start_year}-2026)")
+print("-" * 155)
+report_data = []
+for col in all_cols:
+    s_val, s_prin = res[col], res['Cum_Prin']
+    final_v, total_p = s_val.iloc[-1], s_prin.iloc[-1]
+    years = (res.index[-1] - res.index[0]).days / 365.25
+    cagr = ((final_v / total_p) ** (1 / years) - 1) * 100
+    roll_max = s_val.cummax()
+    max_mdd = ((s_val / roll_max) - 1.0).min() * 100
+    mdd_date = ((s_val / roll_max) - 1.0).idxmin()
+    report_data.append([col, f"{final_v/100000000:.1f}억", f"{cagr:.1f}%", f"{max_mdd:.1f}%", mdd_date.strftime('%Y-%m'), f"{s_prin.loc[mdd_date]/100000000:.1f}억", f"{s_val.loc[mdd_date]/100000000:.1f}억"])
+
+summary_df = pd.DataFrame(report_data, columns=['Strategy', 'Final Asset', 'CAGR', 'Max MDD', 'MDD Date', 'Prin. at MDD', 'Asset at MDD']).set_index('Strategy')
+print(summary_df)
+
+print("\n📅 연도별 수익률 (최근 25년)")
+print("-" * 155)
+annual_ret = res[all_cols].resample('Y').last().pct_change().dropna() * 100
+print(annual_ret[['DCA_1x', 'YJAlgo', 'YJAlgo_Alpha', 'Laure_Inf', 'Top10_SP_Spread_L']].tail(25).round(1))
+
+# ==========================================
+# 3. 누적 수익률 시각화
+# ==========================================
+plt.figure(figsize=(24, 12))
+plot_targets = ['DCA_1x', 'YJAlgo', 'YJAlgo_Alpha', 'Laure_Inf', 'Top10_SP_Spread_L', 'Top3_SP_Spread_L']
+for col in plot_targets:
+    plt.plot(res.index, res[col], label=col, lw=2.5 if 'YJAlgo' in col else 1.2)
+
+plt.yscale('linear')
+plt.title(f"Portfolio Performance: YJAlgo Original vs Alpha-Panic Strategy (1995-2026)", fontsize=15)
+plt.ylabel("Asset Value")
+plt.xlabel("Year")
+plt.legend(loc='upper left', ncol=2)
+plt.grid(True, which="both", alpha=0.3)
+plt.tight_layout()
+plt.show()

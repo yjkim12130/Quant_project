@@ -1,0 +1,275 @@
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import warnings
+import itertools
+from datetime import datetime
+
+# 경고 무시 및 한글 폰트 설정
+warnings.filterwarnings('ignore')
+plt.rcParams['axes.unicode_minus'] = False
+
+# ==========================================
+# 0. 사용자 설정 및 파라미터 그리드 (S&P 500)
+# ==========================================
+start_year = 2010
+end_year = 2026
+annual_budget = 40000000  # 연간 투자금 4,000만 원
+daily_total_budget = annual_budget / 252
+lev_cost_annual = 0.045   # 레버리지 비용 (4.5%)
+cma_interest_annual = 0.035 # CMA 이자 (3.5%)
+
+# S&P 500에 맞춘 파라미터 그리드
+param_grid = {
+    'lev_bull': [2.0], 'lev_bear': [1.0], 'lev_panic': [1.5],
+    'vix_panic': [25],
+    'mdd_panic': [-0.12, -0.15],
+    'cci_bull': [50, 80, 100], 'cci_bear': [-50, -100],
+    'rsi_bull': [50, 70, 90], 'rsi_bear': [40, 60, 80],
+    'stock_ratio': [15], 'panic_period': [1, 5], 'periodic_denom': [1, 5],
+    'mdd_threshold_sets': [(0.45, 0.30, 0.15)],
+    'drain_sets': [(1.0, 0.6, 0.4)]
+}
+
+# ==========================================
+# 1. 데이터 로딩 및 지표 계산
+# ==========================================
+print(f"⏳ 시장 데이터를 불러오고 지표를 계산 중입니다... ({start_year}~2026)")
+fetch_start = f"{start_year - 2}-01-01"
+raw_df = yf.download(["^GSPC", "^VIX", "^IXIC"], start=fetch_start, end="2026-04-05", progress=False)
+
+df = pd.DataFrame({
+    'Price': raw_df[('Close', '^GSPC')],    # 메인: S&P 500
+    'Nasdaq': raw_df[('Close', '^IXIC')],   # 보조: 나스닥
+    'VIX': raw_df[('Close', '^VIX')]        # 공포: S&P 500 VIX
+})
+df = df.ffill()
+df['VIX'] = df['VIX'].fillna(15)
+
+def add_indicators(data, price_col, prefix=''):
+    data[f'{prefix}MA_200'] = data[price_col].rolling(200).mean()
+    data[f'{prefix}Disp'] = (data[price_col] - data[f'{prefix}MA_200']) / data[f'{prefix}MA_200'] * 100
+    tp = data[price_col]
+    data[f'{prefix}CCI'] = (tp - tp.rolling(200).mean()) / (0.015 * tp.rolling(200).apply(lambda x: np.abs(x - x.mean()).mean()))
+    delta = data[price_col].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+    data[f'{prefix}RSI'] = 100 - (100 / (1 + (gain / loss)))
+    data[f'{prefix}MDD'] = (data[price_col] / data[price_col].rolling(252, min_periods=1).max()) - 1.0
+    return data
+
+df = add_indicators(df, 'Price', '')
+df = add_indicators(df, 'Nasdaq', 'NDQ_')
+df['Daily_Ret'] = df['Price'].pct_change()
+df = df.dropna(subset=['MA_200', 'MDD']).copy()
+df = df[df.index.year >= start_year]
+
+# ==========================================
+# 2. 시뮬레이션 엔진 함수 (상태 변경 로그 추가)
+# ==========================================
+def run_simulation(params, data_df):
+    yj_st, yj_cs = 0.0, 0.0
+    dca_p, dca_sh = 0.0, 0.0
+    cur_s = 'Bull'
+    history, panic_logs, s_logs = [], [], []
+    panic_ep = None
+    p_buy_cnt = 0
+
+    d_st_base = (annual_budget * (params['stock_ratio'] / 18)) / 252
+    d_cs_base = (annual_budget * ((18 - params['stock_ratio']) / 18)) / 252
+    m_sets, d_sets = params['mdd_threshold_sets'], params['drain_sets']
+
+    for date, row in data_df.iterrows():
+        new_s = cur_s
+        if row['VIX'] >= params['vix_panic'] and row['MDD'] <= params['mdd_panic']:
+            new_s = 'Panic'
+        else:
+            if cur_s == 'Panic':
+                if row['CCI'] > 0 and row['RSI'] > params['rsi_bear']: new_s = 'Bear'
+            elif cur_s == 'Bear':
+                if row['CCI'] > params['cci_bull'] and row['RSI'] > params['rsi_bull']: new_s = 'Bull'
+            else:
+                if row['CCI'] < params['cci_bear'] and row['Disp'] < -3.0: new_s = 'Bear'
+
+        # 상태가 변경될 경우 로그 기록
+        if new_s != cur_s:
+            s_logs.append({
+                'Date': date, 'From': cur_s, 'To': new_s,
+                'VIX': row['VIX'], 'MDD': row['MDD'], 'CCI': row['CCI'], 'RSI': row['RSI']
+            })
+        cur_s = new_s
+
+        lev = params['lev_bull'] if cur_s == 'Bull' else (params['lev_panic'] if cur_s == 'Panic' else params['lev_bear'])
+
+        if yj_st > 0:
+            yj_st *= (1 + (row['Daily_Ret'] * lev) - max(0, lev - 1) * (lev_cost_annual / 252))
+        yj_cs *= (1 + cma_interest_annual / 252)
+
+        dca_p += daily_total_budget
+        dca_sh += daily_total_budget / row['Price']
+        yj_st += d_st_base
+        yj_cs += d_cs_base
+
+        p_buy = 0
+        if cur_s == 'Panic':
+            if panic_ep is None:
+                panic_ep = {'Start': date, 'Total_Buy': 0.0, 'Max_MDD': row['MDD'], 'Pre_CMA': yj_cs, 'Days': 0}
+            if p_buy_cnt % params['panic_period'] == 0:
+                m = abs(row['MDD'])
+                dr = d_sets[0] if m >= m_sets[0] else (d_sets[1] if m >= m_sets[1] else (d_sets[2] if m >= m_sets[2] else 0))
+                p_buy = min((yj_cs * dr) / params['periodic_denom'], yj_cs)
+                yj_st += p_buy; yj_cs -= p_buy; panic_ep['Total_Buy'] += p_buy
+            panic_ep['Max_MDD'] = min(panic_ep['Max_MDD'], row['MDD'])
+            panic_ep['Days'] += 1; p_buy_cnt += 1
+        else:
+            if panic_ep is not None:
+                panic_ep['End'] = date; panic_ep['Post_CMA'] = yj_cs; panic_logs.append(panic_ep); panic_ep = None
+            p_buy_cnt = 0
+
+        history.append([date, dca_p, dca_sh * row['Price'], yj_st + yj_cs, yj_st, yj_cs, cur_s, lev, p_buy])
+
+    res_df = pd.DataFrame(history, columns=['Date', 'DCA_Prin', 'DCA_Val', 'YJ_Val', 'YJ_Stock', 'YJ_Cash', 'State', 'Lev', 'Panic_Buy']).set_index('Date')
+    return res_df, panic_logs, s_logs
+
+# ==========================================
+# 3. Grid Search 실행
+# ==========================================
+keys, values = zip(*param_grid.items())
+combinations = [dict(zip(keys, v)) for v in itertools.product(*values)]
+print(f"🔎 총 {len(combinations)}개의 파라미터 조합 시뮬레이션 중...")
+
+all_results = []
+for p in combinations:
+    rdf, p_logs, s_logs = run_simulation(p, df)
+    all_results.append({'Params': p, 'Final_Asset': rdf['YJ_Val'].iloc[-1], 'DF': rdf, 'Logs': p_logs, 'S_Logs': s_logs})
+
+all_results.sort(key=lambda x: x['Final_Asset'], reverse=True)
+top_10 = all_results[:10]
+best = top_10[0]
+
+# ==========================================
+# 4. 결과 출력: [1] TOP 10 조합
+# ==========================================
+print(f"\n🏆 [1] TOP 10 파라미터 조합 (메인: S&P 500)")
+print("-" * 170)
+print(f"{'Rank':<4} | {'최종자산(억)':<10} | {'St:CMA':<6} | {'Lev(Bu/Be/Pa)':<13} | {'VIX/MDD(Pa)':<11} | {'CCI(Bu/Be)':<10} | {'RSI(Bu/Be)':<10} | {'Prd':<3} | {'Denom':<5} | {'MDD Thresholds':<14} | {'Drain Ratios'}")
+print("-" * 170)
+for i, r in enumerate(top_10):
+    p = r['Params']
+    mdd_val_str = f"{p['mdd_panic']*100:.0f}%"
+    m_s = f"{p['mdd_threshold_sets'][0]*100:.0f}/{p['mdd_threshold_sets'][1]*100:.0f}/{p['mdd_threshold_sets'][2]*100:.0f}"
+    d_s = f"{p['drain_sets'][0]*100:.0f}/{p['drain_sets'][1]*100:.0f}/{p['drain_sets'][2]*100:.0f}"
+    print(f"{i+1:<4} | {r['Final_Asset']/100000000:<10.2f} | {p['stock_ratio']}:{18-p['stock_ratio']:<4} | "
+          f"{p['lev_bull']}/{p['lev_bear']}/{p['lev_panic']:<13} | {p['vix_panic']}/{mdd_val_str:<11} | "
+          f"{p['cci_bull']}/{p['cci_bear']:<10} | {p['rsi_bull']}/{p['rsi_bear']:<10} | {p['panic_period']:<3} | "
+          f"{p['periodic_denom']:<5} | {m_s:<14} | {d_s}")
+
+# ==========================================
+# 5. 결과 출력: [2] 상태 변경 전체 타임라인 (NEW)
+# ==========================================
+print(f"\n🔄 [2] 1위 파라미터 상태 변경(State Transition) 전체 타임라인")
+print("-" * 110)
+print(f"{'Date':<12} | {'State Change':<18} | {'VIX':<6} | {'MDD':<7} | {'CCI':<8} | {'RSI':<8}")
+print("-" * 110)
+for slog in best['S_Logs']:
+    print(f"{slog['Date'].date()} | {slog['From']+' -> '+slog['To']:<18} | {slog['VIX']:<6.1f} | {slog['MDD']*100:<6.1f}% | {slog['CCI']:<8.1f} | {slog['RSI']:<8.1f}")
+
+# ==========================================
+# 6. 결과 출력: [3] 패닉 에피소드 & [4] 연도별 성과
+# ==========================================
+print(f"\n🔥 [3] Panic 에피소드 상세 로그 (전체)")
+print("-" * 155)
+for log in best['Logs']:
+    status = "✅현금충분" if log['Post_CMA'] > 1000000 else "⚠️현금부족"
+    print(f"기간: {log['Start'].date()} ~ {log['End'].date()} | 지속: {log['Days']:3d}일 | "
+          f"전CMA: {log['Pre_CMA']/10000:7,.0f}만 | 후CMA: {log['Post_CMA']/10000:7,.0f}만 | "
+          f"총매집: {log['Total_Buy']/10000:7,.0f}만 | {status}")
+
+print(f"\n📊 [4] 연도별 성과 비교 테이블 (DCA vs YJAlgo)")
+print("-" * 140)
+print(f"{'Year':<6} | {'DCA 원금':<12} | {'DCA 가치':<12} | {'YJ 가치':<12} | {'DCA 수익률':<10} | {'YJ 수익률':<10} | {'격차 (억)':<8}")
+print("-" * 140)
+yearly = best['DF'].groupby(best['DF'].index.year).last()
+for year, row in yearly.iterrows():
+    d_ror = (row['DCA_Val'] / row['DCA_Prin'] - 1) * 100
+    y_ror = ((row['YJ_Val'] / row['DCA_Prin']) - 1) * 100
+    gap = (row['YJ_Val'] - row['DCA_Val']) / 100000000
+    print(f"{year:<6} | {row['DCA_Prin']/10000:10,.0f}만 | {row['DCA_Val']/10000:10,.0f}만 | {row['YJ_Val']/10000:10,.0f}만 | {d_ror:9.1f}% | {y_ror:9.1f}% | {gap:8.2f}억")
+
+# ==========================================
+# 7. 그래프 시각화 (3단 분리 완벽 복원)
+# ==========================================
+fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(15, 16), sharex=True)
+
+ax1.plot(best['DF'].index, best['DF']['YJ_Val'], label='YJAlgo Asset', color='#1f77b4', linewidth=2)
+ax1.plot(best['DF'].index, best['DF']['DCA_Val'], label='Normal DCA', color='#ff7f0e', linestyle='--', alpha=0.7)
+ax1.set_yscale('log')
+ax1.set_title(f"1. YJAlgo (S&P 500) vs Normal DCA Performance ({start_year}-2026)", fontsize=14, fontweight='bold')
+ax1.set_ylabel("Asset Value (KRW, Log Scale)")
+ax1.legend(loc='upper left')
+
+idx_sp500 = df.loc[best['DF'].index, 'Price']
+idx_ndq = df.loc[best['DF'].index, 'Nasdaq']
+ax2.plot(best['DF'].index, idx_sp500, label='S&P 500 Index', color='black', linewidth=1.5)
+ax2.plot(best['DF'].index, idx_ndq, label='Nasdaq Index', color='purple', linewidth=1.5, alpha=0.7)
+ax2.set_yscale('log')
+
+state_colors = {'Bull': '#e6f3ff', 'Bear': '#fff2e6', 'Panic': '#ffe6e6'}
+for state, color in state_colors.items():
+    ax2.fill_between(best['DF'].index, 10, 50000, where=(best['DF']['State']==state), color=color, alpha=0.6)
+
+ax2.set_ylim(idx_sp500.min()*0.8, idx_ndq.max()*1.2)
+ax2.set_title("2. Market Index (S&P 500 & Nasdaq) & Market States (Bull/Bear/Panic)", fontsize=14, fontweight='bold')
+ax2.set_ylabel("Index (Log Scale)")
+
+from matplotlib.patches import Patch
+legend_elements = [
+    plt.Line2D([0], [0], color='black', lw=1.5, label='S&P 500 Index'),
+    plt.Line2D([0], [0], color='purple', lw=1.5, alpha=0.7, label='Nasdaq Index'),
+    Patch(facecolor='#e6f3ff', edgecolor='none', label='Bull State (Lev)'),
+    Patch(facecolor='#fff2e6', edgecolor='none', label='Bear State (Def)'),
+    Patch(facecolor='#ffe6e6', edgecolor='none', label='Panic State (Buy)')
+]
+ax2.legend(handles=legend_elements, loc='upper left')
+
+ax3.fill_between(best['DF'].index, 0, best['DF']['YJ_Cash']/100000000, color='green', alpha=0.4, label='CMA Reserve (억 원)')
+ax3.set_title("3. CMA Cash Reserve Level (War Chest)", fontsize=14, fontweight='bold')
+ax3.set_ylabel("Asset (Billion KRW)")
+ax3.set_xlabel("Year")
+ax3.legend(loc='upper left')
+
+plt.tight_layout()
+plt.show()
+
+# ==========================================
+# 8. 오늘의 행동 지침
+# ==========================================
+last_date = df.index[-1]
+last_res = best['DF'].iloc[-1]
+last_data = df.iloc[-1]
+
+ndq_s = "No Data"
+if not np.isnan(last_data['Nasdaq']):
+    if last_data['VIX'] >= best['Params']['vix_panic'] and last_data['NDQ_MDD'] <= best['Params']['mdd_panic']: ndq_s = "Panic"
+    elif last_data['NDQ_CCI'] > best['Params']['cci_bull'] and last_data['NDQ_RSI'] > best['Params']['rsi_bull']: ndq_s = "Bull"
+    elif last_data['NDQ_CCI'] < best['Params']['cci_bear']: ndq_s = "Bear"
+    else: ndq_s = "Hold/Bear"
+
+print("\n" + "="*85)
+print(f"🧭 [오늘의 행동 지침] 기준일: {last_date.date()} (S&P 500 전용 엔진 최적화)")
+print("="*85)
+print(f"📈 [현재 시장 가격] S&P 500: {last_data['Price']:,.2f} | Nasdaq: {last_data['Nasdaq']:,.2f}")
+print("-" * 85)
+print(f"▶ 현재 CMA 잔고  : {last_res['YJ_Cash']/10000:,.0f}만 원 (대기 자금)")
+print(f"▶ 오늘의 기본적립: 주식 매수 {(annual_budget*15/18)/252:,.0f}원 | CMA 적립 {(annual_budget*3/18)/252:,.0f}원")
+if last_res['Panic_Buy'] > 0:
+    print(f"🚨 [패닉 매수 발동]: CMA에서 {last_res['Panic_Buy']:,.0f}원 인출하여 즉시 추가 매수!")
+print("-" * 85)
+print(f"🇺🇸 [메인 지표: S&P 500 기준]")
+print(f"   상태: {last_res['State']} (추천 레버리지: {last_res['Lev']}배) | VIX: {last_data['VIX']:.2f} | MDD: {last_data['MDD']*100:.2f}%")
+print(f"🚀 [참고 지표: 나스닥 (Nasdaq) 기준]")
+print(f"   상태: {ndq_s} | MDD: {last_data['NDQ_MDD']*100:.2f}% | CCI: {last_data['NDQ_CCI']:.2f} | RSI: {last_data['NDQ_RSI']:.2f}")
+print(f"   💡 [전략 분석]: 현재 S&P 500과 나스닥의 상태가 {('일치합니다.' if last_res['State']==ndq_s else '다릅니다. 나스닥의 변동성에 유의하세요.')}")
+print("="*85)

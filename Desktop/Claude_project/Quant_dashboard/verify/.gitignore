@@ -1,0 +1,14 @@
+# API keys / secrets — NEVER commit
+.anthropic_api_key
+.dart_api_key
+*.key
+.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+
+# Logs / app output
+*.log
+_st.log

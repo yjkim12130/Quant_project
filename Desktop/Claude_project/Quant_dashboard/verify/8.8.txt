@@ -1,0 +1,1079 @@
+    1 """
+    2 YJ-Quant Dashboard v8.8 — 개선 1건 반영
+    3 ═══════════════════════════════════════════════════════
+    4 v8.8 변경 (vs v8.7):
+    5   [#13] Panic 단계매집 시뮬레이션 추가
+    6         - 반복매집(기존 v8.7): 조건 충족 시 panic_period마다 반복 매수
+    7         - 단계매집(신규 v8.8): 1차→2차→3차 각 단계 최초 1회만 매수
+    8           EX) MDD:-15% → CMA 40% 1차 매수, 이후 MDD:-35% 도달 시만 2차 매수
+    9         - 백테스트 탭 하단에 두 방식 수익률/MDD 비교 추가
+   10 """
+   11 import itertools, time
+   12 from datetime import date, timedelta
+   13 import numpy as np, pandas as pd
+   14 import plotly.graph_objects as go
+   15 from plotly.subplots import make_subplots
+   16 import streamlit as st
+   17 import yfinance as yf
+   18
+   19 st.set_page_config(page_title="YJ-Quant", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
+   20 TRADING_DAYS = 252; LEV_COST = 0.045; CMA_INTEREST = 0.035
+   21 TODAY = date.today().isoformat(); CUR_YEAR = date.today().year; _D = "plotly_dark"
+   22
+   23 # ★ [#2] 중국/유럽 증시 추가
+   24 ASSET_CLASSES = {
+   25     "S&P 500":    {"sym":"^GSPC",   "vix":"^VIX","vf":15,"cur":"$","col":"#00d084"},
+   26     "Nasdaq":     {"sym":"^IXIC",   "vix":"^VXN","vf":20,"cur":"$","col":"#2196f3"},
+   27     "금(Gold)":   {"sym":"GC=F",    "vix":None,  "vf":15,"cur":"$","col":"#ffd700"},
+   28     "KOSPI":      {"sym":"^KS11",   "vix":None,  "vf":20,"cur":"₩","col":"#ff6b6b"},
+   29     "Nikkei225":  {"sym":"^N225",   "vix":None,  "vf":20,"cur":"¥","col":"#ab47bc"},
+   30     "Bitcoin":    {"sym":"BTC-USD", "vix":None,  "vf":40,"cur":"$","col":"#ff9800"},
+   31     "DAX":        {"sym":"^GDAXI",  "vix":None,  "vf":18,"cur":"€","col":"#00bcd4"},
+   32     "상해종합":   {"sym":"000001.SS","vix":None,  "vf":20,"cur":"¥","col":"#e91e63"},
+   33     "FTSE100":    {"sym":"^FTSE",   "vix":None,  "vf":18,"cur":"£","col":"#607d8b"},
+   34     "CAC40":      {"sym":"^FCHI",   "vix":None,  "vf":18,"cur":"€","col":"#795548"},
+   35 }
+   36
+   37 TOP10 = {
+   38     2000:['GE','INTC','MSFT','CSCO','XOM','WMT','C','ORCL','PFE','IBM'],
+   39     2001:['GE','MSFT','XOM','C','WMT','PFE','INTC','JNJ','BP','AIG'],
+   40     2002:['GE','MSFT','XOM','WMT','C','PFE','JNJ','INTC','AIG','IBM'],
+   41     2003:['GE','MSFT','XOM','WMT','PFE','C','JNJ','INTC','AIG','IBM'],
+   42     2004:['GE','XOM','MSFT','WMT','C','PFE','JNJ','INTC','AIG','IBM'],
+   43     2005:['GE','XOM','MSFT','C','WMT','BP','PFE','JNJ','IBM','AIG'],
+   44     2006:['XOM','GE','MSFT','C','BAC','WMT','PFE','JNJ','BP','AIG'],
+   45     2007:['XOM','GE','MSFT','WMT','C','BP','BAC','JNJ','PFE','AIG'],
+   46     2008:['XOM','GE','MSFT','WMT','JNJ','PG','CVX','T','IBM','JPM'],
+   47     2009:['XOM','WMT','MSFT','JNJ','PG','IBM','CVX','JPM','GE','AAPL'],
+   48     2010:['XOM','AAPL','MSFT','BRK-B','GE','WMT','GOOGL','CVX','IBM','PG'],
+   49     2011:['XOM','AAPL','MSFT','IBM','CVX','JNJ','WMT','GE','PG','GOOGL'],
+   50     2012:['AAPL','XOM','MSFT','WMT','IBM','GE','CVX','BRK-B','GOOGL','JNJ'],
+   51     2013:['AAPL','XOM','MSFT','GOOGL','BRK-B','GE','JNJ','WMT','CVX','PG'],
+   52     2014:['AAPL','XOM','MSFT','GOOGL','BRK-B','JNJ','GE','WMT','CVX','PG'],
+   53     2015:['AAPL','GOOGL','MSFT','BRK-B','XOM','AMZN','META','JNJ','GE','WMT'],
+   54     2016:['AAPL','GOOGL','MSFT','BRK-B','AMZN','META','JNJ','XOM','JPM','WMT'],
+   55     2017:['AAPL','GOOGL','MSFT','AMZN','BRK-B','META','JNJ','JPM','XOM','V'],
+   56     2018:['AAPL','MSFT','AMZN','GOOGL','BRK-B','META','JNJ','JPM','V','WMT'],
+   57     2019:['AAPL','MSFT','AMZN','GOOGL','BRK-B','META','JPM','JNJ','V','WMT'],
+   58     2020:['AAPL','MSFT','AMZN','GOOGL','META','TSLA','BRK-B','V','JNJ','WMT'],
+   59     2021:['AAPL','MSFT','GOOGL','AMZN','TSLA','META','NVDA','BRK-B','JPM','JNJ'],
+   60     2022:['AAPL','MSFT','GOOGL','AMZN','BRK-B','TSLA','UNH','JNJ','V','NVDA'],
+   61     2023:['AAPL','MSFT','AMZN','NVDA','GOOGL','META','TSLA','BRK-B','LLY','V'],
+   62     2024:['MSFT','AAPL','NVDA','GOOGL','AMZN','META','BRK-B','LLY','TSLA','AVGO'],
+   63     2025:['NVDA','AAPL','MSFT','GOOGL','AMZN','META','TSLA','AVGO','LLY','BRK-B'],
+   64     2026:['NVDA','AAPL','MSFT','GOOGL','AMZN','META','TSLA','AVGO','LLY','BRK-B'],
+   65 }
+   66
+   67 # ═══════════════════════ AI 해석 박스 ═══════════════════════
+   68 def _ai_box(title, bullets, accent="#00d084"):
+   69     items = "".join(f"<li style='margin:5px 0'>{b}</li>" for b in bullets)
+   70     st.markdown(f"""<div style="background:rgba(0,208,132,0.07);border-left:4px solid {accent};
+   71     padding:14px 18px;border-radius:8px;margin:16px 0;font-size:0.91em;line-height:1.6">
+   72     <span style="color:{accent};font-weight:700">🤖 AI 해석 — {title}</span>
+   73     <ul style="margin:10px 0 0 0;padding-left:20px">{items}</ul></div>""", unsafe_allow_html=True)
+   74
+   75 def _ai_tab1(sp, rp):
+   76     best=sp.idxmin(); worst=sp.idxmax()
+   77     under=[f"{n}({v:+.1f}%)" for n,v in sp.items() if v<-5]
+   78     over=[f"{n}({v:+.1f}%)" for n,v in sp.items() if v>5]
+   79     b=[f"분석 기간 {rp} | {len(sp)}개 자산 비교",
+   80        f"가장 저평가: <b>{best}</b> ({sp[best]:+.1f}%)",
+   81        f"가장 고평가: <b>{worst}</b> ({sp[worst]:+.1f}%)"]
+   82     if under: b.append(f"저평가 자산: {', '.join(under)}")
+   83     if over: b.append(f"고평가 자산: {', '.join(over)}")
+   84     return b
+   85
+   86 # ★ [#6] Panic 전환 조건 추가
+   87 def _ai_tab2(reg, mn, vn, cn, rn, dn, p):
+   88     sr_v=p.get("stock_ratio",15); lv_map={"Bull":p.get("lev_bull",2.0),"Bear":p.get("lev_bear",1.0),"Panic":p.g
+      et("lev_panic",1.5)}
+   89     lv=lv_map.get(reg,1.0); b=[f"현재 상태: <b>{reg}</b> | 레버리지 {lv}배"]
+   90     if reg=="Bull":
+   91         b+=[f"레버리지 {lv}배 유지 — 추세 추종",
+   92             f"Bear 전환: CCI < {p.get('cci_bear',-50)} AND Disp < -3%",
+   93             f"Panic 전환: VIX ≥ {p.get('vix_panic',30)} AND MDD ≤ {p.get('mdd_panic',-0.15)*100:.0f}%"]
+   94     elif reg=="Bear":
+   95         b+=[f"레버리지 {lv}배 축소",
+   96             f"Bull 전환: CCI > {p.get('cci_bull',50)} AND RSI > {p.get('rsi_bull',70)}",
+   97             f"Panic 전환: VIX ≥ {p.get('vix_panic',30)} AND MDD ≤ {p.get('mdd_panic',-0.15)*100:.0f}%"]
+   98     else:
+   99         b+=[f"Panic — CMA 드레인 매수 발동",
+  100             f"MDD {mn*100:.1f}%, VIX {vn:.1f} — 저점 분할 매수",
+  101             f"Bear 이탈 조건: CCI > 0 AND RSI > {p.get('rsi_bear',50)} (VIX 하락만으로는 이탈 안 됨)"]
+  102     b.append(f"매일 ETF {sr_v}/18 + CMA {18-sr_v}/18 적립")
+  103     return b
+  104
+  105 def _ai_tab3(m, rs, asset_name):
+  106     ar=m.get('annual_return',0);mdd=m.get('mdd',0);cal=m.get('calmar',0);sh=m.get('sharpe',0);fv=m.get('final_v
+      alue',0)
+  107     b=[f"연수익률 <b>{ar:.1f}%</b> | MDD {mdd:.1f}%",
+  108        f"Sharpe <b>{sh:.3f}</b> {'✅≥1.0' if sh>=1.0 else ⚠<1.0'}",
+  109        f"Calmar <b>{cal:.4f}</b> {'✅≥0.3' if cal>=0.3 else ⚠<0.3'}",
+  110        f"최종 <b>{fv/1e8:.2f}억</b> | Bull {rs.get('Bull',0)}일 / Bear {rs.get('Bear',0)}일 / Panic {rs.get('Pa
+      nic',0)}일",
+  111        f"Panic 매집 <b>{rs.get('P총(만)',0):.0f}만</b>"]
+  112     return b
+  113
+  114 def _ai_tab4(wr):
+  115     wm=wr.get('metrics',{}); wins=wr.get('windows',[]); pv_d=wr.get('p_value',{}) or {}
+  116     ar=wm.get('annual_return',0); oos_pos=sum(1 for w in wins if w.get('OOS_Ret%',0)>0)
+  117     p_val=pv_d.get('p_value',1.0); sig=pv_d.get('significant',False)
+  118     b=[f"OOS 연수익률 <b>{ar:.1f}%</b> | 승률 {oos_pos}/{len(wins)}",
+  119        f"순열 검정: p={p_val:.4f} → {'✅유의' if sig else '❌비유의'}"]
+  120     return b
+  121
+  122 def _ai_tab5(results):
+  123     rows=[(n,r['metrics'].get('annual_return',0),r['metrics'].get('mdd',0),r['metrics'].get('calmar',0),r['metr
+      ics'].get('final_value',0)) for n,r in results.items() if r and r.get('metrics')]
+  124     if not rows: return ["결과 없음"]
+  125     best_ret=max(rows,key=lambda x:x[1]); best_cal=max(rows,key=lambda x:x[3])
+  126     b=[f"최고 수익률: <b>{best_ret[0]}</b> ({best_ret[1]:.1f}%)",
+  127        f"최고 Calmar: <b>{best_cal[0]}</b> ({best_cal[3]:.4f})"]
+  128     if best_ret[0]==best_cal[0]: b.append(f"👑 <b>{best_ret[0]}</b> 종합 1위")
+  129     return b
+  130
+  131 def _ai_tab6(ohr):
+  132     if not ohr: return ["결과 없음"]
+  133     buy=[r['ticker'] for r in ohr if '매수' in r['signal']]
+  134     heat=[r['ticker'] for r in ohr if '과열' in r['signal']]
+  135     b=[f"{len(ohr)}종목: 매수 <b>{len(buy)}</b> / 과열 <b>{len(heat)}</b>"]
+  136     if buy: b.append(f"✅ 매수: {', '.join(buy)}")
+  137     if heat: b.append(f"🔴 과열: {', '.join(heat)}")
+  138     return b
+  139
+  140 def _ai_tab7(sim, yrs, method):
+  141     p50=sim['percentiles']['p50'];ti=sim['total_invested'];cv=sim['current_val']
+  142     an50=((p50/cv)**(1/yrs)-1)*100 if cv>0 else 0
+  143     prob2x=sim['target_probs'].get('100%',0)
+  144     b=[f"{method} {yrs}년 | 중앙값 연환산 <b>{an50:.1f}%</b>",
+  145        f"원금 2배 확률: <b>{prob2x}%</b>"]
+  146     return b
+  147
+  148 # ★ [#13] Panic 매집방식 비교 AI 해석
+  149 def _ai_panic_cmp(cp_res):
+  150     rows = [(n, r['metrics'].get('annual_return',0), r['metrics'].get('mdd',0),
+  151              r['metrics'].get('calmar',0), r.get('regime_stats',{}).get('P총(만)',0))
+  152             for n, r in cp_res.items() if r and r.get('metrics')]
+  153     if not rows: return ["결과 없음"]
+  154     best_ret = max(rows, key=lambda x: x[1])
+  155     best_mdd = max(rows, key=lambda x: -x[2])
+  156     best_cal = max(rows, key=lambda x: x[3])
+  157     b = [f"수익률 우위: <b>{best_ret[0]}</b> ({best_ret[1]:.1f}%)",
+  158          f"MDD 우위: <b>{best_mdd[0]}</b> (MDD {best_mdd[2]:.1f}%)",
+  159          f"Calmar 우위: <b>{best_cal[0]}</b> ({best_cal[3]:.4f})"]
+  160     for n, ar, mdd, cal, pt in rows:
+  161         b.append(f"{n}: 연{ar:.1f}% | MDD {mdd:.1f}% | Panic매집 {pt:.0f}만")
+  162     if best_ret[0] == best_mdd[0] == best_cal[0]:
+  163         b.append(f"👑 <b>{best_ret[0]}</b> 수익률·MDD·Calmar 모두 우위")
+  164     return b
+  165
+  166 # ═══════════════════════ 데이터 수집 ═══════════════════════
+  167 _dl_errors=[]
+  168 def _yf(syms,start,end,retries=3):
+  169     if isinstance(syms,str):syms=[syms]
+  170     for a in range(retries):
+  171         try:
+  172             r=yf.download(syms,start=start,end=end,progress=False,timeout=30)
+  173             if not r.empty:return r
+  174         except Exception as e:_dl_errors.append(f"[{','.join(syms[:3])}] {type(e).__name__}");time.sleep(2*(a+1
+      ))
+  175     if len(syms)>1:
+  176         fr={};failed=[]
+  177         for s in syms:
+  178             for _ in range(2):
+  179                 try:
+  180                     d=yf.download(s,start=start,end=end,progress=False,timeout=20)
+  181                     if not d.empty:fr[s]=d["Close"];break
+  182                 except:time.sleep(2)
+  183             else:failed.append(s)
+  184         if failed:_dl_errors.append(f"실패: {','.join(failed)}")
+  185         if fr:return pd.DataFrame(fr)
+  186     return pd.DataFrame()
+  187
+  188 def _close(raw):
+  189     return raw["Close"].ffill() if isinstance(raw.columns,pd.MultiIndex) else raw.ffill()
+  190
+  191 @st.cache_data(ttl=3600,show_spinner=False)
+  192 def fetch_asset(name,start):
+  193     ac=ASSET_CLASSES[name];ps=ac["sym"];vs=ac["vix"];vf=ac["vf"]
+  194     raw=_yf([ps]+([vs] if vs else []),start,TODAY)
+  195     if raw.empty:return pd.DataFrame()
+  196     c=_close(raw);df=pd.DataFrame(index=c.index)
+  197     if ps in c.columns:df["Price"]=c[ps]
+  198     elif len(c.columns)==1:df["Price"]=c.iloc[:,0]
+  199     else:return pd.DataFrame()
+  200     df["VIX"]=c[vs] if vs and vs in c.columns else df["Price"].pct_change().rolling(20).std()*np.sqrt(252)*100
+  201     df=df.ffill();df["VIX"]=df["VIX"].fillna(vf);df["Daily_Ret"]=df["Price"].pct_change()
+  202     return df.dropna(subset=["Price"])
+  203
+  204 @st.cache_data(ttl=3600,show_spinner="📡 자산군 비교...")
+  205 def fetch_all_assets(start):
+  206     syms={n:a["sym"] for n,a in ASSET_CLASSES.items()};raw=_yf(list(syms.values()),start,TODAY)
+  207     if raw.empty:return pd.DataFrame()
+  208     c=_close(raw);df=pd.DataFrame(index=c.index)
+  209     for n,s in syms.items():
+  210         if s in c.columns:df[n]=c[s]
+  211     return df.ffill().bfill()
+  212
+  213 @st.cache_data(ttl=86400,show_spinner="📡 종목...")
+  214 def fetch_stocks(start):
+  215     all_t=list({t for ts in TOP10.values() for t in ts})
+  216     raw=_yf(["SPY"]+all_t,start,TODAY);
+  217     if raw.empty:return pd.DataFrame(),pd.Series(dtype=float)
+  218     c=_close(raw);return c,c.get("SPY",pd.Series(dtype=float))
+  219
+  220 # ═══════════════════════ 지표 ═══════════════════════
+  221 def add_ind(data):
+  222     df=data.copy();p=df["Price"];df["MA_200"]=p.rolling(200).mean()
+  223     df["Disp"]=(p-df["MA_200"])/df["MA_200"]*100
+  224     sma=p.rolling(200).mean();mad=p.rolling(200).apply(lambda x:np.abs(x-x.mean()).mean(),raw=True)
+  225     df["CCI"]=(p-sma)/(0.015*mad)
+  226     d=p.diff();g=d.where(d>0,0.0).rolling(14).mean();l=(-d.where(d<0,0.0)).rolling(14).mean()
+  227     df["RSI"]=100-(100/(1+g/l));df["MDD"]=(p/p.rolling(252,min_periods=1).max())-1.0
+  228     return df
+  229
+  230 # ═══════════════════════ 전략 엔진 ═══════════════════════
+  231 def _state(cur,vix,cci,rsi,mdd,disp,p):
+  232     if vix>=p["vix_panic"] and mdd<=p["mdd_panic"]:return "Panic"
+  233     if cur=="Panic":return "Bear" if (cci>0 and rsi>p["rsi_bear"]) else "Panic"
+  234     if cur=="Bear":return "Bull" if (cci>p["cci_bull"] and rsi>p["rsi_bull"]) else "Bear"
+  235     return "Bear" if (cci<p["cci_bear"] and disp<-3.0) else "Bull"
+  236
+  237 def _mstg(ma,ms):
+  238     if ma>=ms[0]:return f"1단계(≥{ms[0]*100:.0f}%)"
+  239     elif ma>=ms[1]:return f"2단계(≥{ms[1]*100:.0f}%)"
+  240     elif ma>=ms[2]:return f"3단계(≥{ms[2]*100:.0f}%)"
+  241     return "미달"
+  242
+  243 # ★ [#13] staged 파라미터 추가 — Panic 단계매집 지원
+  244 def run_beta(data, params, budget, inh=None, sim_start=None, sim_end=None, staged=False):
+  245     """
+  246     staged=False (기본): v8.7 반복매집 — panic_period마다 조건 충족 시 반복 매수
+  247     staged=True  (신규): v8.8 단계매집 — MDD 구간별 최초 1회만 매수 (1차→2차→3차)
+  248     """
+  249     df=add_ind(data);df=df.dropna(subset=["MA_200","MDD"]).copy()
+  250     if sim_start:df=df[df.index>=pd.Timestamp(sim_start)]
+  251     if sim_end:df=df[df.index<=pd.Timestamp(sim_end)]
+  252     if df.empty:return _emp()
+  253     ms=list(params["mdd_threshold_sets"]);ds=list(params["drain_sets"])
+  254     dst=(budget*(params["stock_ratio"]/18))/TRADING_DAYS;dcs=(budget*((18-params["stock_ratio"])/18))/TRADING_D
+      AYS
+  255     if inh:
+  256         ys=float(inh.get("yj_st",0));yc=float(inh.get("yj_cs",0));cur=inh.get("state","Bull")
+  257         pc=int(inh.get("p_cnt",0));tp=float(inh.get("total_principal",0))
+  258         panic_stage=int(inh.get("panic_stage",0))  # ★ 단계매집용 이전 단계 기억
+  259     else:
+  260         ys=yc=0.0;cur="Bull";pc=0;tp=0.0
+  261         panic_stage=0  # ★ 0=미매수, 1=1차완료, 2=2차완료, 3=3차완료
+  262     recs,slogs,plogs,elogs=[],[],[],[];pt=0.0;panic_ep=None
+  263     for dt,row in df.iterrows():
+  264         dr=float(row.get("Daily_Ret",0) or 0);vx=float(row.get("VIX",15));cc=float(row.get("CCI",0))
+  265         rs=float(row.get("RSI",50));md=float(row.get("MDD",0));dp=float(row.get("Disp",0))
+  266         pv=cur;cur=_state(cur,vx,cc,rs,md,dp,params)
+  267         lv={"Bull":params["lev_bull"],"Bear":params["lev_bear"],"Panic":params["lev_panic"]}[cur]
+  268         if cur!=pv:slogs.append({"날짜":dt.date(),"변화":f"{pv}→{cur}","VIX":round(vx,1),"MDD%":round(md*100,1)
+      ,"CCI":round(cc,1),"RSI":round(rs,1),"Disp%":round(dp,1),"레버리지":lv})
+  269         # ★ Panic 탈출 시 단계 초기화
+  270         if pv=="Panic" and cur!="Panic":
+  271             panic_stage=0
+  272         tp+=budget/TRADING_DAYS
+  273         if dr:ys*=1+dr*lv-max(0,lv-1)*(LEV_COST/TRADING_DAYS)
+  274         yc*=1+CMA_INTEREST/TRADING_DAYS;ys+=dst;yc+=dcs
+  275         if cur=="Panic":
+  276             if panic_ep is None:panic_ep={"시작":dt.date(),"종료":"-","지속일":0,"전CMA(만)":round(yc/1e4,1),"
+      후CMA(만)":0.0,"총매집(만)":0.0,"최대MDD%":round(md*100,1),"상태":"진행중"}
+  277             if staged:
+  278                 # ★ 단계매집: MDD 구간 진입 시 해당 단계 최초 1회만 매수
+  279                 m=abs(md)
+  280                 new_stage=(3 if m>=ms[0] else 2 if m>=ms[1] else 1 if m>=ms[2] else 0)
+  281                 if new_stage>panic_stage and new_stage>0:
+  282                     # stage 1→ds[2], stage 2→ds[1], stage 3→ds[0]
+  283                     dr2={1:ds[2],2:ds[1],3:ds[0]}[new_stage]
+  284                     if dr2>0 and yc>0:
+  285                         pb=min(yc*dr2,yc);cma_b=yc;ys+=pb;yc-=pb;pt+=pb
+  286                         panic_stage=new_stage
+  287                         plogs.append({"날짜":dt.date(),"MDD%":round(md*100,1),"단계":_mstg(m,ms),
+  288                                       "매수차수":f"{new_stage}차","매수(만)":round(pb/1e4,1),
+  289                                       "CMA전(만)":round(cma_b/1e4,1),"CMA후(만)":round(yc/1e4,1),
+  290                                       "누적(만)":round(pt/1e4,1),"VIX":round(vx,1)})
+  291             else:
+  292                 # ★ 반복매집(기존 v8.7): panic_period마다 조건 충족 시 반복 매수
+  293                 if pc%params["panic_period"]==0:
+  294                     m=abs(md);dr2=(ds[0] if m>=ms[0] else ds[1] if m>=ms[1] else ds[2] if m>=ms[2] else 0)
+  295                     if dr2>0:
+  296                         pb=min((yc*dr2)/params["periodic_denom"],yc);cma_b=yc;ys+=pb;yc-=pb;pt+=pb
+  297                         plogs.append({"날짜":dt.date(),"MDD%":round(md*100,1),"단계":_mstg(m,ms),
+  298                                       "매수(만)":round(pb/1e4,1),"CMA전(만)":round(cma_b/1e4,1),
+  299                                       "CMA후(만)":round(yc/1e4,1),"누적(만)":round(pt/1e4,1),"VIX":round(vx,1)}
+      )
+  300             if panic_ep:panic_ep["지속일"]+=1;panic_ep["최대MDD%"]=min(panic_ep["최대MDD%"],round(md*100,1));pa
+      nic_ep["총매집(만)"]=round(pt/1e4,1)
+  301         else:
+  302             if panic_ep is not None:panic_ep["종료"]=dt.date();panic_ep["후CMA(만)"]=round(yc/1e4,1);panic_ep["
+      상태"]="✅충분" if yc>1e6 else "⚠부족";elogs.append(panic_ep);panic_ep=None
+  303         pc=pc+1 if cur=="Panic" else 0
+  304         recs.append({"time":dt,"yj_val":ys+yc,"yj_st":ys,"yj_cs":yc,"state":cur,"leverage":lv,"total_principal"
+      :tp})
+  305     if panic_ep is not None:panic_ep["종료"]=df.index[-1].date();panic_ep["후CMA(만)"]=round(yc/1e4,1);panic_ep
+      ["상태"]="진행중";elogs.append(panic_ep)
+  306     if not recs:return _emp()
+  307     eq=pd.DataFrame(recs).set_index("time");sc=eq["state"].value_counts()
+  308     rstat={"Bull":int(sc.get("Bull",0)),"Bear":int(sc.get("Bear",0)),"Panic":int(sc.get("Panic",0)),"전환":len(
+      slogs),"P매수":len(plogs),"P총(만)":round(pt/1e4,1)}
+  309     return {"equity_curve":eq,"dca_curve":_dca(df,budget),"metrics":_met(eq),"state_logs":slogs,"panic_logs":pl
+      ogs,"panic_episodes":elogs,"regime_stats":rstat,
+  310             "final_state":{"yj_st":ys,"yj_cs":yc,"state":cur,"p_cnt":pc,"total_principal":tp,"panic_stage":pani
+      c_stage}}
+  311
+  312 def run_alpha(data,sc2,spy,params,budget,alpha_dca_ratio=0.0,inh=None,sim_start=None,sim_end=None):
+  313     df=add_ind(data);df=df.dropna(subset=["MA_200","MDD"]).copy()
+  314     if sim_start:df=df[df.index>=pd.Timestamp(sim_start)]
+  315     if sim_end:df=df[df.index<=pd.Timestamp(sim_end)]
+  316     if df.empty:return _emp()
+  317     sr=sc2.pct_change().fillna(0);msets=list(params["mdd_threshold_sets"]);dsets=list(params["drain_sets"]);tn=
+      params.get("top_n",10)
+  318     dt_total=budget/TRADING_DAYS;d_stock=dt_total*(params["stock_ratio"]/18);d_rem=dt_total*((18-params["stock_
+      ratio"])/18)
+  319     d_adca=d_rem*alpha_dca_ratio;d_cma=d_rem*(1-alpha_dca_ratio)
+  320     if inh:ys=float(inh.get("yj_st",0));yc=float(inh.get("yj_cs",0));ya=float(inh.get("yj_alpha",0));cur=inh.ge
+      t("state","Bull");pc=int(inh.get("p_cnt",0));tp=float(inh.get("total_principal",0))
+  321     else:ys=yc=ya=0.0;cur="Bull";pc=0;tp=0.0
+  322     recs,plogs=[],[];pt=0.0;adca_total=0.0
+  323     for dt2,row in df.iterrows():
+  324         dr=float(row.get("Daily_Ret",0) or 0);vx=float(row.get("VIX",15));cc=float(row.get("CCI",0))
+  325         rs=float(row.get("RSI",50));md=float(row.get("MDD",0));dp=float(row.get("Disp",0));yr=dt2.year
+  326         cur=_state(cur,vx,cc,rs,md,dp,params)
+  327         if ya>0 and dt2 in sr.index:
+  328             tks=TOP10.get(yr-1,TOP10[max(TOP10)])[:tn];av=[t for t in tks if t in sr.columns]
+  329             if av:ya*=(1+float(sr.loc[dt2,av].mean()))
+  330         lv=1.0 if cur=="Panic" else {"Bull":params["lev_bull"],"Bear":params["lev_bear"]}[cur]
+  331         tp+=dt_total
+  332         if dr:ys*=1+dr*lv-max(0,lv-1)*(LEV_COST/TRADING_DAYS)
+  333         yc*=1+CMA_INTEREST/TRADING_DAYS;ys+=d_stock;ya+=d_adca;yc+=d_cma;adca_total+=d_adca
+  334         if cur=="Panic" and pc%params["panic_period"]==0:
+  335             m=abs(md);dr2=(dsets[0] if m>=msets[0] else dsets[1] if m>=msets[1] else dsets[2] if m>=msets[2] el
+      se 0)
+  336             if dr2>0 and yc>0:
+  337                 ba=min((yc*dr2)/params["periodic_denom"],yc);ya+=ba;yc-=ba;pt+=ba
+  338                 plogs.append({"날짜":dt2.date(),"MDD%":round(md*100,1),"단계":_mstg(m,msets),"매수(만)":round(b
+      a/1e4,1),"CMA전(만)":round((yc+ba)/1e4,1),"CMA후(만)":round(yc/1e4,1),"누적(만)":round(pt/1e4,1)})
+  339         pc=pc+1 if cur=="Panic" else 0
+  340         recs.append({"time":dt2,"yj_val":ys+ya+yc,"yj_st":ys,"yj_alpha":ya,"yj_cs":yc,"state":cur,"leverage":lv
+      ,"total_principal":tp})
+  341     if not recs:return _emp()
+  342     eq=pd.DataFrame(recs).set_index("time")
+  343     return {"equity_curve":eq,"dca_curve":_dca(df,budget),"metrics":_met(eq),"panic_logs":plogs,"state_logs":[]
+      ,"regime_stats":{"alpha_dca_ratio":alpha_dca_ratio,"적립TopN(만)":round(adca_total/1e4,1),"Panic매수(만)":round
+      (pt/1e4,1)},"final_state":{"yj_st":ys,"yj_cs":yc,"yj_alpha":ya,"state":cur,"p_cnt":pc,"total_principal":tp}}
+  344
+  345 def _dca(df,b):
+  346     d=b/TRADING_DAYS;sh=pr=0.0;rows=[]
+  347     for dt,row in df.iterrows():p=row["Price"];sh+=d/p if p>0 else 0;pr+=d;rows.append({"time":dt,"portfolio_va
+      lue":sh*p,"principal":pr})
+  348     return pd.DataFrame(rows).set_index("time")
+  349
+  350 def _met(eq):
+  351     if eq.empty:return {}
+  352     fv=eq["yj_val"].iloc[-1];inv=eq["total_principal"].iloc[-1];tr=(fv/inv-1)*100 if inv>0 else 0
+  353     pk=eq["yj_val"].cummax();mdd=((eq["yj_val"]/pk)-1).min()
+  354     yrs=(eq.index[-1]-eq.index[0]).days/365.25;ar=((fv/inv)**(1/max(yrs,0.01))-1) if inv>0 else 0
+  355     cal=ar/abs(mdd) if mdd!=0 else 0;dr=eq["yj_val"].pct_change().dropna();sh=dr.mean()/dr.std()*np.sqrt(TRADIN
+      G_DAYS) if dr.std()>0 else 0
+  356     return {"total_return":round(tr,2),"annual_return":round(ar*100,2),"mdd":round(mdd*100,2),"calmar":round(ca
+      l,4),"sharpe":round(sh,4),"final_value":round(fv,0)}
+  357
+  358 def _emp():
+  359     return {"equity_curve":pd.DataFrame(),"dca_curve":pd.DataFrame(),"metrics":{},"state_logs":[],"panic_logs":
+      [],"panic_episodes":[],"regime_stats":{},"final_state":{}}
+  360
+  361 # ═══════════════════════ 그리드+WFV ═══════════════════════
+  362 def _combos(g):k,v=zip(*g.items());return [dict(zip(k,v2)) for v2 in itertools.product(*v)]
+  363
+  364 def run_grid(data,grid,base,budget,pfn=None,sim_start=None,sim_end=None):
+  365     combos=_combos(grid);res=[];fail_cnt=0
+  366     for i,c in enumerate(combos):
+  367         try:r=run_beta(data,{**base,**c},budget,sim_start=sim_start,sim_end=sim_end);m=r["metrics"];res.append(
+      {**c,"calmar":m.get("calmar",-999),"annual_ret":m.get("annual_return",0),"mdd":m.get("mdd",0),"sharpe":m.get("s
+      harpe",0),"total_ret":m.get("total_return",0),"final_val":m.get("final_value",0)})
+  368         except:fail_cnt+=1
+  369         if pfn and (i+1)%max(len(combos)//20,1)==0:pfn((i+1)/len(combos))
+  370     if pfn:pfn(1.0)
+  371     if fail_cnt>0:_dl_errors.append(f"그리드: {fail_cnt}/{len(combos)} 실패")
+  372     return sorted(res,key=lambda x:x["calmar"],reverse=True)
+  373
+  374 def _optis(data,combos,base,budget,sim_start=None,sim_end=None):
+  375     bc,bp=-np.inf,{}
+  376     for c in combos:
+  377         try:r=run_beta(data,{**base,**c},budget,sim_start=sim_start,sim_end=sim_end);cal=r["metrics"].get("calm
+      ar",-np.inf)
+  378         except:continue
+  379         if cal>bc:bc,bp=cal,c
+  380     return bp,bc
+  381
+  382 def run_wfv(data,base,budget,isy,oosy,grid,pfn=None,sim_start=None):
+  383     sim_year=int(sim_start[:4]) if sim_start else data.index.year.min()
+  384     yrs=sorted(y for y in data.index.year.unique() if y>=sim_year)
+  385     if len(yrs)<isy+oosy:return {"error":"기간부족","windows":[],"combined_equity":pd.DataFrame(),"metrics":{},
+      "p_value":None}
+  386     combos=_combos(grid);tw=max((len(yrs)-isy)//oosy,1);wins=[];oeqs=[];inh2=None;i=step=0
+  387     while i+isy<len(yrs):
+  388         iy=yrs[i:i+isy];oy=yrs[i+isy:i+isy+oosy]
+  389         if not oy:break
+  390         bp,bc=_optis(data,combos,base,budget,sim_start=f"{iy[0]}-01-01",sim_end=f"{iy[-1]}-12-31")
+  391         res=run_beta(data,{**base,**bp},budget,inh2,sim_start=f"{oy[0]}-01-01",sim_end=f"{oy[-1]}-12-31")
+  392         inh2=res["final_state"]
+  393         wins.append({"IS":f"{iy[0]}~{iy[-1]}","OOS":f"{oy[0]}","IS_Cal":round(bc,4),"OOS_Ret%":res["metrics"].g
+      et("annual_return",0),"OOS_MDD%":res["metrics"].get("mdd",0),"OOS_Cal":res["metrics"].get("calmar",0)})
+  394         if not res["equity_curve"].empty:oeqs.append(res["equity_curve"])
+  395         step+=1;
+  396         if pfn:pfn(min(step/tw,1.0))
+  397         i+=oosy
+  398     if not oeqs:return {"windows":wins,"combined_equity":pd.DataFrame(),"metrics":{},"p_value":None}
+  399     cb=pd.concat(oeqs).sort_index();cb=cb[~cb.index.duplicated(keep="last")]
+  400     return {"windows":wins,"combined_equity":cb,"metrics":_met(cb),"p_value":_perm(cb,data["Daily_Ret"].reindex
+      (cb.index).fillna(0))}
+  401
+  402 def _perm(eq,mrets,n=200):
+  403     if eq.empty or "leverage" not in eq.columns:return {"p_value":1.0,"significant":False}
+  404     lv=eq["leverage"].values;rt=mrets.values
+  405     def _c(r,l):
+  406         m=1.0
+  407         for ri,li in zip(r,l):m*=1+ri*li-max(0,li-1)*(LEV_COST/TRADING_DAYS)
+  408         return (m-1)*100
+  409     act=_c(rt,lv);rng=np.random.default_rng(42);null=np.array([_c(rt,rng.permutation(lv)) for _ in range(n)])
+  410     p=float(np.mean(null>=act));s=float(null.std())
+  411     return {"p_value":round(p,4),"z_score":round((act-null.mean())/s,3) if s>0 else 0,"significant":p<0.05}
+  412
+  413 # ═══════════════════════ 몬테카를로 ═══════════════════════
+  414 def _pure_returns(eq,b):
+  415     dc=b/TRADING_DAYS;vals=eq["yj_val"].values;pr=np.empty(len(vals)-1)
+  416     for i in range(len(pr)):pr[i]=(vals[i+1]-dc)/vals[i]-1 if vals[i]>0 else 0
+  417     return pr[np.isfinite(pr)]
+  418
+  419 def mc_sim(eq,b,yrs,n=1000):
+  420     dr=_pure_returns(eq,b);
+  421     if len(dr)<60:return None
+  422     cv=eq["yj_val"].iloc[-1];cp=eq["total_principal"].iloc[-1];nd=yrs*TRADING_DAYS;di=b/TRADING_DAYS
+  423     rng=np.random.default_rng(42);fv=np.zeros(n);paths=np.zeros((n,nd))
+  424     for i in range(n):
+  425         v=cv
+  426         for d in range(nd):v=v*(1+rng.choice(dr))+di;paths[i,d]=v
+  427         fv[i]=v
+  428     return _bsr(fv,paths,nd,n,yrs,cv,cp+b*yrs)
+  429
+  430 def boot_sim(eq,b,yrs,n=1000,blk=21):
+  431     dr=_pure_returns(eq,b);
+  432     if len(dr)<blk*2:return None
+  433     cv=eq["yj_val"].iloc[-1];cp=eq["total_principal"].iloc[-1];nd=yrs*TRADING_DAYS;di=b/TRADING_DAYS
+  434     nb=len(dr)-blk+1;rng=np.random.default_rng(123);fv=np.zeros(n);paths=np.zeros((n,nd))
+  435     for i in range(n):
+  436         v=cv;d=0
+  437         while d<nd:
+  438             st2=rng.integers(0,nb);bk=dr[st2:st2+blk]
+  439             for r in bk:
+  440                 if d>=nd:break
+  441                 v=v*(1+r)+di;paths[i,d]=v;d+=1
+  442         fv[i]=v
+  443     return _bsr(fv,paths,nd,n,yrs,cv,cp+b*yrs)
+  444
+  445 def _bsr(fv,paths,nd,n,yrs,cv,ti):
+  446     pp={f"p{p}":np.percentile(paths,p,axis=0) for p in [5,25,50,75,95]};tgts=[50,100,150,200,300,500]
+  447     return {"n_sims":n,"years":yrs,"current_val":cv,"total_invested":ti,"percentiles":{f"p{p}":np.percentile(fv
+      ,p) for p in [5,10,25,50,75,90,95]},"ret_pcts":{f"p{p}_ret":(np.percentile(fv,p)/ti-1)*100 for p in [5,10,25,50
+      ,75,90,95]},"target_probs":{f"{t}%":round(float(np.mean(fv>=ti*(1+t/100)))*100,1) for t in tgts},"final_vals":f
+      v,"path_pcts":pp,"n_days":nd}
+  448
+  449 # ═══════════════════════ 과열/저평가 ═══════════════════════
+  450 @st.cache_data(ttl=3600,show_spinner=False)
+  451 def analyze_oh(ticker):
+  452     try:
+  453         df=yf.download(ticker,period="2y",interval="1d",progress=False,timeout=20)
+  454         if isinstance(df.columns,pd.MultiIndex):df.columns=df.columns.get_level_values(0)
+  455         if df.empty or len(df)<200:return None
+  456     except:return None
+  457     p=df["Close"];df["MA50"]=p.rolling(50).mean();df["MA200"]=p.rolling(200).mean()
+  458     d=p.diff();g=d.where(d>0,0.0).rolling(14).mean();l=(-d.where(d<0,0.0)).rolling(14).mean()
+  459     df["RSI"]=100-(100/(1+g/(l+1e-9)));bb=p.rolling(20);df["BB_L"]=bb.mean()-2*bb.std()
+  460     tr=np.maximum(df["High"]-df["Low"],np.maximum(abs(df["High"]-p.shift()),abs(df["Low"]-p.shift())))
+  461     df["ATR"]=tr.rolling(14).mean();df["Peak"]=p.expanding().max();df["DD"]=(p-df["Peak"])/df["Peak"]
+  462     la=df.dropna().iloc[-1];cp=float(la["Close"]);m5=float(la["MA50"]);m2=float(la["MA200"])
+  463     rsi=float(la["RSI"]);dd=float(la["DD"]);atr=float(la["ATR"]);bbl=float(la["BB_L"])
+  464     bzh=m5*0.95;bzl=min(m2,bbl);slv=cp-2*atr;fsl=max(m2*0.95,slv) if cp>m2 else slv
+  465     sig="🟢매수"  if (cp<=bzh or rsi<45) else ("🔴과열" if rsi>70 else "🟡관망" )
+  466     return {"ticker":ticker,"price":cp,"ma50":m5,"ma200":m2,"rsi":rsi,"dd":dd,"atr":atr,"buy_zone":f"${bzl:.2f}
+      ~${bzh:.2f}","sl":fsl,"sl_pct":(fsl/cp-1)*100,"signal":sig,"vs_ma200":(cp/m2-1)*100}
+  467
+  468 # ★ [#11] P/OI 폴백
+  469 @st.cache_data(ttl=3600,show_spinner=False)
+  470 def analyze_rv(tickers,period="12mo"):
+  471     raw=_yf(tickers,f"{CUR_YEAR-2}-01-01",TODAY)
+  472     if raw.empty:return None,None,None
+  473     c=_close(raw).ffill().bfill();pm={"3mo":63,"6mo":126,"12mo":252,"24mo":504};c=c.tail(pm.get(period,252))
+  474     norm=c.apply(lambda x:x/x.dropna().iloc[0] if not x.dropna().empty else x)
+  475     ga=norm.mean(axis=1);sp=(norm.iloc[-1]-ga.iloc[-1])*100
+  476     l1=pd.DataFrame({"가격":c.iloc[-1],"괴리율(%)":sp}).sort_values("괴리율(%)")
+  477     l1["판정"]=l1["괴리율(%)"].apply(lambda x:"🟢저평가"  if x<-5 else ("🔴고평가" if x>5 else "🟡보합" ))
+  478     fund=[]
+  479     for t in tickers:
+  480         try:
+  481             tk=yf.Ticker(t);info=tk.info;mc=info.get("marketCap",np.nan)
+  482             loi=np.nan;qs="N/A";trend="N/A"
+  483             try:
+  484                 fin=tk.financials
+  485                 for metric in ["Operating Income","Gross Profit","EBITDA"]:
+  486                     if metric in fin.index:
+  487                         oi=fin.loc[metric].dropna()
+  488                         if not oi.empty:loi=oi.iloc[0];break
+  489                 qf=tk.quarterly_financials
+  490                 for metric in ["Operating Income","Gross Profit","EBITDA"]:
+  491                     if metric in qf.index:
+  492                         qoi=qf.loc[metric].dropna().sort_index().tail(4)
+  493                         if not qoi.empty:qs="→".join([f"{v/1e8:,.0f}억" for v in qoi.values]);break
+  494                 trend="📈" if (not np.isnan(loi) and loi>0) else "📉"
+  495             except:pass
+  496             poi=mc/loi if (not np.isnan(mc) and not np.isnan(loi) and loi>0) else np.nan
+  497             fund.append({"티커":t,"P/OI":round(poi,1) if not np.isnan(poi) else "N/A","트렌드":trend,"분기OI":q
+      s})
+  498         except:fund.append({"티커":t,"P/OI":"N/A","트렌드":"N/A","분기OI":"N/A"})
+  499     return l1,pd.DataFrame(fund).set_index("티커"),norm
+  500
+  501 # ═══════════════════════ 차트 ═══════════════════════
+  502 _SC={"Bull":"rgba(30,144,255,0.12)","Bear":"rgba(255,165,0,0.18)","Panic":"rgba(255,50,50,0.22)"}
+  503
+  504 def fig_eq(eq,dca,t):
+  505     f=go.Figure();f.add_trace(go.Scatter(x=eq.index,y=eq["yj_val"]/1e8,name="YJAlgo",line=dict(color="#00d084",
+      width=2.5)))
+  506     if not dca.empty:f.add_trace(go.Scatter(x=dca.index,y=dca["portfolio_value"]/1e8,name="DCA",line=dict(color
+      ="#ff9800",dash="dot")))
+  507     f.update_layout(title=t,yaxis_title="억원",template=_D,height=380);return f
+  508 def fig_dd(eq):
+  509     d=((eq["yj_val"]/eq["yj_val"].cummax())-1)*100;f=go.Figure(go.Scatter(x=eq.index,y=d,fill="tozeroy",line=di
+      ct(color="#ff4444")));f.update_layout(title="Drawdown(%)",template=_D,height=280);return f
+  510 def fig_yr(eq):
+  511     yr=eq["yj_val"].resample("YE").last().pct_change().dropna()*100;f=go.Figure(go.Bar(x=[str(d.year) for d in
+      yr.index],y=yr.values,marker_color=["#2ecc71" if v>=0 else "#e74c3c" for v in yr.values],text=[f"{v:.1f}%" for
+      v in yr.values],textposition="outside"));f.update_layout(title="연도별(%)",template=_D,height=340);return f
+  512
+  513 # ★ [#8] 레짐 차트 범례 추가
+  514 def fig_regime(eq,price):
+  515     f=go.Figure();f.add_trace(go.Scatter(x=price.index,y=price.values,name="지수",line=dict(color="white",width
+      =1.5)))
+  516     f.add_trace(go.Scatter(x=[None],y=[None],mode="markers",marker=dict(size=10,color="rgba(30,144,255,0.5)"),n
+      ame="🟦  Bull"))
+  517     f.add_trace(go.Scatter(x=[None],y=[None],mode="markers",marker=dict(size=10,color="rgba(255,165,0,0.5)"),na
+      me="🟧  Bear"))
+  518     f.add_trace(go.Scatter(x=[None],y=[None],mode="markers",marker=dict(size=10,color="rgba(255,50,50,0.5)"),na
+      me="🟥  Panic"))
+  519     pv=None;sg=None
+  520     for dt,row in eq.iterrows():
+  521         s=row["state"]
+  522         if s!=pv:
+  523             if pv and sg is not None:f.add_vrect(x0=sg,x1=dt,fillcolor=_SC.get(pv,""),line_width=0,layer="below
+      ")
+  524             sg,pv=dt,s
+  525     if pv and sg is not None:f.add_vrect(x0=sg,x1=eq.index[-1],fillcolor=_SC.get(pv,""),line_width=0,layer="bel
+      ow")
+  526     f.update_layout(title="지수 & 레짐 (🟦Bull  🟧Bear  🟥Panic)" ,template=_D,height=380);return f
+  527
+  528 def fig_mc_p(sim,nm=""):
+  529     pp=sim["path_pcts"];nd=sim["n_days"];x=list(range(0,nd,max(nd//200,1)));f=go.Figure()
+  530     for p,c,d in [("p5","rgba(255,68,68,0.5)","dot"),("p25","rgba(255,165,0,0.7)","dash"),("p50","#00d084","sol
+      id"),("p75","rgba(33,150,243,0.7)","dash"),("p95","rgba(171,71,188,0.5)","dot")]:
+  531         f.add_trace(go.Scatter(x=x,y=[pp[p][i]/1e8 for i in x],name=p,line=dict(color=c,dash=d,width=3 if p=="p
+      50" else 1.5)))
+  532     f.update_layout(title=f"{nm} {sim['years']}년",xaxis_title="거래일",yaxis_title="억원",template=_D,height=4
+      20);return f
+  533 def fig_mc_h(sim,nm=""):
+  534     f=go.Figure(go.Histogram(x=sim["final_vals"]/1e8,nbinsx=50,marker_color="#00d084",opacity=0.75));f.add_vlin
+      e(x=sim["total_invested"]/1e8,line_dash="dash",line_color="red",annotation_text="원금");f.update_layout(title=f
+      "{nm} 분포",template=_D,height=350);return f
+  535
+  536 # ═══════════════════════ 사이드바 ═══════════════════════
+  537 def _pf(s):
+  538     try:return [float(x.strip()) for x in s.split(",") if x.strip()]
+  539     except:return []
+  540 def _pi(s):
+  541     try:return [int(float(x.strip())) for x in s.split(",") if x.strip()]
+  542     except:return []
+  543 def _pts(s):
+  544     try:
+  545         parts=s.split("|");result=[]
+  546         for part in parts:
+  547             part=part.strip().strip("()");nums=[float(x.strip()) for x in part.split(",") if x.strip()]
+  548             if len(nums)==3:result.append(tuple(nums))
+  549         return result if result else [(0.45,0.30,0.15)]
+  550     except:return [(0.45,0.30,0.15)]
+  551
+  552 _PRESETS={"Nasdaq":{"p_vix":"25,30","p_mdd":"-0.12,-0.15,-0.18","p_cb":"50,80,100","p_cbr":"-60,-80,-100","p_rb
+      ":"50,70,90","p_rbr":"40,60,80","p_ms":"(0.55,0.35,0.15)","p_ds":"(1.0,0.6,0.4)"},"S&P 500":{"p_vix":"25","p_md
+      d":"-0.12,-0.15","p_cb":"50,80,100","p_cbr":"-50,-100","p_rb":"50,70,90","p_rbr":"40,60,80","p_ms":"(0.45,0.30,
+      0.15)","p_ds":"(1.0,0.6,0.4)"}}
+  553 _DEFAULT_PRESET={"p_vix":"25,30","p_mdd":"-0.12,-0.15,-0.18","p_cb":"50,80,100","p_cbr":"-60,-80,-100","p_rb":"
+      50,70,90","p_rbr":"40,60,80","p_ms":"(0.55,0.35,0.15)","p_ds":"(1.0,0.6,0.4)"}
+  554
+  555 with st.sidebar:
+  556     st.title("📈 YJ-Quant v8.8")
+  557     st.subheader("🌍 Step1. 자산")
+  558     asset_name=st.selectbox("투자 대상",list(ASSET_CLASSES.keys()),index=1)
+  559     _cur_preset=_PRESETS.get(asset_name,_DEFAULT_PRESET)
+  560     if st.session_state.get("_prev_asset_p")!=asset_name:
+  561         for k,v in _cur_preset.items():st.session_state[k]=v
+  562         st.session_state["_prev_asset_p"]=asset_name
+  563     else:
+  564         for k,v in _cur_preset.items():
+  565             if k not in st.session_state:st.session_state[k]=v
+  566     st.subheader("📅 Step2. 기간")
+  567     cs2,ce2=st.columns(2);start_year=cs2.number_input("시작",2000,CUR_YEAR-1,2010);end_year=ce2.number_input("
+      종료",start_year+1,CUR_YEAR,CUR_YEAR)
+  568     annual_budget=st.number_input("연간투자금(원)",value=40_000_000,step=1_000_000,format="%d")
+  569     st.subheader("⚡ Step3. 레버리지")
+  570     g_lb=st.text_input("Lev Bull","2.0");g_lbr=st.text_input("Lev Bear","1.0");g_lp=st.text_input("Lev Panic","
+      1.5")
+  571     g_sr=st.text_input("주식비율(/18)","15");g_pp=st.text_input("Panic주기","1,5");g_pd=st.text_input("분모","1
+      ,5")
+  572     st.subheader("📊 Step4. 시그널")
+  573     if st.button(f"⚙️{asset_name} 초기화",key="btn_preset"):
+  574         for k,v in _cur_preset.items():st.session_state[k]=v
+  575         st.rerun()
+  576     g_vix=st.text_input("VIX",key="p_vix");g_mdd=st.text_input("MDD",key="p_mdd")
+  577     g_cb=st.text_input("CCI Bull",key="p_cb");g_cbr=st.text_input("CCI Bear",key="p_cbr")
+  578     g_rb=st.text_input("RSI Bull",key="p_rb");g_rbr=st.text_input("RSI Bear",key="p_rbr")
+  579     g_ms=st.text_input("MDD세트",key="p_ms");g_ds=st.text_input("드레인",key="p_ds")
+  580     st.subheader("🎯 Step5. Alpha")
+  581     alpha_mode=st.radio("Alpha 모드",["① TopN 적립식","② Panic Only","③ 하이브리드"],index=1)
+  582     if alpha_mode.startswith("③"):alpha_dca_ratio=st.slider("적립 비율",0.0,1.0,0.4,0.05)
+  583     elif alpha_mode.startswith("①"):alpha_dca_ratio=1.0
+  584     else:alpha_dca_ratio=0.0
+  585     st.caption(f"TopN **{alpha_dca_ratio*100:.0f}%** + CMA **{(1-alpha_dca_ratio)*100:.0f}%**")
+  586     st.subheader("🔄 Step6. WFV")
+  587     wc1,wc2=st.columns(2);wfv_is=wc1.number_input("IS(년)",2,10,4);wfv_oos=wc2.number_input("OOS(년)",1,5,1)
+  588
+  589 grid_params={"lev_bull":_pf(g_lb) or [2.0],"lev_bear":_pf(g_lbr) or [1.0],"lev_panic":_pf(g_lp) or [1.5],"stock
+      _ratio":_pi(g_sr) or [15],"panic_period":_pi(g_pp) or [1],"periodic_denom":_pi(g_pd) or [1],"vix_panic":_pf(g_v
+      ix) or [25,30],"mdd_panic":_pf(g_mdd) or [-0.15],"cci_bull":_pf(g_cb) or [50,100],"cci_bear":_pf(g_cbr) or [-50
+      ,-100],"rsi_bull":_pf(g_rb) or [70],"rsi_bear":_pf(g_rbr) or [50],"mdd_threshold_sets":_pts(g_ms),"drain_sets":
+      _pts(g_ds)}
+  590 n_combos=1
+  591 for v in grid_params.values():n_combos*=len(v)
+  592 st.sidebar.markdown(f"**그리드: {n_combos}조합**")
+  593 if n_combos>500:st.sidebar.warning("⚠️느릴 수 있음")
+  594 _BF={}
+  595
+  596 # ═══════════════════════ 데이터 로드 ═══════════════════════
+  597 fetch_start=f"{start_year-3}-01-01";fetch_end=f"{end_year}-12-31" if end_year<CUR_YEAR else TODAY
+  598 with st.spinner(f"📡 {asset_name}..."):market_df=fetch_asset(asset_name,fetch_start)
+  599 if market_df.empty:
+  600     st.error("⚠️데이터 실패");
+  601     if st.button("🔄",key="retry"):st.cache_data.clear();st.rerun()
+  602     st.stop()
+  603 if end_year<CUR_YEAR:market_df=market_df[market_df.index<=pd.Timestamp(fetch_end)]
+  604 st.success(f"✅ **{asset_name}** {market_df.index[0].date()}~{market_df.index[-1].date()} ({len(market_df)}일)"
+      )
+  605 if _dl_errors:
+  606     with st.expander(f"⚠️경고({len(_dl_errors)}건)",expanded=False):
+  607         for e in _dl_errors[-10:]:st.caption(e)
+  608 with st.expander("⚠️백테스트 한계",expanded=False):
+  609     st.markdown("- TopN: 전년도 말 기준 (look-ahead 제거, 생존자 편향 일부 존재)\n- WFV: IS/OOS 크기에 따라 결
+      과 변동\n- 과거 성과 ≠ 미래 수익")
+  610
+  611 # ═══════════════════════ 7 탭 ★ [#탭순서] 변경 ═══════════════════════
+  612 tab1,tab2,tab3,tab4,tab5,tab6,tab7=st.tabs(["🌍 자산레이더","📈 백테스트","🏠 지침","🔄 WFV","🆚 5종비교","📡
+      종목분석","🔮 미래시뮬"])
+  613
+  614 # ══════════ Tab1: 자산 레이더 ══════════
+  615 with tab1:
+  616     try:
+  617         st.subheader("🌍 글로벌 자산 상대가치 레이더")
+  618         rp=st.selectbox("기간",["6mo","12mo","24mo","36mo","48mo","60mo"],index=1,key="rp")
+  619         pd_map={"6mo":126,"12mo":252,"24mo":504,"36mo":756,"48mo":1008,"60mo":1260}
+  620         if st.button("▶ 레이더",type="primary",key="btn_r"):
+  621             with st.spinner("글로벌 자산 수집..."):ap=fetch_all_assets(f"{CUR_YEAR-6}-01-01")
+  622             if not ap.empty:ap=ap.tail(pd_map.get(rp,252));st.session_state["radar"]=ap
+  623         if "radar" in st.session_state:
+  624             ap=st.session_state["radar"];norm=ap.apply(lambda x:x/x.dropna().iloc[0] if not x.dropna().empty el
+      se x)
+  625             ga=norm.mean(axis=1);sp=(norm.iloc[-1]-ga.iloc[-1])*100
+  626             f=go.Figure()
+  627             for col in norm.columns:f.add_trace(go.Scatter(x=norm.index,y=norm[col],name=col,line=dict(color=AS
+      SET_CLASSES.get(col,{}).get("col","#aaa"),width=2)))
+  628             f.add_trace(go.Scatter(x=ga.index,y=ga,name="평균",line=dict(color="yellow",dash="dash",width=3)))
+  629             f.update_layout(title=f"정규화 추이({rp})",template=_D,height=450);st.plotly_chart(f,use_container_
+      width=True)
+  630             ss=sp.sort_values();colors=["#00d084" if v<-5 else "#ff4444" if v>5 else "#ffbb33" for v in ss]
+  631             f2=go.Figure(go.Bar(x=ss.index,y=ss.values,marker_color=colors,text=[f"{v:+.1f}%" for v in ss.value
+      s],textposition="outside"))
+  632             f2.add_hline(y=0,line_dash="dash",line_color="white");f2.update_layout(title="괴리율(%)",template=_
+      D,height=380);st.plotly_chart(f2,use_container_width=True)
+  633             summ=pd.DataFrame({"자산":ss.index,"괴리율(%)":ss.values.round(1),"판정":["🟢저평가"  if v<-5 else "
+      🔴고평가" if v>5 else "🟡보합"  for v in ss.values],"수익률":[f"{(ap[n].iloc[-1]/ap[n].iloc[0]-1)*100:.1f}%" for
+       n in ss.index]}).set_index("자산")
+  634             st.dataframe(summ,use_container_width=True)
+  635             _ai_box("자산레이더",_ai_tab1(sp,rp))
+  636     except Exception as e:st.error(f"Tab1: {e}")
+  637
+  638 # ══════════ Tab2: 백테스트 ══════════
+  639 with tab2:
+  640     try:
+  641         sim_s=f"{start_year}-01-01"
+  642         if st.button(f"▶ {asset_name} 그리드서치",type="primary",key="btn_bt"):
+  643             prog=st.progress(0);gr=run_grid(market_df,grid_params,_BF,annual_budget,lambda v:prog.progress(min(
+      v,1.0),text=f"{v*100:.0f}%"),sim_start=sim_s);prog.empty()
+  644             if gr:
+  645                 st.session_state["gr"]=gr;best=gr[0];bp={**_BF,**{k:best[k] for k in grid_params.keys()}}
+  646                 for k in ["calmar","annual_ret","mdd","sharpe","total_ret","final_val"]:bp.pop(k,None)
+  647                 st.session_state["bt"]=run_beta(market_df,bp,annual_budget,sim_start=sim_s);st.session_state["b
+      est"]=best
+  648                 # ★ [#13] 그리드서치 완료 시 단계매집 결과도 자동 생성
+  649                 st.session_state["bt_staged"]=run_beta(market_df,bp,annual_budget,sim_start=sim_s,staged=True)
+  650         if "bt" in st.session_state:
+  651             res=st.session_state["bt"];best=st.session_state.get("best",{});gr=st.session_state.get("gr",[])
+  652             if not res["equity_curve"].empty:
+  653                 st.markdown("### 🏆 1위 파라미터")
+  654                 cols=st.columns(min(len(grid_params),7))
+  655                 for i,(k,v) in enumerate({k:best.get(k,"") for k in grid_params.keys()}.items()):cols[i%len(col
+      s)].metric(k,f"{v}")
+  656                 m=res["metrics"];mc=st.columns(6)
+  657                 mc[0].metric("총수익률",f"{m.get('total_return',0):.1f}%");mc[1].metric("연수익률",f"{m.get('an
+      nual_return',0):.1f}%");mc[2].metric("MDD",f"{m.get('mdd',0):.1f}%")
+  658                 mc[3].metric("Sharpe",f"{m.get('sharpe',0):.3f}");mc[4].metric("Calmar",f"{m.get('calmar',0):.4
+      f}");mc[5].metric("최종",f"{m.get('final_value',0)/1e8:.2f}억")
+  659                 with st.expander("📖 지표 설명"):
+  660                     st.markdown("- **Sharpe**: 위험(변동성) 1단위당 초과수익. ≥1.0 우수, ≥2.0 매우 우수\n- **Ca
+      lmar**: 연수익률 ÷ |MDD|. ≥0.3 양호, ≥0.5 우수. MDD 대비 수익 효율")
+  661                 rs=res.get("regime_stats",{})
+  662                 if rs:rc=st.columns(4);rc[0].metric("🟢Bull" ,f"{rs.get('Bull',0)}일");rc[1].metric("🟡Bear" ,f"{
+      rs.get('Bear',0)}일");rc[2].metric("🔴Panic",f"{rs.get('Panic',0)}일");rc[3].metric("💰",f"{rs.get('P총(만)',0)
+      :.0f}만")
+  663                 st.plotly_chart(fig_eq(res["equity_curve"],res["dca_curve"],f"🏆 {asset_name}"),use_container_w
+      idth=True)
+  664                 st.plotly_chart(fig_regime(res["equity_curve"],market_df.loc[res["equity_curve"].index[0]:,"Pri
+      ce"]),use_container_width=True)
+  665                 st.plotly_chart(fig_dd(res["equity_curve"]),use_container_width=True);st.plotly_chart(fig_yr(re
+      s["equity_curve"]),use_container_width=True)
+  666                 if res.get("state_logs"):
+  667                     with st.expander(f"📋 상태변경({len(res['state_logs'])}건)"):st.dataframe(pd.DataFrame(res[
+      "state_logs"]),use_container_width=True,height=500)
+  668                 if res.get("panic_logs"):
+  669                     with st.expander(f"🔴 Panic매수({len(res['panic_logs'])}건) — 반복매집"):st.dataframe(pd.Da
+      taFrame(res["panic_logs"]),use_container_width=True)
+  670                 if res.get("panic_episodes"):
+  671                     with st.expander(f"📋 Panic에피소드({len(res['panic_episodes'])}건)"):st.dataframe(pd.DataF
+      rame(res["panic_episodes"]),use_container_width=True)
+  672                 if gr:
+  673                     with st.expander(f"📊 Top10/{len(gr)}"):st.dataframe(pd.DataFrame(gr[:10]),use_container_wi
+      dth=True)
+  674                 _ai_box("백테스트",_ai_tab3(res["metrics"],res.get("regime_stats",{}),asset_name))
+  675
+  676                 # ★ [#13] Panic 매집방식 비교 (반복매집 vs 단계매집)
+  677                 st.markdown("---")
+  678                 st.markdown("### 🆚 Panic 매집방식 비교 (v8.8 신규)")
+  679                 st.markdown("""| 방식 | 로직 | 특징 |
+  680 |---|---|---|
+  681 | 🔁 반복매집 (v8.7) | panic_period마다 MDD 조건 충족 시 반복 매수 | CMA 소진 빠름, 저점에서 적극 매수 |
+  682 | 🎯 단계매집 (v8.8) | MDD 구간별 최초 1회만 매수 (1차→2차→3차) | CMA 보존, 더 깊은 저점에 집중 |""")
+  683
+  684                 if "bt_staged" not in st.session_state:
+  685                     if st.button("▶ 단계매집 시뮬레이션 실행",key="btn_staged"):
+  686                         best2=st.session_state.get("best",{})
+  687                         bp2={**_BF,**{k:best2.get(k,(grid_params[k][0] if isinstance(grid_params[k],list) else
+      grid_params[k])) for k in grid_params.keys()}}
+  688                         for k in ["calmar","annual_ret","mdd","sharpe","total_ret","final_val"]:bp2.pop(k,None)
+  689                         with st.spinner("단계매집 시뮬 중..."):
+  690                             st.session_state["bt_staged"]=run_beta(market_df,bp2,annual_budget,sim_start=sim_s,
+      staged=True)
+  691
+  692                 if "bt_staged" in st.session_state:
+  693                     res_rep=st.session_state["bt"]
+  694                     res_stg=st.session_state["bt_staged"]
+  695                     cp_res={"🔁 반복매집(v8.7)":res_rep,"🎯 단계매집(v8.8)":res_stg}
+  696
+  697                     # 지표 비교 테이블
+  698                     cmp_rows=[]
+  699                     for name,r in cp_res.items():
+  700                         mm=r.get("metrics",{});rrs=r.get("regime_stats",{})
+  701                         cmp_rows.append({"방식":name,"연수익률(%)":mm.get("annual_return",0),"MDD(%)":mm.get("m
+      dd",0),
+  702                                          "Sharpe":mm.get("sharpe",0),"Calmar":mm.get("calmar",0),
+  703                                          "최종(억)":round(mm.get("final_value",0)/1e8,2),
+  704                                          "Panic매수횟수":rrs.get("P매수",0),"Panic매집총액(만)":rrs.get("P총(만
+      )",0)})
+  705                     st.dataframe(pd.DataFrame(cmp_rows).set_index("방식"),use_container_width=True)
+  706
+  707                     # 수익 곡선 비교 차트
+  708                     f_cmp=go.Figure()
+  709                     cmp_colors={"🔁 반복매집(v8.7)":"#00d084","🎯 단계매집(v8.8)":"#2196f3"}
+  710                     for name,r in cp_res.items():
+  711                         if r and not r["equity_curve"].empty:
+  712                             eq2=r["equity_curve"]
+  713                             f_cmp.add_trace(go.Scatter(x=eq2.index,y=eq2["yj_val"]/1e8,name=name,line=dict(colo
+      r=cmp_colors.get(name,"#aaa"),width=2.5)))
+  714                     if not res["dca_curve"].empty:
+  715                         f_cmp.add_trace(go.Scatter(x=res["dca_curve"].index,y=res["dca_curve"]["portfolio_value
+      "]/1e8,name="DCA(기준)",line=dict(color="#ff9800",dash="dot",width=1.5)))
+  716                     f_cmp.update_layout(title=f"Panic 매집방식 비교 — {asset_name} (억원)",template=_D,height=4
+      60)
+  717                     st.plotly_chart(f_cmp,use_container_width=True)
+  718
+  719                     # Drawdown 비교
+  720                     f_dd2=go.Figure()
+  721                     for name,r in cp_res.items():
+  722                         if r and not r["equity_curve"].empty:
+  723                             eq2=r["equity_curve"];dd2=((eq2["yj_val"]/eq2["yj_val"].cummax())-1)*100
+  724                             f_dd2.add_trace(go.Scatter(x=eq2.index,y=dd2,name=name,line=dict(color=cmp_colors.g
+      et(name,"#aaa"),width=1.8)))
+  725                     f_dd2.update_layout(title="Drawdown 비교(%)",template=_D,height=300)
+  726                     st.plotly_chart(f_dd2,use_container_width=True)
+  727
+  728                     # Panic 매수 로그 비교
+  729                     c_log1,c_log2=st.columns(2)
+  730                     with c_log1:
+  731                         plogs_rep=res_rep.get("panic_logs",[])
+  732                         with st.expander(f"🔁 반복매집 Panic로그 ({len(plogs_rep)}건)"):
+  733                             if plogs_rep:st.dataframe(pd.DataFrame(plogs_rep),use_container_width=True)
+  734                             else:st.caption("Panic 매수 없음")
+  735                     with c_log2:
+  736                         plogs_stg=res_stg.get("panic_logs",[])
+  737                         with st.expander(f"🎯 단계매집 Panic로그 ({len(plogs_stg)}건)"):
+  738                             if plogs_stg:st.dataframe(pd.DataFrame(plogs_stg),use_container_width=True)
+  739                             else:st.caption("Panic 매수 없음")
+  740
+  741                     _ai_box("Panic 매집방식 비교",_ai_panic_cmp(cp_res),accent="#9c27b0")
+  742
+  743         else:st.info("▶ 그리드서치를 시작하세요.")
+  744     except Exception as e:st.error(f"Tab2: {e}")
+  745
+  746 # ══════════ Tab3: 지침 ══════════
+  747 with tab3:
+  748     try:
+  749         if "bt" not in st.session_state or st.session_state["bt"]["equity_curve"].empty:
+  750             st.warning("⚠️먼저 [📈 백테스트] 탭에서 그리드서치를 실행하세요. 1위 파라미터를 기준으로 오늘의 지
+      침이 생성됩니다.")
+  751         else:
+  752             best=st.session_state.get("best",{})
+  753             pt2={k:best.get(k,(grid_params[k][0] if isinstance(grid_params[k],list) else grid_params[k])) for k
+       in grid_params.keys()}
+  754             st.caption(f"📌 백테스트 1위 파라미터 기준 (vix_panic={pt2.get('vix_panic')}, cci_bull={pt2.get('cc
+      i_bull')}, ...)")
+  755
+  756             en=add_ind(market_df)
+  757             min_date=en.dropna(subset=["MA_200"]).index[0].date();max_date=en.index[-1].date()
+  758             sel_date=st.date_input("📅 기준일 선택",value=max_date,min_value=min_date,max_value=max_date,key="g
+      uide_date")
+  759             sel_ts=pd.Timestamp(sel_date)
+  760             if sel_ts not in en.index:
+  761                 nearest=en.index[en.index.get_indexer([sel_ts],method="nearest")[0]];sel_ts=nearest
+  762             la=en.loc[sel_ts]
+  763
+  764             vn=float(la.get("VIX",15));cn=float(la.get("CCI",0));rn=float(la.get("RSI",50))
+  765             mn=float(la.get("MDD",0));dn=float(la.get("Disp",0))
+  766             reg=_state("Bull",vn,cn,rn,mn,dn,pt2)
+  767
+  768             st.subheader(f"🏠 {asset_name} | {sel_ts.date()} | {reg}")
+  769             price_val=float(la.get("Price",0));cur_sym=ASSET_CLASSES[asset_name]["cur"]
+  770             c1,c2,c3,c4,c5,c6=st.columns(6)
+  771             c1.metric("종가",f"{cur_sym}{price_val:,.2f}")
+  772             c2.metric("VIX",f"{vn:.1f}");c3.metric("CCI",f"{cn:.0f}");c4.metric("RSI",f"{rn:.0f}")
+  773             c5.metric("MDD",f"{mn*100:.1f}%");c6.metric("Disp%",f"{dn:.1f}")
+  774
+  775             if reg=="Bull":st.success(f"🟢  **Bull** — 레버리지 유지")
+  776             elif reg=="Bear":st.warning(f"🟡  **Bear** — 레버리지 축소")
+  777             else:
+  778                 msets_t=list(pt2["mdd_threshold_sets"]) if isinstance(pt2["mdd_threshold_sets"],(list,tuple)) e
+      lse [0.45,0.30,0.15]
+  779                 st.error(f"🔴 **Panic** — {_mstg(abs(mn),msets_t)} | 드레인!")
+  780
+  781             with st.expander("📊 최근 120일 지표 차트",expanded=True):
+  782                 chart_df=en.loc[:sel_ts].tail(120)
+  783                 if not chart_df.empty:
+  784                     fig5=make_subplots(rows=3,cols=1,shared_xaxes=True,vertical_spacing=0.05,row_heights=[0.4,0
+      .3,0.3],subplot_titles=["Price & MA200","CCI","RSI & VIX"])
+  785                     fig5.add_trace(go.Scatter(x=chart_df.index,y=chart_df["Price"],name="Price",line=dict(color
+      ="white",width=1.5)),row=1,col=1)
+  786                     if "MA_200" in chart_df.columns:fig5.add_trace(go.Scatter(x=chart_df.index,y=chart_df["MA_2
+      00"],name="MA200",line=dict(color="#ff9800",dash="dot")),row=1,col=1)
+  787                     fig5.add_trace(go.Scatter(x=chart_df.index,y=chart_df["CCI"],name="CCI",line=dict(color="#2
+      196f3")),row=2,col=1)
+  788                     fig5.add_hline(y=0,line_dash="dash",line_color="gray",row=2,col=1)
+  789                     fig5.add_trace(go.Scatter(x=chart_df.index,y=chart_df["RSI"],name="RSI",line=dict(color="#0
+      0d084")),row=3,col=1)
+  790                     fig5.add_trace(go.Scatter(x=chart_df.index,y=chart_df["VIX"],name="VIX",line=dict(color="#f
+      f4444",dash="dot")),row=3,col=1)
+  791                     fig5.update_layout(template=_D,height=500,showlegend=True)
+  792                     st.plotly_chart(fig5,use_container_width=True)
+  793
+  794             st.markdown("---")
+  795             sr_v=pt2.get("stock_ratio",15);d_stock_amt=(annual_budget*sr_v/18)/TRADING_DAYS;d_cma_amt=(annual_b
+      udget*(18-sr_v)/18)/TRADING_DAYS
+  796             bt_res=st.session_state["bt"]
+  797             last_eq=bt_res["equity_curve"].iloc[-1]
+  798             c7,c8,c9=st.columns(3)
+  799             c7.metric("💰 CMA",f"{last_eq['yj_cs']/1e4:,.0f}만원");c8.metric("📈 ETF",f"{last_eq['yj_st']/1e4:,
+      .0f}만원");c9.metric("💼 총자산",f"{last_eq['yj_val']/1e8:.2f}억원")
+  800             ca,cb2=st.columns(2);ca.info(f"📥 ETF매수: **{d_stock_amt:,.0f}원** ({sr_v}/18)");cb2.info(f"🏦 CMA
+      적립: **{d_cma_amt:,.0f}원** ({18-sr_v}/18)")
+  801             _ai_box("오늘의 지침",_ai_tab2(reg,mn,vn,cn,rn,dn,pt2),accent="#2196f3")
+  802     except Exception as e:st.error(f"Tab3: {e}")
+  803
+  804 # ══════════ Tab4: WFV ══════════
+  805 with tab4:
+  806     try:
+  807         st.caption(f"{asset_name} WFV — IS {wfv_is}년 / OOS {wfv_oos}년")
+  808         wfv_grid={k:(v[:2] if isinstance(v,list) and len(v)>2 else v) for k,v in grid_params.items()}
+  809         wfv_n=1
+  810         for v in wfv_grid.values():wfv_n*=len(v) if isinstance(v,list) else 1
+  811         st.caption(f"WFV 그리드: {wfv_n}조합")
+  812         if st.button("▶ WFV",type="primary",key="btn_wfv"):
+  813             prog=st.progress(0);wr=run_wfv(market_df,_BF,annual_budget,wfv_is,wfv_oos,wfv_grid,lambda v:prog.pr
+      ogress(min(v,1.0),text=f"WFV {v*100:.0f}%"),sim_start=f"{start_year}-01-01");prog.empty()
+  814             st.session_state["wfv"]=wr
+  815         if "wfv" in st.session_state:
+  816             wr=st.session_state["wfv"]
+  817             if wr.get("error"):st.warning(wr["error"])
+  818             elif wr["combined_equity"].empty:st.warning("OOS 없음")
+  819             else:
+  820                 wm=wr["metrics"];wcs=st.columns(4);wcs[0].metric("연수익률",f"{wm.get('annual_return',0):.1f}%"
+      );wcs[1].metric("MDD",f"{wm.get('mdd',0):.1f}%");wcs[2].metric("Calmar",f"{wm.get('calmar',0):.4f}");wcs[3].met
+      ric("Sharpe",f"{wm.get('sharpe',0):.4f}")
+  821                 st.plotly_chart(fig_eq(wr["combined_equity"],pd.DataFrame(),f"{asset_name} WFV"),use_container_
+      width=True)
+  822                 if wr.get("p_value"):pv=wr["p_value"];st.markdown(f"**🧪**  p={pv.get('p_value')} z={pv.get('z_s
+      core')} → {'✅' if pv.get('significant') else '❌'}")
+  823                 if wr.get("windows"):
+  824                     with st.expander(f"윈도우({len(wr['windows'])})"):st.dataframe(pd.DataFrame(wr["windows"]),
+      use_container_width=True)
+  825                 _ai_box("WFV",_ai_tab4(wr),accent="#ff9800")
+  826         else:st.info("▶ WFV를 시작하세요.")
+  827     except Exception as e:st.error(f"Tab4: {e}")
+  828
+  829 # ══════════ Tab5: 5종 비교 ══════════
+  830 with tab5:
+  831     try:
+  832         st.subheader("🆚 5종 전략 비교")
+  833         st.markdown("""| # | 전략 | 매일 | CMA | Panic |
+  834 |---|------|------|-----|-------|
+  835 | 0 | ETF Only | ETF 18/18 | ❌ | 없음 |
+  836 | 1 | ETF+CMA | ETF M/18 | ✅ | →ETF |
+  837 | 2 | TopN Only | TopN 18/18 | ❌ | 없음 |
+  838 | 3 | TopN+CMA | TopN M/18 | ✅ | →TopN |
+  839 | 4 | ETF→TopN | ETF M/18 | ✅ | →TopN |""")
+  840         cmp_topn=st.selectbox("TopN",[5,10,15],index=1,key="ctn")
+  841         if st.button("▶ 5종 비교",type="primary",key="btn_cmp"):
+  842             p_base={k:(v[0] if isinstance(v,list) else v) for k,v in grid_params.items()};p_base.update(_BF);M=
+      p_base.get("stock_ratio",15)
+  843             cmp_data=fetch_asset(asset_name,fetch_start)
+  844             if end_year<CUR_YEAR:cmp_data=cmp_data[cmp_data.index<=pd.Timestamp(fetch_end)]
+  845             sclose,spy=fetch_stocks(fetch_start)
+  846             if end_year<CUR_YEAR:sclose=sclose[sclose.index<=pd.Timestamp(fetch_end)]
+  847             sim_s5=f"{start_year}-01-01";results={}
+  848             if not cmp_data.empty:
+  849                 with st.spinner("0.ETF Only..."):results["0.ETF Only"]=run_beta(cmp_data,{**p_base,"stock_ratio
+      ":18},annual_budget,sim_start=sim_s5)
+  850                 with st.spinner("1.ETF+CMA..."):results["1.ETF+CMA"]=run_beta(cmp_data,p_base,annual_budget,sim
+      _start=sim_s5)
+  851                 if not sclose.empty:
+  852                     with st.spinner("2.TopN Only..."):results["2.TopN Only"]=run_alpha(cmp_data,sclose,spy,{**p
+      _base,"stock_ratio":0,"top_n":cmp_topn},annual_budget,alpha_dca_ratio=1.0,sim_start=sim_s5)
+  853                     with st.spinner("3.TopN+CMA..."):results["3.TopN+CMA"]=run_alpha(cmp_data,sclose,spy,{**p_b
+      ase,"stock_ratio":0,"top_n":cmp_topn},annual_budget,alpha_dca_ratio=M/18,sim_start=sim_s5)
+  854                     with st.spinner("4.ETF→TopN..."):results["4.ETF→TopN"]=run_alpha(cmp_data,sclose,spy,{**p_b
+      ase,"top_n":cmp_topn},annual_budget,alpha_dca_ratio=0.0,sim_start=sim_s5)
+  855                 st.session_state["cmp"]=results
+  856         if "cmp" in st.session_state:
+  857             results=st.session_state["cmp"]
+  858             cm={"0.ETF Only":"#00d084","1.ETF+CMA":"#2196f3","2.TopN Only":"#ff9800","3.TopN+CMA":"#ff6b6b","4.
+      ETF→TopN":"#ab47bc"}
+  859             f=go.Figure()
+  860             for n,r in results.items():
+  861                 if r and not r["equity_curve"].empty:eq=r["equity_curve"];f.add_trace(go.Scatter(x=eq.index,y=e
+      q["yj_val"]/1e8,name=n,line=dict(color=cm.get(n,"#aaa"),width=2.5)))
+  862             f.update_layout(title=f"{asset_name} 5종(억원)",template=_D,height=500);st.plotly_chart(f,use_conta
+      iner_width=True)
+  863             rows=[]
+  864             for n,r in results.items():
+  865                 m=r.get("metrics",{});rs=r.get("regime_stats",{})
+  866                 rows.append({"전략":n,"총%":m.get("total_return",0),"연%":m.get("annual_return",0),"MDD%":m.get
+      ("mdd",0),"Sharpe":m.get("sharpe",0),"Calmar":m.get("calmar",0),"최종(억)":round(m.get("final_value",0)/1e8,2)}
+      )
+  867             st.dataframe(pd.DataFrame(rows),use_container_width=True)
+  868             _ai_box("5종 비교",_ai_tab5(results),accent="#ab47bc")
+  869         else:st.info("▶ 5종 비교를 시작하세요.")
+  870     except Exception as e:st.error(f"Tab5: {e}")
+  871
+  872 # ══════════ Tab6: 종목분석 ══════════
+  873 with tab6:
+  874     try:
+  875         st.subheader("📡 개별주 필터")
+  876         oh_in=st.text_input("종목",",".join(TOP10.get(CUR_YEAR,TOP10[max(TOP10)])[:8]),key="oh")
+  877         if st.button("▶ 과열분석",type="primary",key="btn_oh"):
+  878             tks=[t.strip().upper() for t in oh_in.split(",") if t.strip()];ohr=[];prog=st.progress(0)
+  879             for i,t in enumerate(tks):
+  880                 r=analyze_oh(t)
+  881                 if r:ohr.append(r)
+  882                 prog.progress((i+1)/len(tks))
+  883             prog.empty();st.session_state["ohr"]=ohr
+  884         if "ohr" in st.session_state and st.session_state["ohr"]:
+  885             ohr=st.session_state["ohr"]
+  886             odf=pd.DataFrame(ohr)[["ticker","signal","price","rsi","dd","vs_ma200","buy_zone","sl","sl_pct"]].c
+      opy()
+  887             odf.columns=["종목","판정","가격","RSI","고점비(%)","vs MA200(%)","매수밴드","손절","손절(%)"]
+  888             odf["고점비(%)"]=odf["고점비(%)"]*100
+  889             for c2 in ["가격","RSI","vs MA200(%)","손절","손절(%)"]:odf[c2]=odf[c2].round(1)
+  890             st.dataframe(odf.set_index("종목"),use_container_width=True)
+  891             _ai_box("과열분석",_ai_tab6(ohr),accent="#ff6b6b")
+  892         st.markdown("---");st.markdown("### 📊 상대 저평가")
+  893         rv_in=st.text_input("비교","AAPL,MSFT,GOOGL,AMZN,NVDA,META,TSLA",key="rv")
+  894         rv_p=st.selectbox("기간",["3mo","6mo","12mo","24mo"],index=2,key="rvp")
+  895         if st.button("▶ 저평가",type="primary",key="btn_rv"):
+  896             tks=[t.strip().upper() for t in rv_in.split(",") if t.strip()]
+  897             with st.spinner("분석..."):l1,fd,norm=analyze_rv(tks,rv_p)
+  898             if l1 is not None:st.session_state["rv_l1"]=l1;st.session_state["rv_fd"]=fd;st.session_state["rv_n"
+      ]=norm
+  899         if "rv_l1" in st.session_state:
+  900             l1=st.session_state["rv_l1"];fd=st.session_state["rv_fd"];norm=st.session_state["rv_n"]
+  901             st.dataframe(l1,use_container_width=True)
+  902             if norm is not None and not norm.empty:
+  903                 fn=go.Figure()
+  904                 for col in norm.columns:fn.add_trace(go.Scatter(x=norm.index,y=norm[col],name=col))
+  905                 fn.add_trace(go.Scatter(x=norm.mean(axis=1).index,y=norm.mean(axis=1),name="AVG",line=dict(colo
+      r="yellow",dash="dash",width=3)))
+  906                 fn.update_layout(title="정규화",template=_D,height=420);st.plotly_chart(fn,use_container_width=
+      True)
+  907             if fd is not None:st.markdown("#### P/OI");st.dataframe(fd,use_container_width=True)
+  908     except Exception as e:st.error(f"Tab6: {e}")
+  909
+  910 # ══════════ Tab7: 미래시뮬 ══════════
+  911 with tab7:
+  912     try:
+  913         st.subheader(f"🔮 {asset_name} 미래 수익률 시뮬레이션")
+  914         if "bt" not in st.session_state or st.session_state["bt"]["equity_curve"].empty:st.warning("먼저 [📈 백
+      테스트] 실행")
+  915         else:
+  916             fc=st.columns(3);sy=fc[0].selectbox("기간",[1,2,3,5,7,10],index=2);ns=fc[1].selectbox("횟수",[500,1
+      000,2000,5000],index=1);sm=fc[2].selectbox("방법",["몬테카를로","블록부트스트랩"])
+  917             if st.button("▶ 시뮬",type="primary",key="btn_mc"):
+  918                 eq=st.session_state["bt"]["equity_curve"]
+  919                 with st.spinner("실행..."):sim=mc_sim(eq,annual_budget,sy,ns) if sm=="몬테카를로" else boot_sim
+      (eq,annual_budget,sy,ns)
+  919                 with st.spinner("실행..."):sim=mc_sim(eq,annual_budget,sy,ns) if sm=="몬테카를로" else boot_sim
+      (eq,annual_budget,sy,ns)
+  920                 if sim is None:st.warning("부족")
+  921                 else:st.session_state["sim"]=sim;st.session_state["sm"]=sm
+  922             if "sim" in st.session_state:
+  923                 sim=st.session_state["sim"];mn2=st.session_state.get("sm","")                )
+  924                 cv=sim['current_val'];ti=sim['total_invested'];yrs=sim['years']
+  925                 st.markdown(f"### {mn2} {yrs}년 | 현재:{cv/1e8:.2f}억 → 투자:{ti/1e8:.2f}억")
+  926                 prows=[]
+  927                 for p in [5,10,25,50,75,90,95]:
+  928                     fval=sim["percentiles"][f"p{p}"];growth=(fval/cv-1)*100;annual_g=((fval/cv)**(1/yrs)-1)*100
+       if cv>0 else 0
+  929                     prows.append({"백분위":f"{p}%","자산성장(%)":round(growth,1),"연환산(%)":round(annual_g,1),
+      "최종(억)":round(fval/1e8,2)})
+  930                 st.dataframe(pd.DataFrame(prows),use_container_width=True)
+  931                 st.caption("자산성장 = 현재 자산 대비 | 연환산 = 연평균 성장률 | 이 수치가 백테스트 연수익률과
+      비교 가능")
+  932                 tp=sim["target_probs"];tpc=st.columns(len(tp))
+  933                 for i,(k,v) in enumerate(tp.items()):tpc[i].metric(k,f"{'🟢'; if v>=50 else '🟡'g if v>=20 else '
+      🔴'}{v}%")
+  934                 st.plotly_chart(fig_mc_p(sim,mn2),use_container_width=True);st.plotly_chart(fig_mc_h(sim,mn2),u
+      se_container_width=True)
+  935                 _ai_box("미래시뮬",_ai_tab7(sim,yrs,mn2),accent="#ffd700")                                          936     except Exception as e:st.error(f"Tab7: {e}")

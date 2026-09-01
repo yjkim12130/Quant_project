@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YJ-Quant v9.3 — 변경점 해설 문서</title>
+<style>
+  :root {
+    --bg: #0e1117; --surface: #1a1d26; --surface2: #22263a;
+    --green: #00d084; --blue: #2196f3; --orange: #ff9800;
+    --red: #ff4444; --purple: #ab47bc; --yellow: #ffd700;
+    --text: #e0e0e0; --muted: #8899aa; --border: #2e3650;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.7; }
+  a { color: var(--blue); text-decoration: none; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 24px 80px; }
+  .hero { background: linear-gradient(135deg, #0a1628 0%, #1a2744 50%, #0e1117 100%);
+          border-bottom: 2px solid var(--green); padding: 48px 24px; text-align: center; }
+  .hero h1 { font-size: 2.4rem; color: var(--green); letter-spacing: 2px; }
+  .hero .sub { color: var(--muted); margin-top: 8px; font-size: 1rem; }
+  .badge { display: inline-block; background: var(--surface2); border: 1px solid var(--border);
+           border-radius: 20px; padding: 4px 14px; font-size: 0.82rem; margin: 4px; color: var(--muted); }
+  .toc { background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+         padding: 24px 28px; margin: 32px 0; }
+  .toc h2 { color: var(--green); font-size: 1.1rem; margin-bottom: 12px; }
+  .toc ol { padding-left: 20px; }
+  .toc li { padding: 3px 0; }
+  .section { margin: 40px 0; }
+  h2.sec { font-size: 1.5rem; color: var(--green); border-left: 4px solid var(--green);
+            padding-left: 14px; margin-bottom: 20px; }
+  h3.sub { font-size: 1.15rem; color: var(--blue); margin: 24px 0 10px; }
+  h4 { font-size: 1rem; color: var(--orange); margin: 18px 0 8px; }
+  p { margin: 8px 0 12px; color: var(--text); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+          padding: 20px 24px; margin: 14px 0; }
+  .card-green  { border-left: 4px solid var(--green); }
+  .card-blue   { border-left: 4px solid var(--blue); }
+  .card-orange { border-left: 4px solid var(--orange); }
+  .card-red    { border-left: 4px solid var(--red); }
+  .card-purple { border-left: 4px solid var(--purple); }
+  .card-yellow { border-left: 4px solid var(--yellow); }
+  pre { background: #0b0d15; border: 1px solid var(--border); border-radius: 8px;
+        padding: 16px 18px; overflow-x: auto; font-size: 0.86rem; line-height: 1.6;
+        font-family: 'Consolas', 'Fira Code', monospace; margin: 12px 0; }
+  code { font-family: 'Consolas', 'Fira Code', monospace; font-size: 0.88em;
+         background: #151820; padding: 2px 6px; border-radius: 4px; color: #e0e0e0; }
+  .kw { color: #c792ea; } .fn { color: #82aaff; } .str { color: #c3e88d; }
+  .cm { color: #546e7a; font-style: italic; } .num { color: #f78c6c; }
+  .var { color: #ffcb6b; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 0.9rem; }
+  th { background: var(--surface2); color: var(--green); padding: 10px 14px;
+       text-align: left; border-bottom: 2px solid var(--border); }
+  td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:hover td { background: rgba(255,255,255,0.03); }
+  .tag { display: inline-block; font-size: 0.78rem; padding: 2px 9px; border-radius: 12px; font-weight: 700; }
+  .tag-fix  { background: rgba(33,150,243,0.2);  color: var(--blue);   border: 1px solid var(--blue); }
+  .tag-new  { background: rgba(0,208,132,0.2);   color: var(--green);  border: 1px solid var(--green); }
+  .tag-perf { background: rgba(171,71,188,0.2);  color: var(--purple); border: 1px solid var(--purple); }
+  .callout { background: rgba(0,208,132,0.07); border-left: 4px solid var(--green);
+             padding: 14px 18px; border-radius: 8px; margin: 14px 0; font-size: 0.92rem; }
+  .callout.warn   { background: rgba(255,152,0,0.07);  border-left-color: var(--orange); }
+  .callout.danger { background: rgba(255,68,68,0.07);  border-left-color: var(--red); }
+  .callout.info   { background: rgba(33,150,243,0.07); border-left-color: var(--blue); }
+  .formula { background: #0b0d15; border: 1px solid var(--purple); border-radius: 8px;
+             padding: 12px 18px; font-family: monospace; font-size: 0.95rem; color: #e0e0e0;
+             margin: 10px 0; text-align: center; }
+  .diff-block { border-radius: 8px; overflow: hidden; margin: 12px 0; font-size: 0.86rem;
+                font-family: 'Consolas','Fira Code',monospace; line-height: 1.6; }
+  .diff-header { background: var(--surface2); padding: 6px 14px; color: var(--muted); font-size: 0.8rem; }
+  .diff-del { background: rgba(255,68,68,0.12); color: #ff8a80; padding: 0 14px; display: block; }
+  .diff-add { background: rgba(0,208,132,0.10); color: #69f0ae; padding: 0 14px; display: block; }
+  .diff-ctx { color: var(--muted); padding: 0 14px; display: block; }
+  .change-id { display: inline-block; font-weight: 700; font-size: 0.95rem;
+               background: var(--surface2); border-radius: 6px; padding: 3px 10px;
+               margin-right: 8px; font-family: monospace; }
+  .change-a { color: var(--blue); }
+  .change-b { color: var(--green); }
+  .change-c { color: var(--orange); }
+  .change-d { color: var(--purple); }
+  .change-e { color: var(--yellow); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 700px) { .grid2 { grid-template-columns: 1fr; } }
+  footer { text-align: center; padding: 32px; color: var(--muted); font-size: 0.85rem;
+           border-top: 1px solid var(--border); margin-top: 60px; }
+  .summary-bar { display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0; }
+  .sum-item { flex: 1; min-width: 160px; background: var(--surface); border: 1px solid var(--border);
+              border-radius: 10px; padding: 14px 16px; text-align: center; }
+  .sum-item .s-num { font-size: 1.8rem; font-weight: 700; }
+  .sum-item .s-lbl { font-size: 0.78rem; color: var(--muted); margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>📈 YJ-Quant v9.3</h1>
+  <div class="sub">변경점 해설 문서 — 2026-05-27 기준 &nbsp;|&nbsp; vs v9.2</div>
+  <div style="margin-top:14px">
+    <span class="badge">V93-A 누적 set 버그 수정</span>
+    <span class="badge">V93-B 캐시 회피</span>
+    <span class="badge">V93-C RSI 안정화</span>
+    <span class="badge">V93-D Vol Decay 모델</span>
+    <span class="badge">V93-E 현실적 비용 반영</span>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- TOC -->
+<div class="toc">
+  <h2>📑 목차</h2>
+  <ol>
+    <li><a href="#summary">변경 요약</a></li>
+    <li><a href="#v93a">V93-A — ya_p_tks 누적 set 버그 수정</a></li>
+    <li><a href="#v93b">V93-B — fetch_ticker_signals 에러 캐시 회피</a></li>
+    <li><a href="#v93c">V93-C — RSI 분모 0 보호</a></li>
+    <li><a href="#v93d">V93-D — 레버리지 ETF Volatility Decay 모델</a></li>
+    <li><a href="#v93e">V93-E — 거래 비용 & ETF 운용보수 반영</a></li>
+    <li><a href="#impact">변경 영향 & 파라미터 정리</a></li>
+  </ol>
+</div>
+
+
+<!-- ══════════ 요약 ══════════ -->
+<div class="section" id="summary">
+<h2 class="sec">1. 변경 요약</h2>
+
+<div class="summary-bar">
+  <div class="sum-item">
+    <div class="s-num" style="color:var(--blue)">2</div>
+    <div class="s-lbl">버그 수정<br>(V93-A, V93-C)</div>
+  </div>
+  <div class="sum-item">
+    <div class="s-num" style="color:var(--green)">1</div>
+    <div class="s-lbl">안정성 개선<br>(V93-B)</div>
+  </div>
+  <div class="sum-item">
+    <div class="s-num" style="color:var(--purple)">2</div>
+    <div class="s-lbl">신규 기능<br>(V93-D, V93-E)</div>
+  </div>
+  <div class="sum-item">
+    <div class="s-num" style="color:var(--orange)">5</div>
+    <div class="s-lbl">총 변경 항목</div>
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr><th>ID</th><th>분류</th><th>대상 함수</th><th>한 줄 요약</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="change-id change-a">V93-A</span></td>
+      <td><span class="tag tag-fix">버그 수정</span></td>
+      <td><code>run_alpha</code></td>
+      <td>ya_p_tks — 매수 차수별 list 덮어쓰기 → 누적 <code>set()</code>으로 교체</td>
+    </tr>
+    <tr>
+      <td><span class="change-id change-b">V93-B</span></td>
+      <td><span class="tag tag-new">안정성</span></td>
+      <td><code>fetch_ticker_signals</code></td>
+      <td>에러 결과가 24h 캐시되던 문제 — 외부 래퍼/내부 캐시 함수 분리</td>
+    </tr>
+    <tr>
+      <td><span class="change-id change-c">V93-C</span></td>
+      <td><span class="tag tag-fix">버그 수정</span></td>
+      <td><code>add_ind</code>, <code>_fetch_ticker_signals_inner</code></td>
+      <td>RSI 분모 <code>l=0</code>일 때 NaN 발생 → <code>l+1e-9</code>로 보호</td>
+    </tr>
+    <tr>
+      <td><span class="change-id change-d">V93-D</span></td>
+      <td><span class="tag tag-perf">신규 기능</span></td>
+      <td><code>add_ind</code>, <code>run_beta</code>, <code>run_alpha</code></td>
+      <td>레버리지 ETF vol decay 수학 모델 추가 (max(0,k²-k)·σ²/2)</td>
+    </tr>
+    <tr>
+      <td><span class="change-id change-e">V93-E</span></td>
+      <td><span class="tag tag-perf">신규 기능</span></td>
+      <td>전역 상수 + 전략 엔진 전체</td>
+      <td>TRADE_COST 0.05% + ETF_TER 0.20%/년 + 사이드바 include_costs 토글</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <strong>v9.3 vs v9.2 백테스트 결과 차이</strong><br>
+  V93-D/E 적용으로 비용 반영 시 장기(20년+) 최종 자산이 이전 버전 대비 소폭 하락합니다. 이는 현실 반영이 강화된 것이므로 의도된 동작입니다. <code>include_costs = OFF</code>로 설정하면 v9.2와 동일한 무비용 결과를 얻을 수 있습니다.
+</div>
+</div>
+
+
+<!-- ══════════ V93-A ══════════ -->
+<div class="section" id="v93a">
+<h2 class="sec">2. V93-A — ya_p_tks 누적 set 버그 수정</h2>
+
+<span class="tag tag-fix">버그 수정</span>&nbsp; <code>run_alpha()</code>
+
+<h3 class="sub">버그 원인</h3>
+<p>
+Panic 구간에서 <code>하락상위 / 상승상위</code> 선별 방식을 사용할 때, 매수 차수(1차/2차/3차)마다 새로운 종목 리스트로 <code>ya_p_tks</code>를 <strong>덮어쓰고</strong> 있었습니다.
+그 결과 3차 매수 이후에는 3차 시점의 선별 종목 수익률만 추적되어, 1·2차 매수로 보유한 종목의 실제 수익이 <code>ya_p_val</code>에 반영되지 않았습니다.
+</p>
+
+<div class="callout danger">
+  <strong>증상</strong>: Panic 3단계 매집 후 회복 국면에서 2번째/3번째 대비 1·2차 매수 비중이 많은 경우, 실제 수익보다 낮게 집계되어 최종 자산이 과소평가됨.
+</div>
+
+<h3 class="sub">수정 내용</h3>
+<div class="diff-block">
+  <div class="diff-header">run_alpha() — ya_p_tks 초기화 & 누적 로직</div>
+  <span class="diff-del">- ya_p_val=0.0; ya_p_tks=[]  # list — 매수마다 덮어씀</span>
+  <span class="diff-add">+ ya_p_val=0.0; ya_p_tks=set()  # [V93-A] 누적 set</span>
+  <span class="diff-ctx">  ...</span>
+  <span class="diff-del">-     else: ya_p_val+=ba_net; ya_p_tks=sel_tks  # 덮어쓰기</span>
+  <span class="diff-add">+     else: ya_p_val+=ba_net; ya_p_tks.update(sel_tks)  # [V93-A] 누적</span>
+</div>
+
+<h3 class="sub">수익률 추적 방식 변경</h3>
+
+<div class="grid2">
+  <div class="card card-red">
+    <h4>v9.2 (버그)</h4>
+    <pre><span class="cm"># 3차 매수 후 ya_p_tks = 3차 선별 종목만</span>
+<span class="kw">if</span> ya_p_val > <span class="num">0</span> <span class="kw">and</span> ya_p_tks:
+    pa_av = [t <span class="kw">for</span> t <span class="kw">in</span> ya_p_tks <span class="kw">if</span> t <span class="kw">in</span> sr.columns]
+    ya_p_val *= (<span class="num">1</span> + sr.loc[dt2, pa_av].mean())
+<span class="cm"># → 1·2차 매수 종목은 추적 누락</span></pre>
+  </div>
+  <div class="card card-green">
+    <h4>v9.3 (수정)</h4>
+    <pre><span class="cm"># ya_p_tks = 전 매수 차수 종목 합집합</span>
+<span class="kw">if</span> ya_p_val > <span class="num">0</span> <span class="kw">and</span> ya_p_tks:
+    pa_av = [t <span class="kw">for</span> t <span class="kw">in</span> ya_p_tks <span class="kw">if</span> t <span class="kw">in</span> sr.columns]
+    ya_p_val *= (<span class="num">1</span> + sr.loc[dt2, pa_av].mean())
+<span class="cm"># → 모든 차수 종목의 평균 수익률 추적</span></pre>
+  </div>
+</div>
+
+<div class="callout">
+  <strong>적용 범위</strong>: <code>panic_select = "하락상위"</code> 또는 <code>"상승상위"</code>인 경우에만 해당. <code>"시총기준"</code>은 ya_p_tks를 사용하지 않아 영향 없음.
+</div>
+</div>
+
+
+<!-- ══════════ V93-B ══════════ -->
+<div class="section" id="v93b">
+<h2 class="sec">3. V93-B — fetch_ticker_signals 에러 캐시 회피</h2>
+
+<span class="tag tag-new">안정성 개선</span>&nbsp; <code>fetch_ticker_signals()</code>
+
+<h3 class="sub">문제 상황</h3>
+<p>
+<code>@st.cache_data(ttl=86400)</code> 데코레이터가 함수 전체를 감싸고 있어, <strong>yfinance 호출 실패로 발생한 에러도 24시간 캐시</strong>되었습니다.
+네트워크 일시 장애나 API 레이트 리밋으로 실패한 티커가 다음 날까지 계속 에러 상태로 반환되는 문제가 있었습니다.
+</p>
+
+<div class="callout danger">
+  <strong>증상</strong>: 산업 분석 탭 또는 오늘의 신호 탭에서 특정 티커가 에러 아이콘으로 표시되고, 브라우저를 새로고침해도 최대 24시간 동안 복구되지 않음.
+</div>
+
+<h3 class="sub">수정 구조 — 함수 분리</h3>
+
+<div class="diff-block">
+  <div class="diff-header">v9.2 — 단일 함수 (에러도 캐시됨)</div>
+  <span class="diff-del">- @st.cache_data(ttl=86400, show_spinner=False)</span>
+  <span class="diff-del">- def fetch_ticker_signals(ticker):</span>
+  <span class="diff-del">-     t = yf.Ticker(ticker); info = t.info</span>
+  <span class="diff-del">-     ...  # 에러 발생 시 예외 → 캐시에 에러 결과 저장</span>
+</div>
+
+<div class="diff-block">
+  <div class="diff-header">v9.3 — 외부 래퍼 + 내부 캐시 함수 분리</div>
+  <span class="diff-add">+ # 외부: 캐시 없음 — 에러 시 즉시 재시도 가능</span>
+  <span class="diff-add">+ def fetch_ticker_signals(ticker):</span>
+  <span class="diff-add">+     try: return _fetch_ticker_signals_inner(ticker)</span>
+  <span class="diff-add">+     except Exception as e: return {"ticker": ticker, "error": str(e), "name": ticker}</span>
+  <span class="diff-ctx">  </span>
+  <span class="diff-add">+ # 내부: 성공한 결과만 24h 캐시</span>
+  <span class="diff-add">+ @st.cache_data(ttl=86400, show_spinner=False)</span>
+  <span class="diff-add">+ def _fetch_ticker_signals_inner(ticker):</span>
+  <span class="diff-add">+     t = yf.Ticker(ticker); info = t.info</span>
+  <span class="diff-add">+     price = float(info.get("currentPrice") or info.get("regularMarketPrice") or 0)</span>
+  <span class="diff-add">+     if price <= 0: raise ValueError("no price")  # 캐시 회피용 raise</span>
+  <span class="diff-add">+     ...</span>
+</div>
+
+<h3 class="sub">캐시 동작 비교</h3>
+<table>
+  <thead><tr><th>케이스</th><th>v9.2</th><th>v9.3</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>정상 응답</td>
+      <td>24h 캐시 ✅</td>
+      <td>24h 캐시 ✅</td>
+    </tr>
+    <tr>
+      <td>yfinance 에러 (네트워크 등)</td>
+      <td>에러 결과 24h 캐시 ❌</td>
+      <td>캐시 안 됨, 즉시 재시도 가능 ✅</td>
+    </tr>
+    <tr>
+      <td>price = 0 (데이터 없음)</td>
+      <td>0 결과 24h 캐시 ❌</td>
+      <td><code>raise ValueError</code> → 캐시 건너뜀 ✅</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+<!-- ══════════ V93-C ══════════ -->
+<div class="section" id="v93c">
+<h2 class="sec">4. V93-C — RSI 분모 0 보호</h2>
+
+<span class="tag tag-fix">버그 수정</span>&nbsp; <code>add_ind()</code>, <code>_fetch_ticker_signals_inner()</code>
+
+<h3 class="sub">RSI 계산 공식과 문제</h3>
+<p>RSI(Relative Strength Index)는 14일 평균 상승폭 <code>g</code>와 평균 하락폭 <code>l</code>의 비율로 계산합니다.</p>
+
+<div class="formula">RSI = 100 − 100 / (1 + g / l)</div>
+
+<p>시장이 연속 상승 구간에 있으면 14일간 하락이 전혀 없어 <code>l = 0</code>이 될 수 있습니다. 이때 <code>g / l</code>은 분모 0으로 <strong>NaN</strong> 또는 <strong>Inf</strong>가 발생했습니다.</p>
+
+<div class="callout danger">
+  <strong>증상</strong>: 강한 상승 초기 구간(예: 비트코인 급등 초반, 신규 상장 종목)에서 RSI가 <code>NaN</code>으로 계산되어 이후 지표 체인 전체에 NaN이 전파됨. 상태머신이 의도치 않게 기본값(Bull)으로 고정되거나 시뮬레이션 결과가 왜곡됨.
+</div>
+
+<h3 class="sub">수정</h3>
+
+<div class="diff-block">
+  <div class="diff-header">add_ind() — RSI 계산</div>
+  <span class="diff-del">- df["RSI"] = 100 - (100 / (1 + g / l))</span>
+  <span class="diff-add">+ df["RSI"] = 100 - (100 / (1 + g / (l + 1e-9)))  # [V93-C] 분모 0 보호</span>
+</div>
+
+<div class="callout info">
+  <strong>1e-9의 의미</strong>: 극히 작은 epsilon(ε)을 더해 <code>l=0</code>일 때 <code>g/ε</code> → 매우 큰 수 → RSI ≈ 100이 됩니다. 실제 데이터에서 <code>l</code>이 0에 가까울 때와 사실상 동일한 결과(RSI ≈ 100, 과매수)를 유지하면서 NaN을 완전히 차단합니다.
+</div>
+
+<p>동일한 수정이 <code>_fetch_ticker_signals_inner()</code> 내부의 개별 종목 RSI 계산에도 적용되었습니다.</p>
+</div>
+
+
+<!-- ══════════ V93-D ══════════ -->
+<div class="section" id="v93d">
+<h2 class="sec">5. V93-D — 레버리지 ETF Volatility Decay 모델</h2>
+
+<span class="tag tag-perf">신규 기능</span>&nbsp; <code>add_ind()</code>, <code>run_beta()</code>, <code>run_alpha()</code>
+
+<h3 class="sub">레버리지 ETF의 실제 비용: Volatility Decay</h3>
+<p>
+레버리지 ETF(2x, 3x)는 매일 목표 배율을 재조정(일일 리밸런싱)합니다. 이 과정에서 시장 변동성이 클수록 장기 수익률이 이론 배율보다 낮아지는 <strong>Volatility Decay(변동성 감쇠)</strong> 현상이 발생합니다.
+</p>
+
+<div class="card card-purple">
+  <strong>직관적 이해</strong><br>
+  2x ETF가 하루 +10% 이후 -10% 움직이면:<br>
+  &nbsp;&nbsp;- 원지수: 1.10 × 0.90 = <strong>0.99</strong> (-1%)<br>
+  &nbsp;&nbsp;- 2x ETF: 1.20 × 0.80 = <strong>0.96</strong> (-4%)<br>
+  <br>
+  레버리지가 높을수록, 변동성이 클수록 이 손실이 누적됩니다.
+</div>
+
+<h3 class="sub">수학적 모델</h3>
+<p>연속복리 근사에서 일일 레버리지 비용은 다음 수식으로 표현됩니다:</p>
+
+<div class="formula">daily_decay = max(0, k² − k) · σ² / 2</div>
+
+<table>
+  <thead><tr><th>변수</th><th>의미</th><th>코드</th></tr></thead>
+  <tbody>
+    <tr><td><code>k</code></td><td>레버리지 배율 (예: 2.0, 1.5)</td><td><code>lv</code></td></tr>
+    <tr><td><code>σ²</code></td><td>일일 수익률 분산 (30일 rolling std²)</td><td><code>vd * vd</code></td></tr>
+    <tr><td><code>max(0, k²−k)</code></td><td>k=1일 때 decay=0 보장 (비레버리지는 적용 안 함)</td><td><code>max(0, lv*lv - lv)</code></td></tr>
+  </tbody>
+</table>
+
+<div class="callout info">
+  <strong>k=1 (비레버리지)</strong>: k²−k = 1−1 = 0 → decay = 0. 레버리지 없는 경우 비용 없음.<br>
+  <strong>k=2</strong>: k²−k = 4−2 = 2 → decay = 2·σ²/2 = σ²<br>
+  <strong>k=3</strong>: k²−k = 9−3 = 6 → decay = 6·σ²/2 = 3σ² (훨씬 큰 비용)
+</div>
+
+<h3 class="sub">구현</h3>
+
+<div class="diff-block">
+  <div class="diff-header">add_ind() — Vol_30d 컬럼 추가</div>
+  <span class="diff-add">+ # [V93-D] 30일 rolling 변동성 (vol decay 계산용)</span>
+  <span class="diff-add">+ df["Vol_30d"] = df.get("Daily_Ret", p.pct_change()).rolling(30).std().fillna(0)</span>
+</div>
+
+<div class="diff-block">
+  <div class="diff-header">run_beta() / run_alpha() — 일일 루프 내 적용</div>
+  <span class="diff-add">+ vd = float(row.get("Vol_30d", 0.01) or 0.01)  # [V93-D]</span>
+  <span class="diff-ctx">  ...</span>
+  <span class="diff-add">+ # [V93-D] 레버리지 일일 vol decay = max(0,k²-k)·σ²/2</span>
+  <span class="diff-add">+ decay = max(0, lv*lv - lv) * (vd*vd) / 2 * _dc_mult</span>
+  <span class="diff-ctx">  if dr: ys *= 1 + dr*lv - max(0,lv-1)*(LEV_COST/TRADING_DAYS)</span>
+  <span class="diff-add">+              - decay  # vol decay 차감</span>
+</div>
+
+<div class="callout">
+  <strong>_dc_mult</strong>: <code>include_costs</code> 토글(V93-E)과 연동됩니다. <code>OFF</code>이면 <code>_dc_mult=0.0</code>으로 decay도 비활성화됩니다.
+</div>
+
+<h3 class="sub">실제 영향 추정</h3>
+<table>
+  <thead><tr><th>레버리지</th><th>연 변동성 σ=15%</th><th>연 변동성 σ=25%</th><th>연 변동성 σ=40%</th></tr></thead>
+  <tbody>
+    <tr><td>k=1.0 (비레버리지)</td><td>0%</td><td>0%</td><td>0%</td></tr>
+    <tr><td>k=1.5</td><td>≈0.17%/년</td><td>≈0.47%/년</td><td>≈1.20%/년</td></tr>
+    <tr><td>k=2.0</td><td>≈0.45%/년</td><td>≈1.25%/년</td><td>≈3.20%/년</td></tr>
+    <tr><td>k=3.0</td><td>≈1.35%/년</td><td>≈3.75%/년</td><td>≈9.60%/년</td></tr>
+  </tbody>
+</table>
+</div>
+
+
+<!-- ══════════ V93-E ══════════ -->
+<div class="section" id="v93e">
+<h2 class="sec">6. V93-E — 거래 비용 & ETF 운용보수 반영</h2>
+
+<span class="tag tag-perf">신규 기능</span>&nbsp; 전역 상수 + 전략 엔진 전체
+
+<h3 class="sub">새로운 전역 상수</h3>
+
+<pre><span class="cm"># [V93-E] 현실적 비용 모델 (사이드바 include_costs 토글로 ON/OFF)</span>
+<span class="var">TRADE_COST</span> = <span class="num">0.0005</span>   <span class="cm"># 매수 시 0.05% (수수료 + 슬리피지)</span>
+<span class="var">ETF_TER</span>    = <span class="num">0.0020</span>   <span class="cm"># ETF 연간 운용보수 0.20% (일별 차감)</span></pre>
+
+<h3 class="sub">비용 종류</h3>
+<table>
+  <thead><tr><th>비용</th><th>값</th><th>적용 시점</th><th>실제 의미</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>TRADE_COST</strong></td>
+      <td>0.05%</td>
+      <td>매수 발생 시 (매일 적립 + Panic 매수)</td>
+      <td>증권사 수수료 + 호가 스프레드(슬리피지) 합산</td>
+    </tr>
+    <tr>
+      <td><strong>ETF_TER</strong></td>
+      <td>0.20%/년</td>
+      <td>매 거래일마다 일별 차감</td>
+      <td>ETF 운용 수수료 (Total Expense Ratio). S&P500 ETF 평균 수준</td>
+    </tr>
+    <tr>
+      <td><strong>Vol Decay</strong></td>
+      <td>변동성 의존</td>
+      <td>매 거래일 (V93-D)</td>
+      <td>레버리지 일일 리밸런싱 비용</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 class="sub">적용 위치 (run_beta 기준)</h3>
+
+<pre><span class="cm"># [V93-E] 비용 토글 — include_costs가 False면 모두 0</span>
+<span class="var">_tc</span>      = <span class="var">TRADE_COST</span> <span class="kw">if</span> include_costs <span class="kw">else</span> <span class="num">0.0</span>
+<span class="var">_ter</span>     = <span class="var">ETF_TER</span>    <span class="kw">if</span> include_costs <span class="kw">else</span> <span class="num">0.0</span>
+<span class="var">_dc_mult</span> = <span class="num">1.0</span>        <span class="kw">if</span> include_costs <span class="kw">else</span> <span class="num">0.0</span>  <span class="cm"># vol decay도 함께 제어</span>
+
+<span class="cm"># 매일 적립 시 수수료 차감</span>
+ys += dst * (<span class="num">1</span> - _tc)            <span class="cm"># ETF 적립 매수</span>
+
+<span class="cm"># TER 일별 차감</span>
+ys *= <span class="num">1</span> - _ter / TRADING_DAYS    <span class="cm"># 0.20% / 252</span>
+
+<span class="cm"># Panic 매수 시 수수료 차감</span>
+pb = min(yc * dr2, yc)
+ys += pb * (<span class="num">1</span> - _tc)            <span class="cm"># Panic 매수</span></pre>
+
+<h3 class="sub">사이드바 UI (include_costs 토글)</h3>
+
+<pre>include_costs = st.checkbox(
+    <span class="str">"💰 현실적 비용 반영 (수수료+TER+레버리지 decay)"</span>,
+    value=<span class="kw">True</span>,
+    help=<span class="str">f"매수 {TRADE_COST*100:.2f}% + ETF 운용보수 연 {ETF_TER*100:.2f}% + 레버리지 vol decay\nOFF 시 v9.2와 동일한 무비용 백테스트"</span>
+)</pre>
+
+<div class="callout warn">
+  <strong>기본값 = ON (현실적 모델)</strong><br>
+  v9.3부터 백테스트 기본 설정이 현실 비용 반영 모드입니다. 이전 버전 결과와 직접 비교할 때는 <code>include_costs = OFF</code>로 설정하세요.
+</div>
+</div>
+
+
+<!-- ══════════ 영향 & 파라미터 ══════════ -->
+<div class="section" id="impact">
+<h2 class="sec">7. 변경 영향 & 파라미터 정리</h2>
+
+<h3 class="sub">함수별 변경 영향 요약</h3>
+<table>
+  <thead><tr><th>함수</th><th>V93-A</th><th>V93-B</th><th>V93-C</th><th>V93-D</th><th>V93-E</th></tr></thead>
+  <tbody>
+    <tr><td><code>add_ind()</code></td><td>-</td><td>-</td><td>✅ RSI 보호</td><td>✅ Vol_30d 추가</td><td>-</td></tr>
+    <tr><td><code>run_beta()</code></td><td>-</td><td>-</td><td>-</td><td>✅ decay 적용</td><td>✅ 비용 차감</td></tr>
+    <tr><td><code>run_alpha()</code></td><td>✅ 누적 set</td><td>-</td><td>-</td><td>✅ decay 적용</td><td>✅ 비용 차감</td></tr>
+    <tr><td><code>run_grid()</code></td><td>-</td><td>-</td><td>-</td><td>간접 (run_beta 경유)</td><td>✅ 파라미터 전달</td></tr>
+    <tr><td><code>run_wfv()</code></td><td>-</td><td>-</td><td>-</td><td>간접 (run_beta 경유)</td><td>✅ 파라미터 전달</td></tr>
+    <tr><td><code>fetch_ticker_signals()</code></td><td>-</td><td>✅ 분리</td><td>✅ RSI 보호</td><td>-</td><td>-</td></tr>
+  </tbody>
+</table>
+
+<h3 class="sub">v9.3에서 추가된 전역 파라미터</h3>
+<table>
+  <thead><tr><th>상수</th><th>기본값</th><th>단위</th><th>제어 방법</th></tr></thead>
+  <tbody>
+    <tr><td><code>TRADE_COST</code></td><td>0.0005</td><td>비율 (0.05%)</td><td>사이드바 <code>include_costs</code> 토글</td></tr>
+    <tr><td><code>ETF_TER</code></td><td>0.0020</td><td>연율 (0.20%)</td><td>사이드바 <code>include_costs</code> 토글</td></tr>
+    <tr><td><code>Vol_30d</code></td><td>—</td><td>일일 수익률 std (30일)</td><td><code>add_ind()</code>에서 자동 계산</td></tr>
+  </tbody>
+</table>
+
+<h3 class="sub">버전 비교</h3>
+<table>
+  <thead><tr><th>항목</th><th>v9.2</th><th>v9.3 (include_costs=ON)</th><th>v9.3 (include_costs=OFF)</th></tr></thead>
+  <tbody>
+    <tr><td>매수 수수료</td><td>없음</td><td>0.05%/회</td><td>없음</td></tr>
+    <tr><td>ETF 운용보수</td><td>없음</td><td>0.20%/년 (일별)</td><td>없음</td></tr>
+    <tr><td>레버리지 vol decay</td><td>없음</td><td>max(0,k²-k)·σ²/2</td><td>없음</td></tr>
+    <tr><td>RSI NaN 보호</td><td>없음</td><td>있음</td><td>있음</td></tr>
+    <tr><td>에러 캐시 문제</td><td>있음 (24h)</td><td>해결됨</td><td>해결됨</td></tr>
+    <tr><td>Panic 선별 종목 추적</td><td>마지막 차수만</td><td>전 차수 누적</td><td>전 차수 누적</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <strong>권장 사용법</strong><br>
+  실제 투자 의사결정을 위한 백테스트: <code>include_costs = ON</code> (기본값) — 현실에 가까운 결과<br>
+  이전 버전 결과 재현 또는 전략 순수 성능 분석: <code>include_costs = OFF</code> — 비용 없는 이상적 결과
+</div>
+</div>
+
+</div><!-- /container -->
+
+<footer>
+  YJ-Quant v9.3 변경점 문서 &nbsp;|&nbsp; 생성일: 2026-05-27 &nbsp;|&nbsp; 베이스: v9.2 대비 변경사항 (V93-A ~ V93-E)
+</footer>
+
+</body>
+</html>
