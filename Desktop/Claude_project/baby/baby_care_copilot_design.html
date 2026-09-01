@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BabyCue — 멀티모달 육아 케어 코파일럿 · MVP 설계 초안</title>
+<style>
+  :root{
+    --bg:#0f1220; --panel:#171b2e; --panel2:#1d2238; --ink:#e8ebf5; --muted:#9aa3c0;
+    --acc:#7c9cff; --acc2:#5be0c0; --warn:#ffb454; --danger:#ff6b81; --ok:#5be08a;
+    --line:#2a3050; --chip:#222843;
+    --radius:14px; --shadow:0 8px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 700px at 80% -10%,#1b2murky00,transparent),var(--bg);
+    background:radial-gradient(1200px 700px at 80% -10%,#202749,transparent),var(--bg);
+    color:var(--ink);font-family:"Segoe UI",-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;line-height:1.65}
+  .wrap{max-width:1080px;margin:0 auto;padding:48px 22px 90px}
+  header.hero{padding:34px 30px;border-radius:var(--radius);
+    background:linear-gradient(135deg,#202749,#15182a);border:1px solid var(--line);box-shadow:var(--shadow)}
+  .badge{display:inline-block;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--acc2);
+    border:1px solid var(--line);padding:5px 11px;border-radius:999px;background:var(--chip)}
+  h1{font-size:34px;margin:14px 0 6px;letter-spacing:-.02em}
+  h1 span{color:var(--acc)}
+  .sub{color:var(--muted);font-size:16px;max-width:760px}
+  .meta{margin-top:16px;display:flex;gap:10px;flex-wrap:wrap}
+  .meta b{color:var(--ink)}
+  .meta div{font-size:13px;color:var(--muted);background:var(--chip);border:1px solid var(--line);padding:6px 12px;border-radius:10px}
+
+  section{margin-top:38px}
+  h2{font-size:22px;margin:0 0 4px;display:flex;align-items:center;gap:10px}
+  h2 .n{font-size:13px;color:var(--bg);background:var(--acc);width:26px;height:26px;border-radius:8px;
+    display:inline-grid;place-items:center;font-weight:700}
+  .lead{color:var(--muted);margin:2px 0 18px}
+
+  .grid{display:grid;gap:16px}
+  .g2{grid-template-columns:1fr 1fr}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  @media(max-width:820px){.g2,.g3{grid-template-columns:1fr}}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px}
+  .card h3{margin:0 0 8px;font-size:16px}
+  .card p,.card li{color:var(--muted);font-size:14.5px}
+  .stat{font-size:30px;font-weight:800;color:var(--acc2);letter-spacing:-.02em}
+  .stat small{font-size:13px;color:var(--muted);font-weight:500;display:block;margin-top:2px}
+
+  .verdict{border-left:4px solid var(--ok);background:linear-gradient(90deg,rgba(91,224,138,.08),transparent)}
+  .pivot{border-left:4px solid var(--warn);background:linear-gradient(90deg,rgba(255,180,84,.08),transparent)}
+
+  table{width:100%;border-collapse:collapse;font-size:14px;overflow:hidden;border-radius:12px}
+  th,td{text-align:left;padding:11px 13px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:var(--panel2);color:var(--ink);font-size:12.5px;letter-spacing:.04em}
+  td{color:var(--muted)}
+  tr:last-child td{border-bottom:none}
+  .tag{display:inline-block;font-size:11.5px;padding:2px 9px;border-radius:999px;border:1px solid var(--line);background:var(--chip);color:var(--ink)}
+  .tag.ok{color:var(--ok);border-color:rgba(91,224,138,.4)}
+  .tag.warn{color:var(--warn);border-color:rgba(255,180,84,.4)}
+  .tag.bad{color:var(--danger);border-color:rgba(255,107,129,.4)}
+
+  /* architecture diagram */
+  .arch{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:22px}
+  .layer{border:1px dashed var(--line);border-radius:12px;padding:14px;margin-bottom:14px;position:relative}
+  .layer:last-child{margin-bottom:0}
+  .layer .lbl{position:absolute;top:-11px;left:14px;background:var(--panel);padding:0 8px;font-size:12px;color:var(--acc);letter-spacing:.08em}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .box{flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .box b{display:block;color:var(--ink);font-size:14px;margin-bottom:3px}
+  .box span{font-size:12.5px;color:var(--muted)}
+  .arrow{text-align:center;color:var(--acc);font-size:20px;margin:2px 0}
+
+  ol.flow{counter-reset:s;list-style:none;padding:0;margin:0}
+  ol.flow li{position:relative;padding:12px 0 12px 46px;border-bottom:1px solid var(--line)}
+  ol.flow li:last-child{border-bottom:none}
+  ol.flow li::before{counter-increment:s;content:counter(s);position:absolute;left:0;top:11px;width:30px;height:30px;
+    background:var(--chip);border:1px solid var(--line);border-radius:9px;display:grid;place-items:center;color:var(--acc);font-weight:700;font-size:13px}
+  ol.flow b{color:var(--ink)}
+
+  .pill-list{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+  .pill{font-size:12.5px;padding:5px 11px;border-radius:8px;background:var(--chip);border:1px solid var(--line);color:var(--ink)}
+
+  .road{position:relative;padding-left:22px}
+  .road::before{content:"";position:absolute;left:6px;top:6px;bottom:6px;width:2px;background:var(--line)}
+  .road .step{position:relative;margin-bottom:16px}
+  .road .step::before{content:"";position:absolute;left:-22px;top:5px;width:12px;height:12px;border-radius:50%;background:var(--acc);box-shadow:0 0 0 4px var(--bg)}
+  .road .step.alt::before{background:var(--acc2)}
+  .road .step.late::before{background:var(--muted)}
+  .road h4{margin:0 0 3px;font-size:15px}
+  .road span{font-size:13px;color:var(--muted)}
+
+  .callout{border:1px solid var(--line);background:var(--panel2);border-radius:12px;padding:14px 16px;font-size:14px;color:var(--muted)}
+  .callout b{color:var(--ink)}
+  .disclaimer{border-left:4px solid var(--danger);background:linear-gradient(90deg,rgba(255,107,129,.08),transparent)}
+
+  a{color:var(--acc)}
+  .src{font-size:12.5px;color:var(--muted)}
+  .src li{margin-bottom:4px}
+  footer{margin-top:50px;color:var(--muted);font-size:12.5px;text-align:center;border-top:1px solid var(--line);padding-top:18px}
+  .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  @media(max-width:820px){.kpi-row{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <span class="badge">MVP 설계 초안 · v0.1</span>
+    <h1><span>BabyCue</span> — 멀티모달 육아 케어 코파일럿</h1>
+    <p class="sub">아기의 울음(음성)·표정/상태(이미지)·상황(텍스트)을 함께 보고,
+      <b>"무엇이 문제인지"를 단정하는 번역기</b>가 아니라
+      <b>"지금 무엇을 해보면 좋을지"를 안내하는 의사결정 보조 도구</b>.
+      불확실성을 솔직하게 드러내고, 위험 신호는 병원으로 에스컬레이션합니다.</p>
+    <div class="meta">
+      <div>작성 기준일 <b>2026-06-02</b></div>
+      <div>입력 소스 <b>require.txt</b></div>
+      <div>리서치 결론 <b>수요 O · 포지셔닝 전환 권고</b></div>
+    </div>
+  </header>
+
+  <!-- 1. 시장 리서치 -->
+  <section>
+    <h2><span class="n">1</span> 시장 리서치 — 이 제품, 수요가 있는가?</h2>
+    <p class="lead">결론부터: <b>수요는 분명히 존재</b>하지만, "울음 번역기" 카테고리는 이미 포화 + 신뢰도 논란이 큽니다. 데이터로 정리합니다.</p>
+
+    <div class="kpi-row">
+      <div class="card"><div class="stat">$1.7B<small>2024 육아앱 시장 (→2035년 $6B, CAGR ~12%)</small></div></div>
+      <div class="card"><div class="stat">88.5%<small>새내기·예비 부모가 보고한 "불안 증가"</small></div></div>
+      <div class="card"><div class="stat">9가지<small>경쟁 앱이 주장하는 울음 감정 분류 수 (CryBaby)</small></div></div>
+      <div class="card"><div class="stat">3→3<small>한 울음 세션에 3번 분석 → 3개 상이한 진단 (사용자 불만)</small></div></div>
+    </div>
+
+    <div class="grid g2" style="margin-top:16px">
+      <div class="card">
+        <h3>🟢 수요를 뒷받침하는 신호</h3>
+        <ul>
+          <li>육아앱 시장 고성장 (CAGR 12~20% 추정).</li>
+          <li>새내기 부모 불안 만연(88.5%) → "지금 뭘 해야 하지?" 의사결정 지원 니즈 큼.</li>
+          <li>Nanni(50만+ 부모), 크라잉베베, CryBaby, ChatterBaby 등 사용자 기반 형성됨 = 시장 검증 완료.</li>
+          <li>부모가 가치 있게 보는 기능: <b>배우자/가족 데이터 동기화</b>, <b>커뮤니티</b>, <b>구체적 가이드</b>.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>🔴 경쟁 카테고리의 약점 (= 우리의 기회)</h3>
+        <ul>
+          <li>대부분 <b>오디오 단일 모달</b> → 같은 울음에 매번 다른 결과(신뢰 붕괴).</li>
+          <li>연구자들이 "가짜 cry tech 박물관"을 운영할 만큼 <b>과장 정확도</b> 비판.</li>
+          <li>한 DB의 'gassy' 라벨이 실제론 성인 목소리였던 사례 → 데이터 품질 문제.</li>
+          <li>"무엇을 원하는지" 단정만 하고 <b>구체적 행동 가이드·위험 에스컬레이션 부재</b>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card verdict" style="margin-top:16px">
+      <h3>📌 종합 판단</h3>
+      <p style="color:var(--ink)"><b>제품을 폐기할 필요는 없다.</b> 다만 require.txt의 원안에 이미 들어있던 두 가지 직관 —
+      ①<b>멀티모달(음성·이미지·텍스트)</b>, ②<b>"틀릴 수 있으니 가이드/행동 지침을 함께 제공"</b> — 이 정확히 경쟁군의 빈틈이다.
+      따라서 <b>방향을 크게 틀기보다, "울음 번역기"라는 포지셔닝만 폐기</b>하고
+      <b>"불확실성을 인정하는 멀티모달 케어 코파일럿"</b>으로 재포지셔닝하는 것을 권고한다.</p>
+    </div>
+
+    <div class="card pivot" style="margin-top:14px">
+      <h3>🔁 포지셔닝 전환 (Pivot, 살짝)</h3>
+      <table>
+        <tr><th>구분</th><th class="src">기존 카테고리 (Red Ocean)</th><th>BabyCue 제안</th></tr>
+        <tr><td><b>핵심 약속</b></td><td>"아기가 뭘 원하는지 번역해 줌"</td><td>"가능성 높은 원인 <b>순위 + 지금 할 일 체크리스트</b> 제공"</td></tr>
+        <tr><td><b>입력</b></td><td>오디오 only</td><td>음성 + 사진/짧은 영상 + 텍스트 + 컨텍스트(수유·수면·기저귀 로그)</td></tr>
+        <tr><td><b>불확실성</b></td><td>단정형 1개 결과</td><td>확률·근거 표시, "확실치 않음"을 1급 시민으로</td></tr>
+        <tr><td><b>안전</b></td><td>거의 없음</td><td>발열·호흡곤란 등 <b>위험 신호 → 병원 안내 에스컬레이션</b></td></tr>
+        <tr><td><b>학습 루프</b></td><td>피드백 약함</td><td>"맞았나요?" 피드백으로 <b>우리 아기 개인화</b></td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- 2. 제품 컨셉 -->
+  <section>
+    <h2><span class="n">2</span> 제품 컨셉 & MVP 범위</h2>
+    <p class="lead">"한 화면에서 입력 → 가능성 순위 → 행동 가이드 → 결과 피드백"의 단일 루프에 집중.</p>
+    <div class="grid g3">
+      <div class="card"><h3>🎙️ 멀티모달 입력</h3><p>10초 울음 녹음 + (선택) 아기 사진/짧은 영상 + 자유 텍스트("2시간 전 수유함") + 환경값(온·습도).</p></div>
+      <div class="card"><h3>🧠 추론 & 랭킹</h3><p>배고픔/기저귀/졸림/트림·복통/덥거나 추움/불편함/아픔 등 후보를 <b>확률 순위 + 근거</b>로 제시.</p></div>
+      <div class="card"><h3>✅ 행동 가이드</h3><p>1순위 원인에 대한 <b>구체적 단계</b> + "안 되면 다음으로" 분기 + 위험 신호 시 병원 안내.</p></div>
+    </div>
+    <div class="card disclaimer" style="margin-top:14px">
+      <p><b>⚠️ 안전·법적 포지셔닝(필수):</b> 의료기기/진단 도구가 아닌 <b>정보·보조 도구</b>로 명확히 고지.
+      발열, 호흡곤란, 청색증, 무반응, 지속적 고음 울음 등은 추론을 건너뛰고 즉시 <b>의료 도움 안내</b>로 직행한다.</p>
+    </div>
+  </section>
+
+  <!-- 3. 시스템 아키텍처 -->
+  <section>
+    <h2><span class="n">3</span> 시스템 아키텍처</h2>
+    <p class="lead">모바일(엣지) + 클라우드 추론의 하이브리드. 개인정보 민감도가 높으므로 가능한 처리는 온디바이스, 무거운 추론만 서버.</p>
+    <div class="arch">
+      <div class="layer">
+        <span class="lbl">CLIENT · Mobile App (React Native / Flutter)</span>
+        <div class="row">
+          <div class="box"><b>입력 캡처</b><span>마이크·카메라·텍스트·BLE 온습도 센서</span></div>
+          <div class="box"><b>온디바이스 전처리</b><span>VAD(울음 구간 검출)·노이즈 제거·이미지 크롭</span></div>
+          <div class="box"><b>경량 분류기(옵션)</b><span>오프라인 1차 추정 · TFLite/CoreML</span></div>
+          <div class="box"><b>로컬 로그</b><span>수유/수면/기저귀 타임라인 캐시</span></div>
+        </div>
+      </div>
+      <div class="arrow">▼ HTTPS / 인증 토큰</div>
+      <div class="layer">
+        <span class="lbl">API GATEWAY · BFF</span>
+        <div class="row">
+          <div class="box"><b>Auth</b><span>OAuth/JWT · 가족 계정 권한</span></div>
+          <div class="box"><b>Orchestrator</b><span>멀티모달 입력 라우팅·세션 관리</span></div>
+          <div class="box"><b>Rate / Safety Gate</b><span>위험신호 룰 우선 평가</span></div>
+        </div>
+      </div>
+      <div class="arrow">▼</div>
+      <div class="layer">
+        <span class="lbl">INFERENCE SERVICES</span>
+        <div class="row">
+          <div class="box"><b>Audio Model</b><span>울음 음향 특징(MFCC/스펙트로그램)→원인 후보 확률</span></div>
+          <div class="box"><b>Vision Model</b><span>표정·자세·피부(홍조/발진)·환경 단서</span></div>
+          <div class="box"><b>Fusion + LLM</b><span>멀티모달 신호 + 로그 컨텍스트 융합 → 순위·근거·가이드 생성</span></div>
+        </div>
+      </div>
+      <div class="arrow">▼</div>
+      <div class="layer">
+        <span class="lbl">DATA & PLATFORM</span>
+        <div class="row">
+          <div class="box"><b>User/Baby DB</b><span>PostgreSQL · 프로필·로그</span></div>
+          <div class="box"><b>Object Store</b><span>오디오/이미지(암호화·TTL)</span></div>
+          <div class="box"><b>Feedback Store</b><span>"맞았나요?" 라벨 → 재학습</span></div>
+          <div class="box"><b>Knowledge Base</b><span>가이드/위험신호 콘텐츠(전문가 검수)</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="callout" style="margin-top:14px">
+      <b>MVP 단순화:</b> 초기엔 온디바이스 모델·BLE 센서·Vision을 빼고 <b>오디오+텍스트+규칙기반 가이드+LLM 융합</b>만으로 출발해도 핵심 루프가 성립한다(아래 로드맵 Phase 1).
+    </div>
+  </section>
+
+  <!-- 4. 프로그램 설계 (런타임 플로우) -->
+  <section>
+    <h2><span class="n">4</span> 프로그램 설계 — 런타임 플로우</h2>
+    <p class="lead">한 번의 "아기가 울어요" 이벤트가 처리되는 경로.</p>
+    <div class="card">
+      <ol class="flow">
+        <li><b>입력 수집:</b> 사용자가 녹음 시작 → 10초 오디오 + (선택)사진/텍스트 + 자동 첨부되는 최근 로그(마지막 수유·수면·기저귀 시각).</li>
+        <li><b>안전 게이트 우선 평가:</b> 텍스트/체크박스로 위험 신호(발열·호흡곤란 등) 입력 시 즉시 <b>병원 안내 화면</b>으로 분기, 추론 생략.</li>
+        <li><b>전처리:</b> 울음 구간 검출(VAD)·노이즈 제거, 이미지 정규화.</li>
+        <li><b>모달별 추론:</b> Audio/Vision 모델이 각각 원인 후보에 점수 부여.</li>
+        <li><b>컨텍스트 융합:</b> 모델 점수 + 로그 규칙(예: "마지막 수유 3시간 전"→배고픔 가중) 결합 → 후보 재정렬.</li>
+        <li><b>설명·가이드 생성:</b> LLM이 상위 후보의 <b>근거 + 단계별 행동 가이드 + "안 되면 다음 시도"</b>를 자연어로 생성(KB 가이드 grounding).</li>
+        <li><b>결과 제시:</b> 확률 순위(예: 배고픔 62% · 졸림 21% · 불편 12%) + 1순위 가이드 + 불확실성 고지.</li>
+        <li><b>피드백 루프:</b> "이게 맞았나요? / 무엇이 효과 있었나요?" 수집 → 개인화 + 모델 재학습 데이터.</li>
+      </ol>
+    </div>
+
+    <div class="grid g2" style="margin-top:16px">
+      <div class="card">
+        <h3>핵심 모듈 (백엔드)</h3>
+        <table>
+          <tr><th>모듈</th><th>책임</th></tr>
+          <tr><td><b>Orchestrator</b></td><td>세션 생성, 모달 라우팅, 타임아웃·폴백</td></tr>
+          <tr><td><b>SafetyGate</b></td><td>위험신호 규칙 평가(추론보다 항상 먼저)</td></tr>
+          <tr><td><b>AudioInfer</b></td><td>특징 추출 + 분류, 신뢰도 반환</td></tr>
+          <tr><td><b>FusionEngine</b></td><td>모달 점수 + 로그 규칙 가중 결합</td></tr>
+          <tr><td><b>GuideService</b></td><td>KB grounding LLM 가이드 생성</td></tr>
+          <tr><td><b>FeedbackCollector</b></td><td>라벨 수집·개인화 프로필 갱신</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h3>데이터 모델 (스케치)</h3>
+<pre style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px;color:var(--muted);font-size:12.5px;overflow:auto;margin:0">Baby      { id, name, birth_date, family_id }
+CareLog   { id, baby_id, type(feed|sleep|
+            diaper), at, note }
+Episode   { id, baby_id, audio_url, image_url,
+            text, env_temp, env_humidity,
+            created_at }
+Inference { id, episode_id, ranked_causes[],
+            confidence, guide_text, safety_flag }
+Feedback  { id, inference_id, was_correct,
+            actual_cause, what_worked }</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. UX 화면 -->
+  <section>
+    <h2><span class="n">5</span> UX 화면 흐름 (MVP)</h2>
+    <div class="grid g3">
+      <div class="card"><h3>① 홈 / 녹음</h3><p>큰 "🎙️ 듣기 시작" 버튼. 아래 작은 칩으로 사진/메모 추가. 최근 로그 자동 표시.</p></div>
+      <div class="card"><h3>② 분석 결과</h3><p>확률 막대 순위 + 1순위 근거. "왜 이렇게 봤나요?" 펼치기. 불확실성 배너.</p></div>
+      <div class="card"><h3>③ 행동 가이드</h3><p>단계 체크리스트 + "효과 없었어요 → 다음 시도". 위험신호면 빨간 병원 카드.</p></div>
+      <div class="card"><h3>④ 피드백</h3><p>"맞았나요?" 한 번 탭. 무엇이 효과 있었는지 기록.</p></div>
+      <div class="card"><h3>⑤ 타임라인</h3><p>수유·수면·기저귀·울음 에피소드 통합 로그. 가족 공유.</p></div>
+      <div class="card"><h3>⑥ 가족 공유</h3><p>배우자 초대, 동일 아기 데이터 동기화(부모가 원하는 기능).</p></div>
+    </div>
+  </section>
+
+  <!-- 6. 기술 스택 -->
+  <section>
+    <h2><span class="n">6</span> 기술 스택 제안</h2>
+    <div class="grid g2">
+      <div class="card"><h3>클라이언트</h3>
+        <div class="pill-list">
+          <span class="pill">Flutter / React Native</span><span class="pill">CoreML · TFLite (온디바이스)</span>
+          <span class="pill">WebRTC/native 오디오</span><span class="pill">BLE 센서 SDK (후순위)</span>
+        </div>
+      </div>
+      <div class="card"><h3>백엔드 / 추론</h3>
+        <div class="pill-list">
+          <span class="pill">FastAPI (Python)</span><span class="pill">PostgreSQL</span><span class="pill">S3 호환 스토리지</span>
+          <span class="pill">PyTorch · librosa</span><span class="pill">Claude API (가이드 생성·융합)</span><span class="pill">Redis (세션)</span>
+        </div>
+      </div>
+      <div class="card"><h3>ML 데이터</h3>
+        <div class="pill-list">
+          <span class="pill">공개 울음 데이터셋 + 자체 피드백 라벨</span><span class="pill">스펙트로그램 CNN</span><span class="pill">규칙+모델 하이브리드</span>
+        </div>
+      </div>
+      <div class="card"><h3>운영 / 보안</h3>
+        <div class="pill-list">
+          <span class="pill">미디어 암호화·TTL 삭제</span><span class="pill">GDPR/개인정보 동의</span><span class="pill">의료 면책 고지</span><span class="pill">옵저버빌리티(분석 정확도 추적)</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7. 로드맵 -->
+  <section>
+    <h2><span class="n">7</span> 단계별 로드맵</h2>
+    <div class="card">
+      <div class="road">
+        <div class="step"><h4>Phase 0 · 검증 (2~3주)</h4><span>랜딩페이지 + 부모 인터뷰 20명. "확률+가이드+안전" 컨셉에 대한 지불의사 확인.</span></div>
+        <div class="step"><h4>Phase 1 · Thin MVP (4~6주)</h4><span>오디오+텍스트+로그 → 규칙/LLM 융합 가이드. Vision·온디바이스·센서 제외. 핵심 루프 한 화면.</span></div>
+        <div class="step alt"><h4>Phase 2 · 신뢰 강화</h4><span>피드백 기반 개인화, 오디오 분류 모델 고도화, 안전 게이트 전문가 검수.</span></div>
+        <div class="step alt"><h4>Phase 3 · 멀티모달 확장</h4><span>Vision(표정/홍조), BLE 온습도, 가족 공유·타임라인.</span></div>
+        <div class="step late"><h4>Phase 4 · 생태계</h4><span>커뮤니티, 소아과 연계, 웨어러블 연동.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 대안 -->
+  <section>
+    <h2><span class="n">8</span> 만약 이 방향도 약하다면 — 인접 대안</h2>
+    <p class="lead">리서치상 본 제품의 수요는 충분하다고 보지만, 차별화가 어려울 경우의 인접 피벗 후보.</p>
+    <div class="grid g3">
+      <div class="card"><h3>A. 야간 수면 코파일럿</h3><p>"왜 안 자는가"에 특화 — 수면 회귀·연관성 분석 + 야간 행동 가이드. 통점이 가장 날카로운 시간대 공략.</p></div>
+      <div class="card"><h3>B. 가족 케어 OS</h3><p>분석보다 <b>다중 양육자 동기화·인계</b> 중심(부모가 명시적으로 원한 기능). 분석은 부가.</p></div>
+      <div class="card"><h3>C. 증상 트리아지</h3><p>발진/대변/체온 사진·로그 기반 <b>"병원 가야 하나?" 판단 보조</b>. 안전 가치가 분명, 신뢰 확보 용이.</p></div>
+    </div>
+  </section>
+
+  <!-- 출처 -->
+  <section>
+    <h2><span class="n">9</span> 리서치 출처</h2>
+    <div class="card">
+      <ul class="src">
+        <li><a href="https://www.rootsanalysis.com/reports/parenting-apps-market.html">Roots Analysis — Parenting Apps Market ($1.69B 2024 → $6.02B 2035, CAGR 12%)</a></li>
+        <li><a href="https://www.globalgrowthinsights.com/market-reports/parenting-apps-market-102179">Global Growth Insights — 육아앱 시장 (고성장 CAGR)</a></li>
+        <li><a href="https://sherwood.news/tech/do-baby-cry-translators-work/">Sherwood News — Do baby cry translators work? (연구자 회의론, "cry museum")</a></li>
+        <li><a href="https://www.onebyoneusa.org/blog/2025/11/11/baby-cry-translators-for-fun-or-for-real">One by One — Baby Cry Translators: For Fun or For Real? (정확도 한계)</a></li>
+        <li><a href="https://apps.apple.com/kr/app/crybaby/id6755155390">CryBaby (App Store) — 9가지 감정 분류 경쟁 앱</a></li>
+        <li><a href="https://apps.apple.com/us/app/nanni-ai-your-baby-translator/id6446214576">Nanni AI — 50만+ 부모 사용</a></li>
+        <li><a href="https://www.jmir.org/2021/12/e27033/">JMIR — Supportive Parenting App 개발 연구 (부모 니즈)</a></li>
+        <li><a href="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7732354/">PMC — 부모 88.5% 불안 증가, 커뮤니티·동기화 선호</a></li>
+        <li><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC8444044/">PMC — 모·영유아 건강 앱 소비자 관점(질적 분석)</a></li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    BabyCue · MVP 설계 초안 v0.1 · require.txt 기반 자동 생성 · 2026-06-02<br>
+    ※ 본 문서의 제품은 의료 진단 도구가 아니며, 위험 신호 시 의료 전문가 상담을 우선합니다.
+  </footer>
+
+</div>
+</body>
+</html>
