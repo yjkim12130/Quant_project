@@ -68,12 +68,12 @@ const mix = (...makers: Maker[]): Maker => (rng) => pick(rng, makers)(rng);
 const ALL = [2, 3, 4, 5, 6, 7, 8, 9];
 
 export const UNITS: UnitDef[] = [
-  { unit: 1, title: '10까지 덧셈', color: '#58CC02', icon: '➕' },
-  { unit: 2, title: '10까지 뺄셈', color: '#1CB0F6', icon: '➖' },
-  { unit: 3, title: '20까지 덧셈·뺄셈', color: '#CE82FF', icon: '🔢' },
-  { unit: 4, title: '구구단 ①', color: '#FF9600', icon: '✖️' },
-  { unit: 5, title: '구구단 ②', color: '#FF4B4B', icon: '✖️' },
-  { unit: 6, title: '나눗셈', color: '#2B70C9', icon: '➗' },
+  { unit: 1, title: '10까지 덧셈', color: '#58CC02', icon: '+' },
+  { unit: 2, title: '10까지 뺄셈', color: '#1CB0F6', icon: '−' },
+  { unit: 3, title: '20까지 덧셈·뺄셈', color: '#CE82FF', icon: '±' },
+  { unit: 4, title: '구구단 ①', color: '#FF9600', icon: '×' },
+  { unit: 5, title: '구구단 ②', color: '#FF4B4B', icon: '×' },
+  { unit: 6, title: '나눗셈', color: '#2B70C9', icon: '÷' },
 ];
 
 export const STAGES: StageDef[] = [

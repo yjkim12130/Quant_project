@@ -113,6 +113,7 @@ p { margin: 0; }
   width: 72px; height: 72px; border-radius: 50%; border: none; font-size: 1.9rem; color: #fff; cursor: pointer;
   background: var(--c, var(--green)); box-shadow: 0 6px 0 rgba(0, 0, 0, 0.22);
 }
+.node.open { font-family: var(--font-display); font-size: 2.6rem; line-height: 1; }
 .node.done { background: var(--yellow); box-shadow: 0 6px 0 var(--yellow-dark); }
 .node.locked { background: var(--gray); box-shadow: 0 6px 0 var(--gray-dark); cursor: default; filter: grayscale(1); }
 .node-start {
