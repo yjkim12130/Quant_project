@@ -18,9 +18,11 @@ function prompt(q: Question): string {
 }
 
 function Pictures({ q }: { q: Question }) {
+  // 10개가 넘으면 그림을 줄여서 두 묶음이 한 줄에 나란히 들어가게 한다
+  const cls = q.a + (q.op === 'add' ? q.b : 0) > 10 ? 'pics many' : 'pics';
   if (q.op === 'add') {
     return (
-      <div className="pics" aria-hidden>
+      <div className={cls} aria-hidden>
         <span className="pic-group">{Array.from({ length: q.a }, (_, i) => <span key={i}>🍎</span>)}</span>
         <span className="pic-op">+</span>
         <span className="pic-group">{Array.from({ length: q.b }, (_, i) => <span key={i}>🍎</span>)}</span>
@@ -28,7 +30,7 @@ function Pictures({ q }: { q: Question }) {
     );
   }
   return (
-    <div className="pics" aria-hidden>
+    <div className={cls} aria-hidden>
       <span className="pic-group">
         {Array.from({ length: q.a }, (_, i) => (
           <span key={i} className={i >= q.a - q.b ? 'pic-gone' : ''}>🍪</span>

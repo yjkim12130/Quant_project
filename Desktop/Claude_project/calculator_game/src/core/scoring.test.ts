@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { accuracy, emptyStats, isPassed, isStageUnlocked, lessonXp, levelFromXp, xpForLevel, type LessonOutcome } from './scoring';
+import { accuracy, emptyStats, isPassed, lessonXp, levelFromXp, xpForLevel, type LessonOutcome } from './scoring';
 
 const outcome = (firstTryCorrect: number, heartsLeft: number, total = 10): LessonOutcome => ({
   firstTryCorrect, total, heartsLeft, stats: emptyStats(),
@@ -40,22 +40,5 @@ describe('레벨', () => {
     expect(xpForLevel(1)).toBe(0);
     expect(xpForLevel(2)).toBe(100);
     expect(xpForLevel(4)).toBe(600);
-  });
-});
-
-describe('isStageUnlocked', () => {
-  const p = (stages: Record<string, { crowns: number; bestAccuracy: number }>, unlockAll = false) => ({ stages, unlockAll });
-  it('첫 단계는 항상 열려 있다', () => {
-    expect(isStageUnlocked('u1s1', p({}))).toBe(true);
-  });
-  it('이전 단계 왕관 3개면 열린다', () => {
-    expect(isStageUnlocked('u1s2', p({ u1s1: { crowns: 2, bestAccuracy: 1 } }))).toBe(false);
-    expect(isStageUnlocked('u1s2', p({ u1s1: { crowns: 3, bestAccuracy: 1 } }))).toBe(true);
-  });
-  it('unlockAll이면 모두 열린다', () => {
-    expect(isStageUnlocked('u6s4', p({}, true))).toBe(true);
-  });
-  it('없는 단계는 닫혀 있다', () => {
-    expect(isStageUnlocked('zzz', p({}))).toBe(false);
   });
 });

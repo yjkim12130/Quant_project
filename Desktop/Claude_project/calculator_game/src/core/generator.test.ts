@@ -63,7 +63,7 @@ describe('pickKind', () => {
 
   it('preferBlank 단계는 키패드 대신 빈칸을 낸다', () => {
     const rng = mulberry32(8);
-    for (let i = 0; i < 2000; i++) expect(pickKind(rng, getStage('u1s4'), 2)).not.toBe('keypad');
+    for (let i = 0; i < 2000; i++) expect(pickKind(rng, getStage('u1s11'), 2)).not.toBe('keypad');
   });
 });
 
@@ -95,7 +95,7 @@ describe('generateLesson', () => {
   });
 
   it('같은 수식이 연속으로 나오지 않는다 (경우의 수가 적은 단계 포함)', () => {
-    for (const id of ['u1s4', 'u4s1', 'u2s1']) {
+    for (const id of ['u1s11', 'u4s1', 'u2s1', 'u6s1']) {
       for (let seed = 0; seed < 200; seed++) {
         const qs = generateLesson(getStage(id), 0, seed);
         for (let i = 1; i < qs.length; i++) expect(qs[i].key).not.toBe(qs[i - 1].key);

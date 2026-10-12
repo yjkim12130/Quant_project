@@ -36,7 +36,6 @@ export interface Profile {
   xp: number;
   streak: StreakState;
   stages: Record<string, StageProgress>;
-  unlockAll: boolean;
   stats: OpStats;
 }
 

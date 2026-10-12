@@ -1,5 +1,4 @@
-import { STAGES, stageIndex } from './stages';
-import type { OpStats, Profile } from './types';
+import type { OpStats } from './types';
 
 export const XP_CORRECT = 10;
 export const XP_LESSON = 20;
@@ -44,11 +43,4 @@ export function levelFromXp(xp: number): number {
 
 export function xpForLevel(level: number): number {
   return 50 * (level - 1) * level;
-}
-
-export function isStageUnlocked(stageId: string, p: Pick<Profile, 'stages' | 'unlockAll'>): boolean {
-  const i = stageIndex(stageId);
-  if (i < 0) return false;
-  if (p.unlockAll || i === 0) return true;
-  return (p.stages[STAGES[i - 1].id]?.crowns ?? 0) >= 3;
 }

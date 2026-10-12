@@ -34,7 +34,7 @@ describe('부모 설정', () => {
     const { user, store } = renderApp({ setup: withProfile });
     await user.click(screen.getByRole('button', { name: '부모 설정' }));
     await user.click(screen.getByRole('button', { name: '돌아가기' }));
-    expect(store.getState().screen).toEqual({ name: 'map' });
+    expect(store.getState().screen).toEqual({ name: 'home' });
   });
 
   it('타이머와 효과음을 바꾼다', async () => {
@@ -47,14 +47,11 @@ describe('부모 설정', () => {
     expect(store.getState().data.settings.soundOn).toBe(false);
   });
 
-  it('시작 단계 지정과 모든 단계 열기', async () => {
-    const { user, store } = renderApp({ setup: withProfile });
+  it('모든 단계가 열려 있으니 잠금 관련 옵션은 없다', async () => {
+    const { user } = renderApp({ setup: withProfile });
     await unlock(user);
-    await user.selectOptions(screen.getByRole('combobox', { name: '시작 단계' }), 'u4s1');
-    await user.click(screen.getByRole('button', { name: '여기부터 시작' }));
-    expect(store.getState().data.profiles[0].stages.u3s4.crowns).toBe(3);
-    await user.click(screen.getByRole('checkbox', { name: '모든 단계 열기' }));
-    expect(store.getState().data.profiles[0].unlockAll).toBe(true);
+    expect(screen.queryByRole('combobox', { name: '시작 단계' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: '모든 단계 열기' })).not.toBeInTheDocument();
   });
 
   it('연산별 정답률을 보여준다', async () => {
@@ -63,7 +60,7 @@ describe('부모 설정', () => {
         withProfile(s);
         const stats = { add: { correct: 8, total: 10 }, sub: { correct: 0, total: 0 }, mul: { correct: 0, total: 0 }, div: { correct: 0, total: 0 } };
         s.getState().finishLesson('u1s1', { firstTryCorrect: 8, total: 10, heartsLeft: 3, stats });
-        s.getState().goto({ name: 'map' });
+        s.getState().goto({ name: 'home' });
       },
     });
     await unlock(user);

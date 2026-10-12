@@ -1,5 +1,4 @@
 import { accuracy, isPassed, lessonXp, levelFromXp, type LessonOutcome } from './scoring';
-import { STAGES, stageIndex } from './stages';
 import { recordPlay } from './streak';
 import type { Op, OpStats, Profile } from './types';
 
@@ -56,13 +55,4 @@ export function applyLesson(
       streak: streak.count,
     },
   };
-}
-
-export function withStartStage(profile: Profile, stageId: string): Profile {
-  const idx = stageIndex(stageId);
-  const stages = { ...profile.stages };
-  STAGES.forEach((s, i) => {
-    if (i < idx) stages[s.id] = { crowns: 3, bestAccuracy: stages[s.id]?.bestAccuracy ?? 0 };
-  });
-  return { ...profile, stages };
 }

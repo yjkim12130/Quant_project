@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { applyLesson, withStartStage } from './progress';
-import { emptyStats, isStageUnlocked, type LessonOutcome } from './scoring';
+import { applyLesson } from './progress';
+import { emptyStats, type LessonOutcome } from './scoring';
 import type { Profile } from './types';
 
 const profile = (over: Partial<Profile> = {}): Profile => ({
   id: 'p1', name: '하늘', avatar: '🐶', xp: 0,
   streak: { count: 0, lastPlayedDate: null, freezeUsedWeek: null },
-  stages: {}, unlockAll: false, stats: emptyStats(), ...over,
+  stages: {}, stats: emptyStats(), ...over,
 });
 
 const outcome = (firstTryCorrect: number, heartsLeft = 5): LessonOutcome => {
@@ -57,16 +57,5 @@ describe('applyLesson', () => {
     applyLesson(start, 'u1s1', outcome(10), '2026-10-10');
     expect(start.xp).toBe(0);
     expect(start.stats.add.total).toBe(0);
-  });
-});
-
-describe('withStartStage', () => {
-  it('지정한 단계 앞은 모두 왕관 3개가 되어 그 단계가 열린다', () => {
-    const p = withStartStage(profile({ stages: { u1s1: { crowns: 1, bestAccuracy: 0.7 } } }), 'u3s1');
-    expect(p.stages.u1s1).toEqual({ crowns: 3, bestAccuracy: 0.7 });
-    expect(p.stages.u2s4.crowns).toBe(3);
-    expect(p.stages.u3s1).toBeUndefined();
-    expect(isStageUnlocked('u3s1', p)).toBe(true);
-    expect(isStageUnlocked('u3s2', p)).toBe(false);
   });
 });

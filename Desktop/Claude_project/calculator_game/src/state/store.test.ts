@@ -11,26 +11,30 @@ function make(kv = new MemoryKV()) {
 }
 
 describe('game store', () => {
-  it('처음엔 프로필 화면에서 시작한다', () => {
+  it('처음엔 입장 화면에서 시작하고, 프로필이 없으면 프로필 화면으로 들어간다', () => {
     const { store } = make();
+    expect(store.getState().screen).toEqual({ name: 'intro' });
+    store.getState().enter();
     expect(store.getState().screen).toEqual({ name: 'profiles' });
     expect(store.getState().loadError).toBe(false);
   });
 
-  it('프로필을 추가하면 활성화되고 맵으로 가며 저장된다', () => {
+  it('프로필을 추가하면 활성화되고 홈으로 가며 저장된다', () => {
     const { store, kv } = make();
     store.getState().addProfile('  하늘 ', '🐶');
     const s = store.getState();
     expect(activeProfile(s)?.name).toBe('하늘');
-    expect(s.screen).toEqual({ name: 'map' });
+    expect(s.screen).toEqual({ name: 'home' });
     expect(loadAppData(kv).data.profiles).toHaveLength(1);
   });
 
-  it('저장된 활성 프로필이 있으면 맵에서 다시 시작한다', () => {
+  it('저장된 활성 프로필이 있으면 입장 화면 다음에 홈으로 들어간다', () => {
     const { kv, store } = make();
     store.getState().addProfile('하늘', '🐶');
     const reopened = make(kv).store;
-    expect(reopened.getState().screen).toEqual({ name: 'map' });
+    expect(reopened.getState().screen).toEqual({ name: 'intro' });
+    reopened.getState().enter();
+    expect(reopened.getState().screen).toEqual({ name: 'home' });
     expect(activeProfile(reopened.getState())?.name).toBe('하늘');
   });
 
@@ -39,13 +43,14 @@ describe('game store', () => {
     store.getState().addProfile('하늘', '🐶');
     const stats = emptyStats();
     stats.add = { correct: 10, total: 10 };
+    store.getState().goto({ name: 'lesson', stageId: 'u1s1', categoryId: 'add' });
     store.getState().finishLesson('u1s1', { firstTryCorrect: 10, total: 10, heartsLeft: 5, stats });
     const s = store.getState();
     const p = activeProfile(s)!;
     expect(p.xp).toBe(130);
     expect(p.stages.u1s1.crowns).toBe(1);
     expect(p.streak.count).toBe(1);
-    expect(s.screen).toMatchObject({ name: 'result', stageId: 'u1s1', summary: { xpGained: 130, passed: true } });
+    expect(s.screen).toMatchObject({ name: 'result', stageId: 'u1s1', categoryId: 'add', summary: { xpGained: 130, passed: true } });
   });
 
   it('설정 변경', () => {
@@ -53,12 +58,8 @@ describe('game store', () => {
     store.getState().addProfile('하늘', '🐶');
     store.getState().setTimer(15);
     store.getState().setSound(false);
-    store.getState().setUnlockAll('p1', true);
-    store.getState().setStartStage('p1', 'u2s1');
     const s = store.getState();
     expect(s.data.settings).toEqual({ soundOn: false, timerSec: 15 });
-    expect(activeProfile(s)?.unlockAll).toBe(true);
-    expect(activeProfile(s)?.stages.u1s4.crowns).toBe(3);
   });
 
   it('활성 프로필을 지우면 활성 해제된다', () => {

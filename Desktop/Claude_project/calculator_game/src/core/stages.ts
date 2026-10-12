@@ -5,17 +5,12 @@ export interface StageDef {
   id: string;
   unit: number;
   title: string;
+  /** 카테고리 화면 3열 타일에 크게 쓰는 짧은 이름. 없으면 한 줄 전체 타일. */
+  short?: string;
   picture: 'none' | 'mixed' | 'priority';
   preferBlank?: boolean;
   hint?: string;
   make: (rng: Rng) => Operands;
-}
-
-export interface UnitDef {
-  unit: number;
-  title: string;
-  color: string;
-  icon: string;
 }
 
 type Maker = (rng: Rng) => Operands;
@@ -26,19 +21,15 @@ const sub = (a: number, b: number): Operands => ({ op: 'sub', a, b });
 const plusSmall: Maker = (rng) => add(randInt(rng, 1, 8), randInt(rng, 1, 2));
 const minusSmall: Maker = (rng) => sub(randInt(rng, 2, 6), randInt(rng, 1, 2));
 
-const sumTo = (max: number): Maker => (rng) => {
-  const a = randInt(rng, 1, max - 1);
-  return add(a, randInt(rng, 1, max - a));
-};
+// 1~9 에 n 을 더한다 (답 2~18)
+const plusN = (n: number): Maker => (rng) => add(randInt(rng, 1, 9), n);
+
+// n 을 빼서 답이 0~9 가 되게 한다
+const minusN = (n: number): Maker => (rng) => sub(n + randInt(rng, 0, 9), n);
 
 const makeTen: Maker = (rng) => {
   const a = randInt(rng, 1, 9);
   return add(a, 10 - a);
-};
-
-const subWithin = (max: number): Maker => (rng) => {
-  const a = randInt(rng, 1, max);
-  return sub(a, randInt(rng, 1, a));
 };
 
 const teenNoCarry: Maker = (rng) => {
@@ -65,45 +56,31 @@ const divide = (ds: number[]): Maker => (rng) => {
 
 const mix = (...makers: Maker[]): Maker => (rng) => pick(rng, makers)(rng);
 
-const ALL = [2, 3, 4, 5, 6, 7, 8, 9];
+const range = (lo: number, hi: number) => Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
+const ALL = range(1, 9);
 
-export const UNITS: UnitDef[] = [
-  { unit: 1, title: '10까지 덧셈', color: '#58CC02', icon: '+' },
-  { unit: 2, title: '10까지 뺄셈', color: '#1CB0F6', icon: '−' },
-  { unit: 3, title: '20까지 덧셈·뺄셈', color: '#CE82FF', icon: '±' },
-  { unit: 4, title: '구구단 ①', color: '#FF9600', icon: '×' },
-  { unit: 5, title: '구구단 ②', color: '#FF4B4B', icon: '×' },
-  { unit: 6, title: '나눗셈', color: '#2B70C9', icon: '÷' },
-];
+// 받침 있는 숫자(3 삼, 6 육)는 '으로', 나머지는 '로'
+const byDivisor = (d: number) => `${d}${d === 3 || d === 6 ? '으로' : '로'} 나누기`;
 
 export const STAGES: StageDef[] = [
   { id: 'u1s1', unit: 1, title: '그림 세기', picture: 'priority', make: plusSmall },
-  { id: 'u1s2', unit: 1, title: '합 5까지', picture: 'mixed', make: sumTo(5) },
-  { id: 'u1s3', unit: 1, title: '합 10까지', picture: 'mixed', make: sumTo(10) },
-  { id: 'u1s4', unit: 1, title: '10 만들기', picture: 'mixed', preferBlank: true, make: makeTen },
+  ...ALL.map((n): StageDef => ({ id: `u1s${n + 1}`, unit: 1, title: `${n} 더하기`, short: `+${n}`, picture: 'mixed', make: plusN(n) })),
+  { id: 'u1s11', unit: 1, title: '10 만들기', picture: 'mixed', preferBlank: true, make: makeTen },
   { id: 'u2s1', unit: 2, title: '그림 빼기', picture: 'priority', make: minusSmall },
-  { id: 'u2s2', unit: 2, title: '5 안에서 빼기', picture: 'mixed', make: subWithin(5) },
-  { id: 'u2s3', unit: 2, title: '10 안에서 빼기', picture: 'mixed', make: subWithin(10) },
-  { id: 'u2s4', unit: 2, title: '더하기 빼기 섞기', picture: 'mixed', make: mix(sumTo(10), subWithin(10)) },
-  { id: 'u3s1', unit: 3, title: '10 넘는 덧셈', picture: 'none', make: teenNoCarry },
-  { id: 'u3s2', unit: 3, title: '받아올림 덧셈', picture: 'none', make: addCarry },
-  { id: 'u3s3', unit: 3, title: '받아내림 뺄셈', picture: 'none', make: subBorrow },
-  { id: 'u3s4', unit: 3, title: '20까지 섞기', picture: 'none', make: mix(teenNoCarry, addCarry, subBorrow) },
-  { id: 'u4s1', unit: 4, title: '2단', picture: 'none', make: times([2]) },
-  { id: 'u4s2', unit: 4, title: '5단', picture: 'none', make: times([5]) },
-  { id: 'u4s3', unit: 4, title: '3단', picture: 'none', make: times([3]) },
-  { id: 'u4s4', unit: 4, title: '4단', picture: 'none', make: times([4]) },
-  { id: 'u5s1', unit: 5, title: '6단', picture: 'none', make: times([6]) },
-  { id: 'u5s2', unit: 5, title: '7단', picture: 'none', make: times([7]) },
-  { id: 'u5s3', unit: 5, title: '8단·9단', picture: 'none', make: times([8, 9]) },
-  { id: 'u5s4', unit: 5, title: '구구단 섞기', picture: 'none', make: times(ALL) },
-  {
-    id: 'u6s1', unit: 6, title: '2단·5단 나누기', picture: 'none', make: divide([2, 5]),
-    hint: '나눗셈은 구구단 거꾸로! 12 ÷ 3 = ? 는 3 × ? = 12 와 같아요.',
-  },
-  { id: 'u6s2', unit: 6, title: '3단·4단 나누기', picture: 'none', make: divide([3, 4]) },
-  { id: 'u6s3', unit: 6, title: '6~9단 나누기', picture: 'none', make: divide([6, 7, 8, 9]) },
-  { id: 'u6s4', unit: 6, title: '곱셈 나눗셈 섞기', picture: 'none', make: mix(times(ALL), divide(ALL)) },
+  ...ALL.map((n): StageDef => ({ id: `u2s${n + 1}`, unit: 2, title: `${n} 빼기`, short: `−${n}`, picture: 'mixed', make: minusN(n) })),
+  { id: 'u3s1', unit: 3, title: '받아올림 덧셈', picture: 'none', make: addCarry },
+  { id: 'u3s2', unit: 3, title: '받아내림 뺄셈', picture: 'none', make: subBorrow },
+  { id: 'u3s3', unit: 3, title: '20까지 섞기', picture: 'none', make: mix(teenNoCarry, addCarry, subBorrow) },
+  ...range(1, 5).map((d): StageDef => ({ id: `u4s${d}`, unit: 4, title: `${d}단`, short: `${d}단`, picture: 'none', make: times([d]) })),
+  ...range(6, 9).map((d): StageDef => ({ id: `u5s${d - 5}`, unit: 5, title: `${d}단`, short: `${d}단`, picture: 'none', make: times([d]) })),
+  { id: 'u5s5', unit: 5, title: '혼합 구구단', picture: 'none', make: times(ALL) },
+  ...ALL.map(
+    (d): StageDef => ({
+      id: `u6s${d}`, unit: 6, title: byDivisor(d), short: `÷${d}`, picture: 'none', make: divide([d]),
+      hint: d === 1 ? '나눗셈은 구구단 거꾸로! 12 ÷ 3 = ? 는 3 × ? = 12 와 같아요.' : undefined,
+    }),
+  ),
+  { id: 'u6s10', unit: 6, title: '곱셈 나눗셈 섞기', picture: 'none', make: mix(times(ALL), divide(ALL)) },
 ];
 
 export function stageIndex(id: string): number {

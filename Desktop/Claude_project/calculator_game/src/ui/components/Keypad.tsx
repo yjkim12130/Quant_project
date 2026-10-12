@@ -17,7 +17,7 @@ export function Keypad({ value, onChange, disabled }: Props) {
     <div className="keypad">
       {KEYS.map((key, i) =>
         key === '' ? (
-          <span key={i} />
+          <span key={`blank-${i}`} />
         ) : (
           <button
             key={key}

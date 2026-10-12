@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { makeParentChallenge, type ParentChallenge } from '../../core/parentLock';
 import { mulberry32 } from '../../core/random';
 import { levelFromXp } from '../../core/scoring';
-import { STAGES } from '../../core/stages';
 import type { Op, Profile } from '../../core/types';
 import { useGame } from '../../state/GameContext';
 import { activeProfile } from '../../state/store';
@@ -53,10 +52,7 @@ function ParentGate({ challenge, onPass, onCancel }: { challenge: ParentChalleng
 }
 
 function ProfileAdmin({ profile }: { profile: Profile }) {
-  const setStartStage = useGame((s) => s.setStartStage);
-  const setUnlockAll = useGame((s) => s.setUnlockAll);
   const removeProfile = useGame((s) => s.removeProfile);
-  const [start, setStart] = useState(STAGES[0].id);
 
   return (
     <section className="panel" aria-label={`${profile.name} 설정`}>
@@ -70,22 +66,6 @@ function ProfileAdmin({ profile }: { profile: Profile }) {
           return <div key={op}>{`${OP_NAMES[op]} ${text}`}</div>;
         })}
       </div>
-      <div className="row">
-        <select aria-label="시작 단계" value={start} onChange={(e) => setStart(e.target.value)}>
-          {STAGES.map((s) => (
-            <option key={s.id} value={s.id}>
-              유닛 {s.unit} · {s.title}
-            </option>
-          ))}
-        </select>
-        <button className="small-btn" onClick={() => setStartStage(profile.id, start)}>
-          여기부터 시작
-        </button>
-      </div>
-      <label className="toggle">
-        <input type="checkbox" checked={profile.unlockAll} onChange={(e) => setUnlockAll(profile.id, e.target.checked)} />
-        모든 단계 열기
-      </label>
       <button
         className="small-btn danger"
         onClick={() => {
@@ -109,7 +89,7 @@ export function Parent() {
   const [challenge] = useState(() => makeParentChallenge(mulberry32(nextSeed())));
   const [unlocked, setUnlocked] = useState(false);
 
-  const close = () => goto(hasProfile ? { name: 'map' } : { name: 'profiles' });
+  const close = () => goto(hasProfile ? { name: 'home' } : { name: 'profiles' });
 
   if (!unlocked) return <ParentGate challenge={challenge} onPass={() => setUnlocked(true)} onCancel={close} />;
 

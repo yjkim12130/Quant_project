@@ -11,7 +11,7 @@ export function defaultAppData(): AppData {
 }
 
 export function newProfile(id: string, name: string, avatar: string): Profile {
-  return { id, name, avatar, xp: 0, streak: emptyStreak(), stages: {}, unlockAll: false, stats: emptyStats() };
+  return { id, name, avatar, xp: 0, streak: emptyStreak(), stages: {}, stats: emptyStats() };
 }
 
 export function browserStorage(): KV | null {

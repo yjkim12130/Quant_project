@@ -1,15 +1,18 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
-import { applyLesson, withStartStage, type LessonSummary } from '../core/progress';
+import { categoryOf, type CategoryId } from '../core/categories';
+import { applyLesson, type LessonSummary } from '../core/progress';
 import type { LessonOutcome } from '../core/scoring';
 import { loadAppData, newProfile, saveAppData, type KV } from '../core/storage';
 import { toLocalDateString } from '../core/streak';
 import type { AppData, Profile } from '../core/types';
 
 export type Screen =
+  | { name: 'intro' }
   | { name: 'profiles' }
-  | { name: 'map' }
-  | { name: 'lesson'; stageId: string }
-  | { name: 'result'; stageId: string; summary: LessonSummary }
+  | { name: 'home' }
+  | { name: 'category'; categoryId: CategoryId }
+  | { name: 'lesson'; stageId: string; categoryId: CategoryId }
+  | { name: 'result'; stageId: string; categoryId: CategoryId; summary: LessonSummary }
   | { name: 'parent' };
 
 export interface GameState {
@@ -19,13 +22,13 @@ export interface GameState {
   nextSeed: () => number;
   today: () => string;
   goto: (screen: Screen) => void;
+  /** 입장 화면에서 '시작!': 활성 프로필이 있으면 홈, 없으면 프로필 화면 */
+  enter: () => void;
   addProfile: (name: string, avatar: string) => void;
   selectProfile: (id: string) => void;
   removeProfile: (id: string) => void;
   setSound: (on: boolean) => void;
   setTimer: (sec: number | null) => void;
-  setUnlockAll: (id: string, on: boolean) => void;
-  setStartStage: (id: string, stageId: string) => void;
   finishLesson: (stageId: string, outcome: LessonOutcome) => void;
 }
 
@@ -54,11 +57,12 @@ export function createGameStore(opts: StoreOptions): GameStore {
     return {
       data,
       loadError: error,
-      screen: data.activeProfileId ? { name: 'map' } : { name: 'profiles' },
+      screen: { name: 'intro' },
       nextSeed: opts.nextSeed ?? (() => Math.floor(Math.random() * 2 ** 31)),
       today: opts.today ?? (() => toLocalDateString(new Date())),
 
       goto: (screen) => set({ screen }),
+      enter: () => set({ screen: activeProfile(get()) ? { name: 'home' } : { name: 'profiles' } }),
 
       addProfile: (name, avatar) => {
         const id = makeId();
@@ -67,12 +71,12 @@ export function createGameStore(opts: StoreOptions): GameStore {
           profiles: [...d.profiles, newProfile(id, name.trim() || '친구', avatar)],
           activeProfileId: id,
         }));
-        set({ screen: { name: 'map' } });
+        set({ screen: { name: 'home' } });
       },
 
       selectProfile: (id) => {
         updateData((d) => ({ ...d, activeProfileId: id }));
-        set({ screen: { name: 'map' } });
+        set({ screen: { name: 'home' } });
       },
 
       removeProfile: (id) =>
@@ -84,15 +88,16 @@ export function createGameStore(opts: StoreOptions): GameStore {
 
       setSound: (on) => updateData((d) => ({ ...d, settings: { ...d.settings, soundOn: on } })),
       setTimer: (sec) => updateData((d) => ({ ...d, settings: { ...d.settings, timerSec: sec } })),
-      setUnlockAll: (id, on) => updateProfile(id, (p) => ({ ...p, unlockAll: on })),
-      setStartStage: (id, stageId) => updateProfile(id, (p) => withStartStage(p, stageId)),
 
       finishLesson: (stageId, outcome) => {
         const p = activeProfile(get());
         if (!p) return;
         const { profile, summary } = applyLesson(p, stageId, outcome, get().today());
+        const cur = get().screen;
+        // 같은 단계가 두 카테고리에 있을 수 있어서, 들어온 카테고리로 돌아가게 기억한다
+        const categoryId = cur.name === 'lesson' && cur.stageId === stageId ? cur.categoryId : categoryOf(stageId);
         updateProfile(p.id, () => profile);
-        set({ screen: { name: 'result', stageId, summary } });
+        set({ screen: { name: 'result', stageId, categoryId, summary } });
       },
     };
   });

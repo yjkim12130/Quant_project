@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { CategoryId } from '../../core/categories';
 import { generateLesson } from '../../core/generator';
 import { currentItem, lessonProgress, nextQuestion, startLesson, submitAnswer, toOutcome } from '../../core/lesson';
 import { getStage } from '../../core/stages';
@@ -13,7 +14,7 @@ import { Mascot, type Mood } from '../components/Mascot';
 import { ProgressBar } from '../components/ProgressBar';
 import { QuestionView } from '../components/QuestionView';
 
-export function Lesson({ stageId }: { stageId: string }) {
+export function Lesson({ stageId, categoryId }: { stageId: string; categoryId: CategoryId }) {
   const stage = getStage(stageId);
   const profile = useGame(activeProfile);
   const nextSeed = useGame((s) => s.nextSeed);
@@ -95,7 +96,7 @@ export function Lesson({ stageId }: { stageId: string }) {
   return (
     <main className="screen lesson">
       <div className="lesson-top">
-        <button className="icon-btn" aria-label="그만하기" onClick={() => goto({ name: 'map' })}>
+        <button className="icon-btn" aria-label="그만하기" onClick={() => goto({ name: 'category', categoryId })}>
           ✕
         </button>
         <ProgressBar value={lessonProgress(lesson)} />
@@ -126,7 +127,6 @@ export function Lesson({ stageId }: { stageId: string }) {
         <FeedbackSheet
           correct={last.correct}
           timedOut={last.timedOut}
-          correctText={String(item.q.answer)}
           message={message}
           onContinue={onContinue}
         />

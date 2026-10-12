@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import type { CategoryId } from '../../core/categories';
 import type { LessonSummary } from '../../core/progress';
 import { getStage } from '../../core/stages';
 import { useGame } from '../../state/GameContext';
@@ -15,7 +16,7 @@ function Stat({ label, value, color }: { label: string; value: string; color: st
   );
 }
 
-export function Result({ stageId, summary }: { stageId: string; summary: LessonSummary }) {
+export function Result({ stageId, categoryId, summary }: { stageId: string; categoryId: CategoryId; summary: LessonSummary }) {
   const goto = useGame((s) => s.goto);
   const stage = getStage(stageId);
   const speech = summary.passed
@@ -40,7 +41,7 @@ export function Result({ stageId, summary }: { stageId: string; summary: LessonS
           <span key={i} className={i < summary.crowns ? 'on' : 'off'}>👑</span>
         ))}
       </div>
-      <Button3D full onClick={() => goto({ name: 'map' })}>
+      <Button3D full onClick={() => goto({ name: 'category', categoryId })}>
         계속하기
       </Button3D>
     </main>

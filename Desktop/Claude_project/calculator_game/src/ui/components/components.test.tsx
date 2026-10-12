@@ -55,20 +55,28 @@ describe('components', () => {
     expect(screen.getByRole('status')).toHaveTextContent('5');
   });
 
-  it('FeedbackSheet: 오답이면 정답과 격려, 계속 버튼', async () => {
+  it('FeedbackSheet: 오답이면 정답은 숨기고 격려와 계속 버튼만', async () => {
     const user = userEvent.setup();
     const onContinue = vi.fn();
-    render(<FeedbackSheet correct={false} timedOut={false} correctText="8" message="한 번 더 나올 거야" onContinue={onContinue} />);
+    render(<FeedbackSheet correct={false} timedOut={false} message="한 번 더 나올 거야" onContinue={onContinue} />);
     expect(screen.getByText('괜찮아, 다시 해보자!')).toBeInTheDocument();
-    expect(screen.getByText('8')).toBeInTheDocument();
+    expect(screen.getByText('한 번 더 나올 거야')).toBeInTheDocument();
+    expect(screen.queryByText(/정답/)).toBeNull();
     await user.click(screen.getByRole('button', { name: '계속' }));
     expect(onContinue).toHaveBeenCalledOnce();
   });
 
-  it('FeedbackSheet: 정답이면 정답 줄을 숨긴다', () => {
-    render(<FeedbackSheet correct timedOut={false} correctText="8" message="" onContinue={() => {}} />);
+  it('FeedbackSheet: 정답이면 칭찬한다', () => {
+    render(<FeedbackSheet correct timedOut={false} message="" onContinue={() => {}} />);
     expect(screen.getByText('잘했어! 🎉')).toBeInTheDocument();
     expect(screen.queryByText(/정답:/)).toBeNull();
+  });
+
+  it('Keypad는 React key 경고 없이 그려진다', () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(<Keypad value="" onChange={() => {}} />);
+    expect(err).not.toHaveBeenCalled();
+    err.mockRestore();
   });
 
   it('Mascot은 말풍선을 보여준다', () => {
