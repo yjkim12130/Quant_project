@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#FF6B35"/>
+  <!-- 덤벨 -->
+  <rect x="120" y="300" width="272" height="40" rx="12" fill="#fff"/>
+  <rect x="84" y="250" width="56" height="140" rx="16" fill="#fff"/>
+  <rect x="372" y="250" width="56" height="140" rx="16" fill="#fff"/>
+  <!-- +1 -->
+  <rect x="150" y="146" width="96" height="28" rx="10" fill="#fff"/>
+  <rect x="184" y="112" width="28" height="96" rx="10" fill="#fff"/>
+  <path d="M300 128 L332 104 L332 208" stroke="#fff" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>
