@@ -8,10 +8,11 @@ npm install
 npm run dev      # 개발 서버 (같은 Wi-Fi 폰에서 Network 주소로 접속)
 npm test
 npm run build    # dist/ 정적 파일(PWA)
-npm run deploy   # 테스트 → 빌드 → Cloudflare Pages(tracking-workout)
+npm run deploy   # 테스트 → 빌드 → Cloudflare(Workers 정적 자산, wrangler.jsonc)
 ```
 
 - 설계: `docs/superpowers/specs/2026-10-17-tracking-workout-design.md`
 - 계획: `docs/superpowers/plans/2026-10-17-tracking-workout.md`
+- 배포 주소: https://tracking-workout.calculator-game.workers.dev
 - 기록은 각 기기의 IndexedDB에만 저장된다. 설정 → 백업 내보내기로 JSON 파일을 보관할 것.
 - 아이폰은 Safari → 공유 → 홈 화면에 추가로 설치해야 저장소가 안정적으로 유지된다.

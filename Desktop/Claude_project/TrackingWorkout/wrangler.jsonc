@@ -1,0 +1,9 @@
+// Cloudflare 정적 자산 배포 설정 — npm run deploy 가 dist/ 를 올린다
+{
+  "name": "tracking-workout",
+  "compatibility_date": "2026-10-12",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}

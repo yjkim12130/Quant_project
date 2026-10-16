@@ -9,7 +9,7 @@
     "preview": "vite preview --host",
     "test": "vitest run",
     "test:watch": "vitest",
-    "deploy": "npm test && npm run build && npx --yes wrangler@4 pages deploy dist --project-name tracking-workout --branch main"
+    "deploy": "npm test && npm run build && npx --yes wrangler@4 deploy"
   },
   "dependencies": {
     "dexie": "^4.4.6",
