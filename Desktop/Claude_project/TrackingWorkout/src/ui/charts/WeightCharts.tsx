@@ -15,7 +15,7 @@ export function WeightCharts({ points }: { points: WeightPoint[] }) {
           <BarChart data={points} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
             <CartesianGrid {...GRID} />
             <XAxis dataKey="label" {...AXIS} />
-            <YAxis width={44} {...AXIS} />
+            <YAxis width={44} domain={[0, 'auto']} {...AXIS} />
             <Tooltip {...TOOLTIP} cursor={{ fill: 'var(--line)', opacity: 0.4 }} formatter={(v, name) => [`${v}kg`, name]} />
             <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, color: 'var(--muted)' }} />
             {/* 구간 사이 2px 표면색 간격으로 쌓인 두 계열을 구분 */}
