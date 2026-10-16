@@ -6,8 +6,10 @@
   --line: #e2e2e0;
   --accent: #ff6b35;
   --accent-text: #ffffff;
-  --drop: #7aa6ff;
-  --gold: #e5a900;
+  --drop: #2f6fd6;
+  /* 그래프 계열색 — dataviz 검증기 통과(라이트 #fff / 다크 #1e1e21 표면 기준) */
+  --series-1: #d9480f;
+  --series-2: #2f6fd6;
   --up: #1f9d55;
   --same: #8a8a8e;
   --down: #d64545;
@@ -23,7 +25,9 @@
     --text: #f2f2f4;
     --muted: #a0a0a6;
     --line: #2e2e33;
-    --drop: #5d86d9;
+    --drop: #4f7fdc;
+    --series-1: #e8622f;
+    --series-2: #4f7fdc;
     color-scheme: dark;
   }
 }
@@ -141,4 +145,5 @@ input[type='number'], input[type='text'] {
 
 .chart-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 6px 4px; margin-bottom: 12px; }
 .chart-card h2 { font-size: 15px; margin: 0 8px 6px; }
+.chart-note { margin: 2px 8px 6px; font-size: 12px; }
 .history-row { display: flex; justify-content: space-between; gap: 8px; padding: 10px 2px; border-bottom: 1px solid var(--line); font-size: 14px; }
