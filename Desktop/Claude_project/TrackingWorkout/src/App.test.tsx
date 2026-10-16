@@ -1,8 +1,12 @@
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { expect, it } from 'vitest';
-import { App } from './App';
+import { renderApp } from './test/renderApp';
 
-it('앱 이름을 보여준다', () => {
-  render(<App />);
-  expect(screen.getByText('오늘도 +1')).toBeInTheDocument();
+it('하단 탭으로 화면을 전환한다', async () => {
+  const { user } = renderApp();
+  expect(screen.getByRole('button', { name: '오늘' })).toHaveAttribute('aria-current', 'page');
+  await user.click(screen.getByRole('button', { name: '설정' }));
+  expect(screen.getByRole('button', { name: '설정' })).toHaveAttribute('aria-current', 'page');
+  await user.click(screen.getByRole('button', { name: '기록' }));
+  expect(screen.getByRole('button', { name: '기록' })).toHaveAttribute('aria-current', 'page');
 });
