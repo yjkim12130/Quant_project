@@ -17,15 +17,14 @@ describe('CATEGORIES', () => {
     ]);
   });
 
-  it('덧셈 탭 끝은 20까지·100까지 덧셈 섞기, 뺄셈 탭 끝은 뺄셈 섞기', () => {
+  it('받아올림·받아내림 다음은 100까지 섞기로 끝나고, 20까지 섞기는 없다', () => {
     const add = getCategory('add').stageIds;
     const sub = getCategory('sub').stageIds;
-    expect(add).toContain('u3s1');
-    expect(sub).toContain('u3s2');
-    expect(add.slice(-2).map((id) => getStage(id).title)).toEqual(['20까지 섞기', '100까지 섞기']);
-    expect(sub.slice(-2).map((id) => getStage(id).title)).toEqual(['20까지 섞기', '100까지 섞기']);
-    expect(add.slice(-2)).toEqual(['u3s3', 'u3s5']);
-    expect(sub.slice(-2)).toEqual(['u3s4', 'u3s6']);
+    expect(add.slice(-2)).toEqual(['u3s1', 'u3s5']);
+    expect(sub.slice(-2)).toEqual(['u3s2', 'u3s6']);
+    expect(getStage('u3s5').title).toBe('100까지 섞기');
+    expect(getStage('u3s6').title).toBe('100까지 섞기');
+    expect(STAGES.some((s) => s.title === '20까지 섞기')).toBe(false);
   });
 
   it('덧셈 탭에는 뺄셈이, 뺄셈 탭에는 덧셈이 섞이지 않는다', () => {
@@ -47,8 +46,8 @@ describe('CATEGORIES', () => {
 
   it('categoryOf는 단계가 처음 나오는 카테고리를 준다', () => {
     expect(categoryOf('u5s4')).toBe('mul');
-    expect(categoryOf('u3s3')).toBe('add');
-    expect(categoryOf('u3s4')).toBe('sub');
+    expect(categoryOf('u3s5')).toBe('add');
+    expect(categoryOf('u3s6')).toBe('sub');
     expect(categoryOf('u6s1')).toBe('div');
   });
 

@@ -18,10 +18,10 @@ const RULES: Record<string, (q: Operands) => boolean> = {
   u1s11: (q) => isAdd(q) && q.a >= 1 && q.b >= 1 && q.a + q.b === 10,
   u2s1: (q) => isSub(q) && between(q.a, 2, 6) && between(q.b, 1, 2),
   ...Object.fromEntries(range(1, 9).map((n) => [`u2s${n + 1}`, (q: Operands) => isSub(q) && q.b === n && between(q.a - q.b, 0, 9)])),
-  u3s1: (q) => isAdd(q) && between(q.a, 2, 9) && between(q.b, 2, 9) && between(q.a + q.b, 11, 18),
-  u3s2: (q) => isSub(q) && between(q.a, 11, 18) && between(q.b, 2, 9) && q.a % 10 < q.b,
-  u3s3: (q) => (isAdd(q) && between(q.a, 10, 19) && q.b >= 1 && (q.a % 10) + q.b <= 9) || RULES.u3s1(q),
-  u3s4: (q) => (isSub(q) && between(q.a, 11, 19) && q.b >= 1 && q.b <= q.a % 10) || RULES.u3s2(q),
+  // 두 자리 + 두 자리, 일의 자리에서 받아올림, 합 ≤ 99
+  u3s1: (q) => isAdd(q) && between(q.a, 10, 99) && between(q.b, 10, 99) && (q.a % 10) + (q.b % 10) >= 10 && q.a + q.b <= 99,
+  // 두 자리 − 두 자리, 일의 자리에서 받아내림, 답 ≥ 1
+  u3s2: (q) => isSub(q) && between(q.a, 10, 99) && between(q.b, 10, 99) && q.a % 10 < q.b % 10 && q.a - q.b >= 1,
   u3s5: (q) => isAdd(q) && q.a >= 10 && q.b >= 1 && q.a + q.b <= 100,
   u3s6: (q) => isSub(q) && q.a >= 11 && q.a <= 100 && q.b >= 1 && q.a - q.b >= 1,
   ...Object.fromEntries(range(1, 5).map((d) => [`u4s${d}`, mulOf([d])])),
@@ -32,7 +32,7 @@ const RULES: Record<string, (q: Operands) => boolean> = {
 };
 
 describe('STAGES', () => {
-  it('단계 47개이고 ID가 규칙표와 일치한다', () => {
+  it('단계 45개이고 ID가 규칙표와 일치한다', () => {
     expect(STAGES.map((s) => s.id)).toEqual(Object.keys(RULES));
   });
 
@@ -49,7 +49,7 @@ describe('STAGES', () => {
     expect(() => getStage('nope')).toThrow();
     expect(stageIndex('nope')).toBe(-1);
     expect(stageIndex('u1s1')).toBe(0);
-    expect(stageIndex('u6s10')).toBe(46);
+    expect(stageIndex('u6s10')).toBe(44);
   });
 
   it('100까지 섞기는 두 자리 수끼리 계산도 나온다', () => {

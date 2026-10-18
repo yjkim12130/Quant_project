@@ -15,8 +15,8 @@ const ids = (prefix: string, from: number, to: number) =>
   Array.from({ length: to - from + 1 }, (_, i) => `${prefix}${from + i}`);
 
 export const CATEGORIES: CategoryDef[] = [
-  { id: 'add', title: '덧셈', color: '#58CC02', icon: '+', stageIds: [...ids('u1s', 1, 11), 'u3s1', 'u3s3', 'u3s5'] },
-  { id: 'sub', title: '뺄셈', color: '#1CB0F6', icon: '−', stageIds: [...ids('u2s', 1, 10), 'u3s2', 'u3s4', 'u3s6'] },
+  { id: 'add', title: '덧셈', color: '#58CC02', icon: '+', stageIds: [...ids('u1s', 1, 11), 'u3s1', 'u3s5'] },
+  { id: 'sub', title: '뺄셈', color: '#1CB0F6', icon: '−', stageIds: [...ids('u2s', 1, 10), 'u3s2', 'u3s6'] },
   { id: 'mul', title: '구구단', color: '#FF9600', icon: '×', stageIds: [...ids('u4s', 1, 5), ...ids('u5s', 1, 5)] },
   { id: 'div', title: '나눗셈', color: '#CE82FF', icon: '÷', stageIds: ids('u6s', 1, 10) },
 ];
