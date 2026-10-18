@@ -1,5 +1,5 @@
 import {
-  calendarWeeks, categorySummary, dailyTotals, daysInMonth, kstToday, manwon,
+  calendarWeeks, categorySummary, dailyTotals, daysInMonth, elapsedRatio, kstToday, manwon,
   monthDetail, progress, shiftMonth, won, yearOptions,
 } from "./ledger.js";
 
@@ -98,10 +98,32 @@ function renderForm() {
   if (data?.formUrl && form.getAttribute("src") !== data.formUrl) form.setAttribute("src", data.formUrl);
 }
 
+// 연/월 선택줄 — 대시보드와 전체 내역이 같은 선택(ui.year, ui.month)을 공유한다.
+function monthNav(t) {
+  const years = yearOptions(data.rows, t.year, ui.year)
+    .map((y) => `<option value="${y}"${y === ui.year ? " selected" : ""}>${y}년</option>`).join("");
+  const months = Array.from({ length: 12 }, (_, i) => i + 1)
+    .map((m) => `<option value="${m}"${m === ui.month ? " selected" : ""}>${m}월</option>`).join("");
+  return `
+    <div class="month-nav">
+      <button type="button" data-shift="-1" aria-label="이전 달">◀</button>
+      <select data-sel="year" aria-label="연도">${years}</select>
+      <select data-sel="month" aria-label="월">${months}</select>
+      <button type="button" data-shift="1" aria-label="다음 달">▶</button>
+    </div>`;
+}
+
+function reportTitle(t, year, month, ratio) {
+  if (ratio === 0) return `🎯 ${month}월 (아직 시작 전)`;
+  if (ratio === 1 && !(year === t.year && month === t.month)) return `🎯 ${month}월 말일(${month}/${daysInMonth(year, month)}) 기준 소비 성적표`;
+  return `🎯 오늘(${t.month}/${t.day}) 기준 소비 성적표`;
+}
+
 function renderDashboard() {
   const t = kstToday();
-  const ratio = t.day / daysInMonth(t.year, t.month);
-  const summary = categorySummary(data.targets, data.rows, t.year, t.month);
+  const { year, month } = ui;
+  const ratio = elapsedRatio(year, month, t);
+  const summary = categorySummary(data.targets, data.rows, year, month);
   const max = Math.max(1, ...summary.map((s) => s.actual));
   const total = summary.reduce((sum, s) => sum + s.actual, 0);
 
@@ -116,11 +138,11 @@ function renderDashboard() {
     <div class="cat">
       <div class="cat-title"><b>${i + 1}. ${esc(s.category)}</b> <span class="muted">(전체예산: ${won(s.goal)})</span></div>
       <div class="cat-row">
-        <div class="track">
+        <div class="track-wrap"><div class="track">
           <div class="green" style="width:${p.green}%"></div>
           <div class="red" style="left:${p.green}%;width:${p.red}%"></div>
           ${p.status === "unset" ? "" : `<div class="marker" style="left:${p.marker}%"></div>`}
-        </div>
+        </div></div>
         <div class="badge ${p.status}">
           <span class="b1">누적: ${won(s.actual)}원</span>
           <span class="b2">계획: ${won(p.plan)}원</span>
@@ -131,27 +153,22 @@ function renderDashboard() {
   }).join("");
 
   $("dashboard").innerHTML = `
-    <h2>📊 카테고리별 사용금액</h2>
+    ${monthNav(t)}
+    <h2>📊 ${year}년 ${month}월 카테고리별 사용금액</h2>
     <div class="bars">${bars}</div>
     <hr>
-    <h2>🎯 오늘(${t.month}/${t.day}) 기준 소비 성적표</h2>
+    <h2>${reportTitle(t, year, month, ratio)}</h2>
     ${cards}
     <hr>
-    <h2>${t.month}월 총 지출: ${won(total)} 원</h2>`;
+    <h2>${month}월 총 지출: ${won(total)} 원</h2>`;
 }
 
 function renderHistory() {
   const t = kstToday();
-  if (ui.year === null) [ui.year, ui.month] = [t.year, t.month];
   const { year, month } = ui;
   const detail = monthDetail(data.rows, year, month);
   const daily = dailyTotals(detail);
   const total = detail.reduce((sum, r) => sum + r.amount, 0);
-
-  const years = yearOptions(data.rows, t.year, year)
-    .map((y) => `<option value="${y}"${y === year ? " selected" : ""}>${y}년</option>`).join("");
-  const months = Array.from({ length: 12 }, (_, i) => i + 1)
-    .map((m) => `<option value="${m}"${m === month ? " selected" : ""}>${m}월</option>`).join("");
 
   const rows = detail.map((r) => `
     <tr><td>${esc(r.timestamp)}</td><td>${r.date}</td><td>${esc(r.category)}</td><td>${esc(r.small)}</td>
@@ -172,12 +189,7 @@ function renderHistory() {
   }).join("");
 
   $("history").innerHTML = `
-    <div class="month-nav">
-      <button type="button" data-shift="-1" aria-label="이전 달">◀</button>
-      <select id="sel-year" aria-label="연도">${years}</select>
-      <select id="sel-month" aria-label="월">${months}</select>
-      <button type="button" data-shift="1" aria-label="다음 달">▶</button>
-    </div>
+    ${monthNav(t)}
     <h2>📜 ${year}년 ${month}월 소비 상세 내역</h2>
     ${table}
     <h2>💰 ${year}년 ${month}월 총 지출: ${won(total)} 원</h2>
@@ -197,6 +209,11 @@ function render() {
     return;
   }
   renderForm();
+  renderMonth();
+}
+
+function renderMonth() {
+  if (ui.year === null) ({ year: ui.year, month: ui.month } = kstToday());
   renderDashboard();
   renderHistory();
 }
@@ -211,19 +228,21 @@ document.querySelector(".tabs").addEventListener("click", (e) => {
 
 $("refresh").addEventListener("click", () => load(true));
 
-$("history").addEventListener("click", (e) => {
-  const b = e.target.closest("[data-shift]");
-  if (!b) return;
-  ({ year: ui.year, month: ui.month } = shiftMonth(ui.year, ui.month, Number(b.dataset.shift)));
-  renderHistory();
-});
-
-$("history").addEventListener("change", (e) => {
-  if (e.target.id === "sel-year") ui.year = Number(e.target.value);
-  else if (e.target.id === "sel-month") ui.month = Number(e.target.value);
-  else return;
-  renderHistory();
-});
+for (const panel of [$("dashboard"), $("history")]) {
+  panel.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-shift]");
+    if (!b) return;
+    ({ year: ui.year, month: ui.month } = shiftMonth(ui.year, ui.month, Number(b.dataset.shift)));
+    renderMonth();
+  });
+  panel.addEventListener("change", (e) => {
+    const sel = e.target.dataset.sel;
+    if (sel === "year") ui.year = Number(e.target.value);
+    else if (sel === "month") ui.month = Number(e.target.value);
+    else return;
+    renderMonth();
+  });
+}
 
 // 다시 앱으로 돌아왔을 때 오래된 데이터면 새로 받는다(날짜가 바뀌었을 수도 있으니 다시 그린다).
 document.addEventListener("visibilitychange", () => {

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  calendarWeeks, categorySummary, dailyTotals, daysInMonth, kstToday, manwon,
+  calendarWeeks, categorySummary, dailyTotals, daysInMonth, elapsedRatio, kstToday, manwon,
   monthDetail, progress, shiftMonth, won, yearOptions,
 } from "../public/ledger.js";
 
@@ -86,4 +86,13 @@ test("shiftMonth crosses years", () => {
 test("yearOptions merges recorded, current and selected years, descending", () => {
   const rows = [row("2025-03-01", "a", 1), row("2026-01-01", "a", 1), row(null, "a", 1)];
   assert.deepEqual(yearOptions(rows, 2026, 2023), [2026, 2025, 2023]);
+});
+
+test("elapsedRatio: current month by today, past month full, future month zero", () => {
+  const today = { year: 2026, month: 10, day: 18 };
+  assert.equal(elapsedRatio(2026, 10, today), 18 / 31);
+  assert.equal(elapsedRatio(2026, 9, today), 1);
+  assert.equal(elapsedRatio(2025, 12, today), 1);
+  assert.equal(elapsedRatio(2026, 11, today), 0);
+  assert.equal(elapsedRatio(2027, 1, today), 0);
 });

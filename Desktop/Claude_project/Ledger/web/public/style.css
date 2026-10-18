@@ -60,7 +60,9 @@ hr { border: 0; border-top: 1px solid #e6e6ea; margin: 24px 0; }
 .cat-title b { font-size: 1.1rem; }
 .cat-title span { font-size: 0.9rem; }
 .cat-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
-.track { flex: 1; position: relative; background: var(--line); border-radius: 4px; height: 18px; }
+/* 빨강은 예산의 120%까지 그려지므로 회색 칸을 1/1.2로 줄여 넘친 부분이 옆 상자를 덮지 않게 한다 */
+.track-wrap { flex: 1; min-width: 0; }
+.track { width: calc(100% / 1.2); position: relative; background: var(--line); border-radius: 4px; height: 18px; }
 .track > div { position: absolute; top: 0; height: 100%; border-radius: 4px; }
 .track .green { left: 0; background: var(--green); }
 .track .red { background: var(--red); }

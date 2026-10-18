@@ -6,7 +6,15 @@ export function kstToday(now = new Date()) {
 
 export const daysInMonth = (year, month) => new Date(Date.UTC(year, month, 0)).getUTCDate();
 
-export const won = (n) => (Math.trunc(n) || 0).toLocaleString("en-US");
+// 계획선 위치: 이번 달은 오늘까지, 지난 달은 말일 기준(1), 아직 안 온 달은 0.
+export function elapsedRatio(year, month, today) {
+  const sel = year * 12 + month, cur = today.year * 12 + today.month;
+  if (sel < cur) return 1;
+  if (sel > cur) return 0;
+  return today.day / daysInMonth(year, month);
+}
+
+export const won =(n) => (Math.trunc(n) || 0).toLocaleString("en-US");
 
 const inMonth = (r, year, month) =>
   r.date !== null && Number(r.date.slice(0, 4)) === year && Number(r.date.slice(5, 7)) === month;
