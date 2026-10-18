@@ -42,7 +42,7 @@ describe('홈과 카테고리', () => {
     const cards = ['덧셈', '뺄셈', '구구단', '나눗셈'].map((t) => screen.getByRole('button', { name: `${t} 카테고리` }));
     expect(cards).toHaveLength(4);
     expect(within(cards[2]).getByText('👑 1/30')).toBeInTheDocument();
-    expect(within(cards[0]).getByText('👑 0/39')).toBeInTheDocument();
+    expect(within(cards[0]).getByText('👑 0/42')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: / 단계$/ })).not.toBeInTheDocument();
   });
 

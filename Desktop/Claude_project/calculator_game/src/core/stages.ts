@@ -47,6 +47,29 @@ const subBorrow: Maker = (rng) => {
   return sub(a, randInt(rng, (a % 10) + 1, 9));
 };
 
+// 받아내림 없는 십몇 빼기 몇 (답 10~18)
+const teenNoBorrow: Maker = (rng) => {
+  const a = randInt(rng, 11, 19);
+  return sub(a, randInt(rng, 1, a % 10));
+};
+
+// 100까지: 두 자리 + 한 자리 / 두 자리 + 두 자리 (합 ≤ 100)
+const add100: Maker = (rng) => {
+  if (rng() < 0.5) {
+    const a = randInt(rng, 10, 91);
+    return add(a, randInt(rng, 1, Math.min(9, 100 - a)));
+  }
+  const a = randInt(rng, 10, 90);
+  return add(a, randInt(rng, 10, 100 - a));
+};
+
+// 100까지: 두 자리 − 한 자리 / 두 자리 − 두 자리 (답 ≥ 1)
+const sub100: Maker = (rng) => {
+  if (rng() < 0.5) return sub(randInt(rng, 11, 100), randInt(rng, 1, 9));
+  const a = randInt(rng, 21, 100);
+  return sub(a, randInt(rng, 10, a - 1));
+};
+
 const times = (ds: number[]): Maker => (rng) => ({ op: 'mul', a: pick(rng, ds), b: randInt(rng, 1, 9) });
 
 const divide = (ds: number[]): Maker => (rng) => {
@@ -70,7 +93,10 @@ export const STAGES: StageDef[] = [
   ...ALL.map((n): StageDef => ({ id: `u2s${n + 1}`, unit: 2, title: `${n} 빼기`, short: `−${n}`, picture: 'mixed', make: minusN(n) })),
   { id: 'u3s1', unit: 3, title: '받아올림 덧셈', picture: 'none', make: addCarry },
   { id: 'u3s2', unit: 3, title: '받아내림 뺄셈', picture: 'none', make: subBorrow },
-  { id: 'u3s3', unit: 3, title: '20까지 섞기', picture: 'none', make: mix(teenNoCarry, addCarry, subBorrow) },
+  { id: 'u3s3', unit: 3, title: '20까지 섞기', picture: 'none', make: mix(teenNoCarry, addCarry) },
+  { id: 'u3s4', unit: 3, title: '20까지 섞기', picture: 'none', make: mix(teenNoBorrow, subBorrow) },
+  { id: 'u3s5', unit: 3, title: '100까지 섞기', picture: 'none', make: add100 },
+  { id: 'u3s6', unit: 3, title: '100까지 섞기', picture: 'none', make: sub100 },
   ...range(1, 5).map((d): StageDef => ({ id: `u4s${d}`, unit: 4, title: `${d}단`, short: `${d}단`, picture: 'none', make: times([d]) })),
   ...range(6, 9).map((d): StageDef => ({ id: `u5s${d - 5}`, unit: 5, title: `${d}단`, short: `${d}단`, picture: 'none', make: times([d]) })),
   { id: 'u5s5', unit: 5, title: '혼합 구구단', picture: 'none', make: times(ALL) },

@@ -20,8 +20,10 @@ const RULES: Record<string, (q: Operands) => boolean> = {
   ...Object.fromEntries(range(1, 9).map((n) => [`u2s${n + 1}`, (q: Operands) => isSub(q) && q.b === n && between(q.a - q.b, 0, 9)])),
   u3s1: (q) => isAdd(q) && between(q.a, 2, 9) && between(q.b, 2, 9) && between(q.a + q.b, 11, 18),
   u3s2: (q) => isSub(q) && between(q.a, 11, 18) && between(q.b, 2, 9) && q.a % 10 < q.b,
-  u3s3: (q) =>
-    (isAdd(q) && between(q.a, 10, 19) && q.b >= 1 && (q.a % 10) + q.b <= 9) || RULES.u3s1(q) || RULES.u3s2(q),
+  u3s3: (q) => (isAdd(q) && between(q.a, 10, 19) && q.b >= 1 && (q.a % 10) + q.b <= 9) || RULES.u3s1(q),
+  u3s4: (q) => (isSub(q) && between(q.a, 11, 19) && q.b >= 1 && q.b <= q.a % 10) || RULES.u3s2(q),
+  u3s5: (q) => isAdd(q) && q.a >= 10 && q.b >= 1 && q.a + q.b <= 100,
+  u3s6: (q) => isSub(q) && q.a >= 11 && q.a <= 100 && q.b >= 1 && q.a - q.b >= 1,
   ...Object.fromEntries(range(1, 5).map((d) => [`u4s${d}`, mulOf([d])])),
   ...Object.fromEntries(range(6, 9).map((d) => [`u5s${d - 5}`, mulOf([d])])),
   u5s5: mulOf(all),
@@ -30,7 +32,7 @@ const RULES: Record<string, (q: Operands) => boolean> = {
 };
 
 describe('STAGES', () => {
-  it('단계 44개이고 ID가 규칙표와 일치한다', () => {
+  it('단계 47개이고 ID가 규칙표와 일치한다', () => {
     expect(STAGES.map((s) => s.id)).toEqual(Object.keys(RULES));
   });
 
@@ -47,7 +49,17 @@ describe('STAGES', () => {
     expect(() => getStage('nope')).toThrow();
     expect(stageIndex('nope')).toBe(-1);
     expect(stageIndex('u1s1')).toBe(0);
-    expect(stageIndex('u6s10')).toBe(43);
+    expect(stageIndex('u6s10')).toBe(46);
+  });
+
+  it('100까지 섞기는 두 자리 수끼리 계산도 나온다', () => {
+    const rng = mulberry32(7);
+    const adds = Array.from({ length: 300 }, () => getStage('u3s5').make(rng));
+    const subs = Array.from({ length: 300 }, () => getStage('u3s6').make(rng));
+    expect(adds.some((q) => q.b >= 10)).toBe(true);
+    expect(adds.some((q) => q.a + q.b === 100 || q.a + q.b > 90)).toBe(true);
+    expect(subs.some((q) => q.b >= 10)).toBe(true);
+    expect(subs.some((q) => q.a >= 90)).toBe(true);
   });
 
   it('그림 문제는 유닛 1~2에만, 나눗셈 힌트는 u6s1에만', () => {
